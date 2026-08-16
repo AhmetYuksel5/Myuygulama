@@ -30,6 +30,7 @@ import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
+import com.ahmety.uygulama.ui.update.UpdateScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -104,6 +105,7 @@ fun MerkezApp() {
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
+                    onOpenUpdates = { navController.navigate(UPDATE_ROUTE) },
                 )
             }
             composable(PERMISSIONS_ROUTE) {
@@ -114,6 +116,9 @@ fun MerkezApp() {
             }
             composable(GESTURES_ROUTE) {
                 GestureSettingsScreen()
+            }
+            composable(UPDATE_ROUTE) {
+                UpdateScreen()
             }
             composable(
                 route = "$NOTE_ROUTE/{noteId}",
@@ -132,12 +137,14 @@ private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
 private const val NOTE_ROUTE = "note"
+private const val UPDATE_ROUTE = "update"
 
 @Composable
 private fun SettingsScreen(
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenGestures: () -> Unit,
+    onOpenUpdates: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -160,6 +167,11 @@ private fun SettingsScreen(
             headlineContent = { Text("Kenar hareketleri") },
             supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
             modifier = Modifier.clickable(onClick = onOpenGestures),
+        )
+        ListItem(
+            headlineContent = { Text("Güncellemeler") },
+            supportingContent = { Text("Yeni sürümü uygulama içinden indir ve kur") },
+            modifier = Modifier.clickable(onClick = onOpenUpdates),
         )
     }
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- İndirilen güncelleme APK'sı; kurulum ekranına bu yolla veriliyor. -->
+    <cache-path
+        name="guncellemeler"
+        path="." />
+</paths>

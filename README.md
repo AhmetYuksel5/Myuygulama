@@ -24,6 +24,19 @@ Google Drive taşıyıcısı henüz eklenmedi (OAuth kurulumu gerekiyor).
 **Faz 3 — Yakala ve sakla** ◐ kenar hareketleri (Fluid NG yerine) yazıldı.
 Notlar, oku-sonra ve genel arama sırada.
 
+## Kurulum ve güncelleme
+
+APK, her push'ta GitHub Actions tarafından **sabit bir anahtarla imzalanıp**
+[Releases](../../releases) altında yayınlanır.
+
+- **İlk kurulum:** Releases sayfasındaki en son `.apk` dosyasını telefondan indir ve kur.
+- **Sonraki güncellemeler:** uygulama içinden — **Ayarlar → Güncellemeler → Güncelleme ara**.
+  Yeni sürüm varsa indirip kurulum ekranını açar; silip yeniden kurmaya,
+  izinleri baştan vermeye gerek kalmaz.
+
+Sabit imza şart: imzası farklı bir APK'yı Android güncelleme saymaz, uygulamayı
+silmeni ister. İmzalama anahtarı GitHub Secrets'ta durur, depoda değildir.
+
 - Yol haritası: [`docs/YOL-HARITASI.md`](docs/YOL-HARITASI.md)
 - Veri saklama kararları: [`docs/VERI-SAKLAMA.md`](docs/VERI-SAKLAMA.md)
 - İki cihaz senkronizasyonu: [`docs/SENKRON.md`](docs/SENKRON.md)

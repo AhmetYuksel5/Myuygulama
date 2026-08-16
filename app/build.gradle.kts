@@ -6,6 +6,12 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+/**
+ * Sürüm numarası CI çalışma numarasından geliyor; her yayın bir öncekinden
+ * büyük olmak zorunda, yoksa Android güncellemeyi reddeder.
+ */
+val buildNumber = (System.getenv("BUILD_NUMBER") ?: "0").toInt()
+
 android {
     namespace = "com.ahmety.uygulama"
     compileSdk = 35
@@ -14,8 +20,27 @@ android {
         applicationId = "com.ahmety.uygulama"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 1 + buildNumber
+        versionName = "0.$buildNumber"
+    }
+
+    /**
+     * Sabit imzalama anahtarı olmadan her derleme farklı imzalanır ve Android
+     * yeni APK'yı güncelleme olarak kabul etmez — kullanıcı her seferinde
+     * uygulamayı silip izinleri yeniden vermek zorunda kalır. Anahtar
+     * GitHub Secrets'tan geliyor; yerel derlemelerde debug imzasına düşüyoruz.
+     */
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "merkez"
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+                    ?: System.getenv("SIGNING_STORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -25,6 +50,11 @@ android {
         release {
             isMinifyEnabled = false
             isShrinkResources = false
+            signingConfig = if (System.getenv("SIGNING_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfigs.getByName("debug")
+            } else {
+                signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -1,0 +1,76 @@
+name: Sürüm yayınla
+
+on:
+  push:
+    branches: ["claude/**", "main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: İmzalı APK yayınla
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: JDK 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle hazırla
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: İmzalama anahtarını çöz
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Anahtar yok; sürüm yayınlanmayacak."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/merkez-release.jks"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: İmzalı APK derle
+        if: steps.keystore.outputs.ready == 'true'
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/merkez-release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: merkez
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: APK'yı adlandır
+        if: steps.keystore.outputs.ready == 'true'
+        run: |
+          mkdir -p yayin
+          cp app/build/outputs/apk/release/app-release.apk "yayin/merkez-0.${{ github.run_number }}.apk"
+
+      - name: Sürümü yayınla
+        if: steps.keystore.outputs.ready == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.${{ github.run_number }}
+          name: Merkez 0.${{ github.run_number }}
+          body: |
+            ${{ github.event.head_commit.message }}
+          files: yayin/merkez-0.${{ github.run_number }}.apk
+          make_latest: true
+
+      - name: Anahtarı sil
+        if: always()
+        run: rm -f "$RUNNER_TEMP/merkez-release.jks"
