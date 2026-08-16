@@ -29,6 +29,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ahmety.uygulama.feature.calendar.AgendaSection
+import com.ahmety.uygulama.feature.calendar.AgendaViewModel
 import com.ahmety.uygulama.feature.habits.AddHabitDialog
 import com.ahmety.uygulama.feature.habits.HabitsSection
 import com.ahmety.uygulama.feature.habits.HabitsViewModel
@@ -40,17 +42,19 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 
 /**
- * Günün tek ekranı: alışkanlıklar ve bugünün görevleri bir arada.
- * Ajanda (takvim) da buraya gelecek.
+ * Günün tek ekranı: alışkanlıklar, bugünün görevleri ve ajanda bir arada.
+ * Widget’lar da bu ekranın küçültülmüş hâli olacak.
  */
 @Composable
 fun TodayScreen(
     modifier: Modifier = Modifier,
     habitsViewModel: HabitsViewModel = hiltViewModel(),
     tasksViewModel: TasksViewModel = hiltViewModel(),
+    agendaViewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val habitsState by habitsViewModel.uiState.collectAsStateWithLifecycle()
     val tasksState by tasksViewModel.todayState.collectAsStateWithLifecycle()
+    val agendaState by agendaViewModel.uiState.collectAsStateWithLifecycle()
 
     var fabMenuOpen by remember { mutableStateOf(false) }
     var showAddHabit by remember { mutableStateOf(false) }
@@ -62,6 +66,7 @@ fun TodayScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 habitsViewModel.refreshToday()
                 tasksViewModel.refreshToday()
+                agendaViewModel.refresh()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -92,6 +97,8 @@ fun TodayScreen(
                 state = tasksState,
                 onToggle = tasksViewModel::setCompleted,
             )
+
+            AgendaSection(state = agendaState)
         }
 
         Box(
