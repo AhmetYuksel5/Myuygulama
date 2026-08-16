@@ -37,14 +37,27 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          # Teşhis için: aynı isimler "Variables" sekmesine eklenmiş olabilir.
+          KEYSTORE_AS_VAR: ${{ vars.SIGNING_KEYSTORE_BASE64 }}
+          PASSWORD_AS_VAR: ${{ vars.SIGNING_STORE_PASSWORD }}
         run: |
-          echo "SIGNING_KEYSTORE_BASE64 uzunluğu: ${#KEYSTORE_BASE64}"
-          echo "SIGNING_STORE_PASSWORD uzunluğu: ${#STORE_PASSWORD}"
+          echo "secrets.SIGNING_KEYSTORE_BASE64 uzunluğu: ${#KEYSTORE_BASE64}"
+          echo "secrets.SIGNING_STORE_PASSWORD  uzunluğu: ${#STORE_PASSWORD}"
+          echo "vars.SIGNING_KEYSTORE_BASE64    uzunluğu: ${#KEYSTORE_AS_VAR}"
+          echo "vars.SIGNING_STORE_PASSWORD     uzunluğu: ${#PASSWORD_AS_VAR}"
+
+          if [ -z "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_AS_VAR" ]; then
+            echo "::error::Değerler 'Variables' sekmesine eklenmiş, 'Secrets' sekmesine değil."
+            echo "::error::Aynı sayfada iki sekme var: Secrets | Variables."
+            echo "::error::Variables'taki iki kaydı sil, 'Secrets' sekmesinden"
+            echo "::error::'New repository secret' ile yeniden ekle."
+            exit 1
+          fi
 
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::error::SIGNING_KEYSTORE_BASE64 secret'ı boş ya da tanımlı değil."
-            echo "::error::Settings > Secrets and variables > Actions > Repository secrets altında,"
-            echo "::error::adı tam olarak SIGNING_KEYSTORE_BASE64 olmalı (Environment secret değil)."
+            echo "::error::Settings > Secrets and variables > Actions > SECRETS sekmesi >"
+            echo "::error::Repository secrets altında olmalı (Environment secrets değil)."
             exit 1
           fi
           if [ -z "$STORE_PASSWORD" ]; then
