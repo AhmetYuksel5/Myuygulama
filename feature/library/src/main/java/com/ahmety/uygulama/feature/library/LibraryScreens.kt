@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,11 +42,15 @@ import com.ahmety.uygulama.core.model.EntryType
 @Composable
 fun NotesRoute(
     onOpenNote: (Long) -> Unit,
+    onOpenArticle: (Long) -> Unit,
+    onAddArticle: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: NotesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val createdNoteId by viewModel.createdNoteId.collectAsStateWithLifecycle()
+    var showArticles by remember { mutableStateOf(false) }
+    var fabMenuOpen by remember { mutableStateOf(false) }
 
     // Yeni not oluşturulunca doğrudan editöre geçiyoruz; boş bir satır
     // listeye düşüp kullanıcının ayrıca dokunmasını beklemek fazladan adım olurdu.
@@ -71,7 +76,34 @@ fun NotesRoute(
                 Text("Arşiv", style = MaterialTheme.typography.headlineSmall)
             }
 
-            if (state.loaded && state.notes.isEmpty()) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !showArticles,
+                        onClick = { showArticles = false },
+                        label = { Text("Notlar (${state.notes.size})") },
+                    )
+                    FilterChip(
+                        selected = showArticles,
+                        onClick = { showArticles = true },
+                        label = { Text("Makaleler (${state.articles.size})") },
+                    )
+                }
+            }
+
+            if (state.loaded && showArticles && state.articles.isEmpty()) {
+                item {
+                    Text(
+                        text = "Henüz makale yok. Sağ alttaki düğmeden URL yapıştırabilir " +
+                            "ya da herhangi bir uygulamadan bu uygulamaya paylaşabilirsin — " +
+                            "sayfa okunabilir hâle getirilip çevrimdışı saklanır.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (state.loaded && !showArticles && state.notes.isEmpty()) {
                 item {
                     Text(
                         text = "Henüz not yok. Sağ alttaki düğmeyle ilk notunu yazabilirsin.\n\n" +
@@ -83,23 +115,43 @@ fun NotesRoute(
                 }
             }
 
-            items(state.notes, key = { it.id }) { note ->
+            val visible = if (showArticles) state.articles else state.notes
+            items(visible, key = { it.id }) { entry ->
                 EntryCard(
-                    entry = note,
-                    onClick = { onOpenNote(note.id) },
-                    onArchive = { viewModel.archive(note) },
-                    onDelete = { viewModel.delete(note) },
+                    entry = entry,
+                    onClick = {
+                        if (showArticles) onOpenArticle(entry.id) else onOpenNote(entry.id)
+                    },
+                    onArchive = { viewModel.archive(entry) },
+                    onDelete = { viewModel.delete(entry) },
                 )
             }
         }
 
-        FloatingActionButton(
-            onClick = viewModel::createNote,
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Not ekle")
+            FloatingActionButton(onClick = { fabMenuOpen = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "Ekle")
+            }
+            DropdownMenu(expanded = fabMenuOpen, onDismissRequest = { fabMenuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Not yaz") },
+                    onClick = {
+                        fabMenuOpen = false
+                        viewModel.createNote()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Makale kaydet (URL)") },
+                    onClick = {
+                        fabMenuOpen = false
+                        onAddArticle()
+                    },
+                )
+            }
         }
     }
 }
@@ -174,6 +226,7 @@ fun NoteEditorRoute(
 @Composable
 fun SearchRoute(
     onOpenNote: (Long) -> Unit,
+    onOpenArticle: (Long) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
@@ -215,7 +268,13 @@ fun SearchRoute(
                 items(state.results, key = { it.id }) { entry ->
                     EntryCard(
                         entry = entry,
-                        onClick = { if (entry.type == EntryType.NOTE) onOpenNote(entry.id) },
+                        onClick = {
+                            when (entry.type) {
+                                EntryType.NOTE -> onOpenNote(entry.id)
+                                EntryType.ARTICLE -> onOpenArticle(entry.id)
+                                else -> Unit
+                            }
+                        },
                     )
                 }
             }

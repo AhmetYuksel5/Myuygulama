@@ -88,6 +88,7 @@ dependencies {
     implementation(project(":feature:widget"))
     implementation(project(":feature:gestures"))
     implementation(project(":feature:library"))
+    implementation(project(":feature:reader"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

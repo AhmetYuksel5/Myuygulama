@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.feature.library.NoteEditorRoute
+import com.ahmety.uygulama.feature.reader.ArticleRoute
+import com.ahmety.uygulama.feature.reader.SaveArticleDialog
 import com.ahmety.uygulama.feature.library.NotesRoute
 import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
@@ -66,6 +68,7 @@ fun MerkezApp() {
     // Widget'tan gelen "görevlere git / görev ekle" istekleri.
     val navRequest by NavRequestBus.target.collectAsState()
     var pendingAddTask by remember { mutableStateOf(false) }
+    var showSaveArticle by remember { mutableStateOf(false) }
     LaunchedEffect(navRequest) {
         when (navRequest) {
             NavRequestBus.TARGET_TASKS, NavRequestBus.TARGET_ADD_TASK -> {
@@ -78,6 +81,16 @@ fun MerkezApp() {
             }
         }
         if (navRequest != null) NavRequestBus.consume()
+    }
+
+    if (showSaveArticle) {
+        SaveArticleDialog(
+            onDismiss = { showSaveArticle = false },
+            onSaved = { id ->
+                showSaveArticle = false
+                navController.navigate("$ARTICLE_ROUTE/$id")
+            },
+        )
     }
 
     Scaffold(
@@ -120,10 +133,17 @@ fun MerkezApp() {
                 )
             }
             composable(TopLevelDestination.LIBRARY.route) {
-                NotesRoute(onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") })
+                NotesRoute(
+                    onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") },
+                    onOpenArticle = { navController.navigate("$ARTICLE_ROUTE/$it") },
+                    onAddArticle = { showSaveArticle = true },
+                )
             }
             composable(TopLevelDestination.SEARCH.route) {
-                SearchRoute(onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") })
+                SearchRoute(
+                    onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") },
+                    onOpenArticle = { navController.navigate("$ARTICLE_ROUTE/$it") },
+                )
             }
             composable(TopLevelDestination.SETTINGS.route) {
                 SettingsScreen(
@@ -154,6 +174,14 @@ fun MerkezApp() {
                     onBack = { navController.popBackStack() },
                 )
             }
+            composable(
+                route = "$ARTICLE_ROUTE/{articleId}",
+                arguments = listOf(navArgument("articleId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                ArticleRoute(
+                    entryId = backStackEntry.arguments?.getLong("articleId") ?: 0L,
+                )
+            }
         }
     }
 }
@@ -163,6 +191,7 @@ private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
 private const val NOTE_ROUTE = "note"
 private const val UPDATE_ROUTE = "update"
+private const val ARTICLE_ROUTE = "article"
 
 @Composable
 private fun SettingsScreen(
