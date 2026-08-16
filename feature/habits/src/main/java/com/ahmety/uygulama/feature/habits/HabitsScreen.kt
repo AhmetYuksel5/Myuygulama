@@ -1,5 +1,8 @@
 package com.ahmety.uygulama.feature.habits
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,25 +32,34 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ahmety.uygulama.core.designsystem.MerkezPalette
 
 /**
- * "Bugün" ekranında görünen alışkanlık bölümü. Ayrı bir ekran değil, çünkü
- * alışkanlıkların doğal yeri günün geri kalanının yanı.
+ * "Bugün" ekranındaki alışkanlık bölümü.
+ *
+ * Satır düzeni popüler alışkanlık uygulamalarının ortak kalıbını izliyor:
+ * ilerleme rozeti + ad + 🔥 seri + son 7 günün nokta şeridi. Şeritteki
+ * geçmiş günlere dokunarak unutulan işaretleme geriye dönük yapılabiliyor —
+ * bu, kategorinin en sevilen özelliği (seri kaybı en büyük kullanıcı acısı).
  */
 @Composable
 fun HabitsSection(
     state: HabitsUiState,
     onAdvance: (HabitUiItem) -> Unit,
+    onToggleDay: (HabitUiItem, Int) -> Unit,
     onArchive: (HabitUiItem) -> Unit,
     onDelete: (HabitUiItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         val due = state.dueToday
         Row(
@@ -57,8 +69,7 @@ fun HabitsSection(
         ) {
             Text(
                 text = "Alışkanlıklar",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleLarge,
             )
             if (due.isNotEmpty()) {
                 Text(
@@ -83,6 +94,7 @@ fun HabitsSection(
             HabitRow(
                 item = item,
                 onAdvance = { onAdvance(item) },
+                onToggleDay = { date -> onToggleDay(item, date) },
                 onArchive = { onArchive(item) },
                 onDelete = { onDelete(item) },
             )
@@ -94,28 +106,34 @@ fun HabitsSection(
 private fun HabitRow(
     item: HabitUiItem,
     onAdvance: () -> Unit,
+    onToggleDay: (Int) -> Unit,
     onArchive: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val accent = item.habit.colorArgb?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
+    val haptics = LocalHapticFeedback.current
+    val accent = item.habit.colorArgb?.let { Color(it) }
+        ?: MerkezPalette.colorFor(item.habit.uuid)
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = item.isDueToday, onClick = onAdvance),
+            .clickable(enabled = item.isDueToday) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onAdvance()
+            },
         colors = CardDefaults.cardColors(
             containerColor = if (item.isDoneToday) {
-                MaterialTheme.colorScheme.surfaceVariant
+                accent.copy(alpha = 0.10f)
             } else {
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.surfaceContainerLow
             },
         ),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ProgressBadge(
@@ -130,15 +148,30 @@ private fun HabitRow(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    text = item.habit.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = subtitleFor(item),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.habit.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (item.currentStreak > 0) {
+                        Text(
+                            text = "  🔥${item.currentStreak}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = accent,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                WeekStrip(
+                    week = item.week,
+                    accent = accent,
+                    onToggleDay = { date ->
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onToggleDay(date)
+                    },
                 )
             }
 
@@ -147,6 +180,11 @@ private fun HabitRow(
                     Icon(Icons.Outlined.MoreVert, contentDescription = "Seçenekler")
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(scheduleLabel(item.habit.schedule)) },
+                        onClick = { menuOpen = false },
+                        enabled = false,
+                    )
                     DropdownMenuItem(
                         text = { Text(if (item.habit.archived) "Arşivden çıkar" else "Arşivle") },
                         onClick = {
@@ -167,6 +205,41 @@ private fun HabitRow(
     }
 }
 
+/** Son 7 gün: dolu nokta = yapıldı, soluk = yapılmadı, halka = bugün. */
+@Composable
+private fun WeekStrip(
+    week: List<DayCell>,
+    accent: Color,
+    onToggleDay: (Int) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        week.forEach { cell ->
+            val color = when {
+                cell.isComplete -> accent
+                cell.isDue -> MaterialTheme.colorScheme.outlineVariant
+                else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            }
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .background(color, CircleShape)
+                    // Bugüne dokunmak kartın kendisiyle aynı işi yapar; şerit
+                    // geçmiş günleri düzeltmek için.
+                    .clickable(enabled = !cell.isToday) { onToggleDay(cell.date) },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (cell.isToday && !cell.isComplete) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(MaterialTheme.colorScheme.surface, CircleShape),
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ProgressBadge(
     count: Int,
@@ -175,49 +248,54 @@ private fun ProgressBadge(
     enabled: Boolean,
     accent: Color,
 ) {
+    // Tamamlanınca küçük bir "pop": Streaks'in en övülen hissi.
+    val scale by animateFloatAsState(
+        targetValue = if (done) 1f else 0.92f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "habitPop",
+    )
+    val progress by animateFloatAsState(
+        targetValue = if (target <= 0) 0f else (count.toFloat() / target).coerceIn(0f, 1f),
+        label = "habitProgress",
+    )
+
     Box(
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier
+            .size(44.dp)
+            .scale(scale),
         contentAlignment = Alignment.Center,
     ) {
         when {
             done -> Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(44.dp)
                     .background(accent, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Check,
                     contentDescription = "Tamamlandı",
-                    tint = MaterialTheme.colorScheme.surface,
+                    tint = Color.White,
                 )
             }
 
-            target > 1 -> {
+            else -> {
                 CircularProgressIndicator(
-                    progress = { count.toFloat() / target },
-                    modifier = Modifier.size(40.dp),
-                    color = accent,
+                    progress = { progress },
+                    modifier = Modifier.size(44.dp),
+                    color = if (enabled) accent else MaterialTheme.colorScheme.outlineVariant,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 )
-                Text(
-                    text = "$count/$target",
-                    style = MaterialTheme.typography.labelSmall,
-                )
+                if (target > 1) {
+                    Text(
+                        text = "$count/$target",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
-
-            else -> CircularProgressIndicator(
-                progress = { 0f },
-                modifier = Modifier.size(40.dp),
-                color = if (enabled) accent else MaterialTheme.colorScheme.outlineVariant,
-            )
         }
     }
-}
-
-private fun subtitleFor(item: HabitUiItem): String {
-    val parts = mutableListOf<String>()
-    if (!item.isDueToday) parts += "bugün değil"
-    if (item.currentStreak > 0) parts += streakLabel(item.habit.schedule, item.currentStreak)
-    if (parts.isEmpty()) parts += scheduleLabel(item.habit.schedule)
-    return parts.joinToString(" · ")
 }

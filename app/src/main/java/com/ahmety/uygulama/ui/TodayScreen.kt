@@ -89,6 +89,7 @@ fun TodayScreen(
             HabitsSection(
                 state = habitsState,
                 onAdvance = habitsViewModel::advance,
+                onToggleDay = habitsViewModel::toggleDay,
                 onArchive = { habitsViewModel.setArchived(it.habit.uuid, !it.habit.archived) },
                 onDelete = { habitsViewModel.deleteHabit(it.habit.uuid) },
             )

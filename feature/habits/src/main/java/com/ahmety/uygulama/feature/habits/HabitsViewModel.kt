@@ -22,11 +22,21 @@ import javax.inject.Inject
 /** Seri hesabı için geriye kaç güne bakıldığı. */
 private const val STREAK_LOOKBACK_DAYS = 400
 
+/** Satırdaki 7 günlük şeridin bir hücresi. */
+data class DayCell(
+    val date: Int,
+    val isDue: Boolean,
+    val isComplete: Boolean,
+    val isToday: Boolean,
+)
+
 data class HabitUiItem(
     val habit: Habit,
     val todayCount: Int,
     val currentStreak: Int,
     val isDueToday: Boolean,
+    /** Son 7 gün, eskiden bugüne. */
+    val week: List<DayCell> = emptyList(),
 ) {
     val isDoneToday: Boolean get() = todayCount >= habit.targetPerDay
 }
@@ -81,6 +91,18 @@ class HabitsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Şeritteki geçmiş bir güne dokununca o günü tamamlandı/tamamlanmadı yapar.
+     * Loop kullanıcılarının en sevdiği özellik: dünü unutmuşsan seri kaybolmasın.
+     */
+    fun toggleDay(item: HabitUiItem, date: Int) {
+        viewModelScope.launch {
+            val target = item.habit.targetPerDay.coerceAtLeast(1)
+            val done = item.week.firstOrNull { it.date == date }?.isComplete == true
+            repository.setCheckCount(item.habit.uuid, date, if (done) 0 else target)
+        }
+    }
+
     fun createHabit(
         name: String,
         schedule: HabitSchedule,
@@ -121,6 +143,15 @@ private fun buildState(
             todayCount = habitChecks.firstOrNull { it.date == today }?.count ?: 0,
             currentStreak = HabitStreaks.currentStreak(habit.schedule, completed, today),
             isDueToday = HabitStreaks.isDue(habit.schedule, today),
+            week = (6 downTo 0).map { offset ->
+                val date = today - offset
+                DayCell(
+                    date = date,
+                    isDue = HabitStreaks.isDue(habit.schedule, date),
+                    isComplete = date in completed,
+                    isToday = date == today,
+                )
+            },
         )
     }
     return HabitsUiState(today = today, items = items, loaded = true)
