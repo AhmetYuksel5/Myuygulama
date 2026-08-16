@@ -89,6 +89,7 @@ dependencies {
     implementation(project(":feature:gestures"))
     implementation(project(":feature:library"))
     implementation(project(":feature:reader"))
+    implementation(project(":feature:vocab"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

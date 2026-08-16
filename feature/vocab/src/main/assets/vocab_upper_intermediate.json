@@ -1,0 +1,1992 @@
+[
+{
+"w": "abundant",
+"t": "bol, bereketli",
+"e": "The forest was abundant with wildlife of every kind."
+},
+{
+"w": "accommodate",
+"t": "ağırlamak, yer sağlamak",
+"e": "The hotel can accommodate up to four hundred guests."
+},
+{
+"w": "accomplish",
+"t": "başarmak, tamamlamak",
+"e": "She accomplished more in a week than most people do in a month."
+},
+{
+"w": "accurate",
+"t": "doğru, isabetli",
+"e": "The weather forecast turned out to be surprisingly accurate."
+},
+{
+"w": "acknowledge",
+"t": "kabul etmek, teslim etmek",
+"e": "He refused to acknowledge that he had made a mistake."
+},
+{
+"w": "acquire",
+"t": "edinmek, kazanmak",
+"e": "Over the years she acquired a deep knowledge of the region."
+},
+{
+"w": "adequate",
+"t": "yeterli, elverişli",
+"e": "The lighting in the room was barely adequate for reading."
+},
+{
+"w": "adjacent",
+"t": "bitişik, komşu",
+"e": "Their office is adjacent to the main railway station."
+},
+{
+"w": "advocate",
+"t": "savunmak, savunucu",
+"e": "Many doctors advocate a diet low in processed sugar."
+},
+{
+"w": "aesthetic",
+"t": "estetik",
+"e": "The building was praised for its bold aesthetic appeal."
+},
+{
+"w": "affluent",
+"t": "varlıklı, zengin",
+"e": "They grew up in an affluent suburb outside the city."
+},
+{
+"w": "aggregate",
+"t": "toplam, bir araya getirmek",
+"e": "The aggregate cost of the repairs was far higher than expected."
+},
+{
+"w": "alleviate",
+"t": "hafifletmek, dindirmek",
+"e": "The new medication helped alleviate her chronic pain."
+},
+{
+"w": "allocate",
+"t": "tahsis etmek, ayırmak",
+"e": "The council allocated extra funds to public transport."
+},
+{
+"w": "ambiguous",
+"t": "belirsiz, çok anlamlı",
+"e": "His answer was deliberately ambiguous to avoid blame."
+},
+{
+"w": "ample",
+"t": "bol, geniş",
+"e": "There was ample time to finish the exam calmly."
+},
+{
+"w": "anticipate",
+"t": "önceden tahmin etmek, beklemek",
+"e": "We anticipate a sharp rise in demand next winter."
+},
+{
+"w": "apparent",
+"t": "belli, görünen",
+"e": "It soon became apparent that no one had a plan."
+},
+{
+"w": "arbitrary",
+"t": "keyfi, rastgele",
+"e": "The rules seemed arbitrary and impossible to justify."
+},
+{
+"w": "articulate",
+"t": "akıcı konuşan, ifade etmek",
+"e": "She was able to articulate her ideas with remarkable clarity."
+},
+{
+"w": "ascertain",
+"t": "saptamak, kesinleştirmek",
+"e": "Police are trying to ascertain the cause of the fire."
+},
+{
+"w": "aspire",
+"t": "özlem duymak, hedeflemek",
+"e": "He aspires to become a leading researcher in his field."
+},
+{
+"w": "assess",
+"t": "değerlendirmek",
+"e": "Teachers assess each student's progress every term."
+},
+{
+"w": "assumption",
+"t": "varsayım",
+"e": "Her whole argument rests on a false assumption."
+},
+{
+"w": "attain",
+"t": "elde etmek, ulaşmak",
+"e": "Few athletes ever attain that level of fitness."
+},
+{
+"w": "attribute",
+"t": "atfetmek, özellik",
+"e": "She attributes her success to hard work and luck."
+},
+{
+"w": "authentic",
+"t": "özgün, gerçek",
+"e": "The museum verified that the painting was authentic."
+},
+{
+"w": "autonomy",
+"t": "özerklik",
+"e": "The region was granted a large degree of autonomy."
+},
+{
+"w": "aversion",
+"t": "tiksinti, isteksizlik",
+"e": "He has a strong aversion to crowded places."
+},
+{
+"w": "benchmark",
+"t": "ölçüt, referans noktası",
+"e": "Their results set a new benchmark for the industry."
+},
+{
+"w": "bias",
+"t": "önyargı, yanlılık",
+"e": "The study was criticised for its obvious bias."
+},
+{
+"w": "bleak",
+"t": "kasvetli, ümitsiz",
+"e": "The economic outlook remained bleak for months."
+},
+{
+"w": "boost",
+"t": "artırmak, güçlendirmek",
+"e": "The tax cut was designed to boost consumer spending."
+},
+{
+"w": "brisk",
+"t": "hızlı, canlı",
+"e": "They set off at a brisk pace to catch the train."
+},
+{
+"w": "bureaucracy",
+"t": "bürokrasi",
+"e": "Endless bureaucracy delayed the building permit for years."
+},
+{
+"w": "candid",
+"t": "açık sözlü, samimi",
+"e": "In a candid interview she admitted her doubts."
+},
+{
+"w": "cease",
+"t": "son vermek, durmak",
+"e": "The company was ordered to cease all operations."
+},
+{
+"w": "coherent",
+"t": "tutarlı, anlaşılır",
+"e": "He struggled to give a coherent account of events."
+},
+{
+"w": "coincide",
+"t": "çakışmak, aynı zamana denk gelmek",
+"e": "Our holidays happened to coincide that year."
+},
+{
+"w": "collaborate",
+"t": "iş birliği yapmak",
+"e": "The two universities collaborate on climate research."
+},
+{
+"w": "commence",
+"t": "başlamak",
+"e": "The ceremony will commence at exactly nine o'clock."
+},
+{
+"w": "compel",
+"t": "zorlamak",
+"e": "Bad weather compelled them to cancel the trip."
+},
+{
+"w": "compensate",
+"t": "telafi etmek, tazmin etmek",
+"e": "Nothing could compensate for the loss of his notes."
+},
+{
+"w": "competent",
+"t": "yetkin, ehil",
+"e": "She proved to be a highly competent manager."
+},
+{
+"w": "compile",
+"t": "derlemek, bir araya getirmek",
+"e": "He compiled a list of every book he had read."
+},
+{
+"w": "comprehensive",
+"t": "kapsamlı",
+"e": "The report gives a comprehensive overview of the market."
+},
+{
+"w": "comprise",
+"t": "oluşmak, içermek",
+"e": "The committee comprises members from every department."
+},
+{
+"w": "conceive",
+"t": "tasavvur etmek, kavramak",
+"e": "It is hard to conceive of a world without electricity."
+},
+{
+"w": "concise",
+"t": "özlü, kısa ve öz",
+"e": "Please keep your summary clear and concise."
+},
+{
+"w": "condemn",
+"t": "kınamak, mahkûm etmek",
+"e": "World leaders condemned the attack immediately."
+},
+{
+"w": "confront",
+"t": "yüzleşmek, karşı koymak",
+"e": "She finally decided to confront her fears."
+},
+{
+"w": "consecutive",
+"t": "ard arda, peş peşe",
+"e": "It rained for five consecutive days."
+},
+{
+"w": "consensus",
+"t": "uzlaşı, fikir birliği",
+"e": "The group reached a consensus after long debate."
+},
+{
+"w": "considerable",
+"t": "hatırı sayılır, epeyce",
+"e": "The project required a considerable amount of money."
+},
+{
+"w": "constitute",
+"t": "oluşturmak, teşkil etmek",
+"e": "Twelve members constitute a full committee."
+},
+{
+"w": "contemplate",
+"t": "derin düşünmek, tasarlamak",
+"e": "He sat quietly, contemplating his next move."
+},
+{
+"w": "contradict",
+"t": "çelişmek, yalanlamak",
+"e": "Her latest statement contradicts what she said before."
+},
+{
+"w": "controversial",
+"t": "tartışmalı",
+"e": "The decision proved deeply controversial among voters."
+},
+{
+"w": "convey",
+"t": "iletmek, aktarmak",
+"e": "Words alone cannot convey how grateful I am."
+},
+{
+"w": "credible",
+"t": "inanılır, güvenilir",
+"e": "The witness gave a credible account of the crash."
+},
+{
+"w": "crucial",
+"t": "çok önemli, kritik",
+"e": "The next few weeks will be crucial for the campaign."
+},
+{
+"w": "cultivate",
+"t": "yetiştirmek, geliştirmek",
+"e": "She worked hard to cultivate good relationships with clients."
+},
+{
+"w": "cumulative",
+"t": "birikimli",
+"e": "The cumulative effect of small savings can be huge."
+},
+{
+"w": "curb",
+"t": "dizginlemek, sınırlamak",
+"e": "New laws aim to curb excessive online advertising."
+},
+{
+"w": "deceptive",
+"t": "aldatıcı",
+"e": "The calm sea was deceptive; a storm was coming."
+},
+{
+"w": "dedicate",
+"t": "adamak, ithaf etmek",
+"e": "He dedicated his life to helping the poor."
+},
+{
+"w": "deficient",
+"t": "eksik, yetersiz",
+"e": "A diet deficient in iron can cause fatigue."
+},
+{
+"w": "deliberate",
+"t": "kasıtlı, ölçülü",
+"e": "Her slow, deliberate speech held everyone's attention."
+},
+{
+"w": "denote",
+"t": "belirtmek, ifade etmek",
+"e": "A red light denotes danger in most cultures."
+},
+{
+"w": "deplete",
+"t": "tüketmek, azaltmak",
+"e": "Overfishing has depleted stocks in the region."
+},
+{
+"w": "deploy",
+"t": "konuşlandırmak, seferber etmek",
+"e": "The company deployed new software across all offices."
+},
+{
+"w": "deteriorate",
+"t": "kötüleşmek, bozulmak",
+"e": "His health began to deteriorate rapidly last winter."
+},
+{
+"w": "detrimental",
+"t": "zararlı",
+"e": "Too much screen time can be detrimental to sleep."
+},
+{
+"w": "deviate",
+"t": "sapmak, ayrılmak",
+"e": "The plane had to deviate from its planned route."
+},
+{
+"w": "devise",
+"t": "tasarlamak, icat etmek",
+"e": "They devised a clever scheme to save water."
+},
+{
+"w": "differentiate",
+"t": "ayırt etmek",
+"e": "It is hard to differentiate the twins by their voices."
+},
+{
+"w": "diminish",
+"t": "azalmak, küçültmek",
+"e": "Interest in the topic gradually diminished over time."
+},
+{
+"w": "discern",
+"t": "seçmek, ayırt etmek",
+"e": "In the fog she could barely discern the road ahead."
+},
+{
+"w": "discrepancy",
+"t": "tutarsızlık, uyuşmazlık",
+"e": "There was a discrepancy between the two accounts."
+},
+{
+"w": "disperse",
+"t": "dağıtmak, dağılmak",
+"e": "Police used water to disperse the crowd."
+},
+{
+"w": "disrupt",
+"t": "aksatmak, bozmak",
+"e": "The strike disrupted train services for days."
+},
+{
+"w": "distinct",
+"t": "belirgin, ayrı",
+"e": "There is a distinct difference between the two styles."
+},
+{
+"w": "diverse",
+"t": "çeşitli, farklı",
+"e": "The city is home to a remarkably diverse population."
+},
+{
+"w": "divert",
+"t": "yönünü değiştirmek, saptırmak",
+"e": "Traffic was diverted around the flooded street."
+},
+{
+"w": "dominant",
+"t": "baskın, hâkim",
+"e": "English has become the dominant language of science."
+},
+{
+"w": "dubious",
+"t": "şüpheli, kuşkulu",
+"e": "The deal was funded by money of dubious origin."
+},
+{
+"w": "elaborate",
+"t": "ayrıntılı, detaylandırmak",
+"e": "Could you elaborate on your last point a little?"
+},
+{
+"w": "eligible",
+"t": "uygun, hak sahibi",
+"e": "Only residents are eligible to vote in the election."
+},
+{
+"w": "elicit",
+"t": "ortaya çıkarmak, elde etmek",
+"e": "The teacher tried to elicit answers from the class."
+},
+{
+"w": "eloquent",
+"t": "güzel konuşan, etkili",
+"e": "She gave an eloquent speech that moved the audience."
+},
+{
+"w": "embrace",
+"t": "kucaklamak, benimsemek",
+"e": "The company was quick to embrace remote work."
+},
+{
+"w": "emerge",
+"t": "ortaya çıkmak, belirmek",
+"e": "New evidence has emerged in the case this week."
+},
+{
+"w": "eminent",
+"t": "seçkin, ünlü",
+"e": "An eminent scientist was invited to open the lab."
+},
+{
+"w": "empirical",
+"t": "deneysel, gözleme dayalı",
+"e": "There is little empirical evidence for the claim."
+},
+{
+"w": "encompass",
+"t": "kapsamak, içermek",
+"e": "The course encompasses both theory and practice."
+},
+{
+"w": "endorse",
+"t": "onaylamak, desteklemek",
+"e": "Several celebrities endorsed the new product."
+},
+{
+"w": "endure",
+"t": "dayanmak, katlanmak",
+"e": "The settlers had to endure a brutal winter."
+},
+{
+"w": "enhance",
+"t": "geliştirmek, artırmak",
+"e": "Good lighting can greatly enhance a photograph."
+},
+{
+"w": "entail",
+"t": "gerektirmek, beraberinde getirmek",
+"e": "The job entails a great deal of travel."
+},
+{
+"w": "equivalent",
+"t": "eşdeğer, denk",
+"e": "One euro is roughly equivalent to a dollar these days."
+},
+{
+"w": "erode",
+"t": "aşındırmak, yıpratmak",
+"e": "Constant criticism can erode a child's confidence."
+},
+{
+"w": "essential",
+"t": "temel, olmazsa olmaz",
+"e": "Water is essential for every form of life."
+},
+{
+"w": "evident",
+"t": "açık, belli",
+"e": "It was evident that she had been crying."
+},
+{
+"w": "evoke",
+"t": "çağrıştırmak, uyandırmak",
+"e": "The old song evoked memories of his childhood."
+},
+{
+"w": "exceed",
+"t": "aşmak, geçmek",
+"e": "Costs must not exceed the agreed budget."
+},
+{
+"w": "exempt",
+"t": "muaf, muaf tutmak",
+"e": "Small businesses are exempt from the new tax."
+},
+{
+"w": "exert",
+"t": "göstermek, sarf etmek",
+"e": "She had to exert real effort to stay calm."
+},
+{
+"w": "exhaust",
+"t": "tüketmek, yormak",
+"e": "They exhausted every option before giving up."
+},
+{
+"w": "explicit",
+"t": "açık, net",
+"e": "The instructions were explicit and easy to follow."
+},
+{
+"w": "exploit",
+"t": "sömürmek, yararlanmak",
+"e": "The company was accused of exploiting cheap labour."
+},
+{
+"w": "extensive",
+"t": "kapsamlı, geniş",
+"e": "The house needs extensive repairs before winter."
+},
+{
+"w": "facilitate",
+"t": "kolaylaştırmak",
+"e": "The app is designed to facilitate group planning."
+},
+{
+"w": "feasible",
+"t": "yapılabilir, uygulanabilir",
+"e": "Building a bridge here is simply not feasible."
+},
+{
+"w": "fluctuate",
+"t": "dalgalanmak, değişkenlik göstermek",
+"e": "Prices tend to fluctuate with the seasons."
+},
+{
+"w": "formulate",
+"t": "formüle etmek, oluşturmak",
+"e": "They spent weeks formulating a new strategy."
+},
+{
+"w": "foster",
+"t": "beslemek, geliştirmek",
+"e": "The programme aims to foster creativity in children."
+},
+{
+"w": "fragment",
+"t": "parça, parçalanmak",
+"e": "The vase shattered into a hundred fragments."
+},
+{
+"w": "frank",
+"t": "açık sözlü, dürüst",
+"e": "To be frank, I don't think the plan will work."
+},
+{
+"w": "fundamental",
+"t": "temel, esas",
+"e": "Trust is fundamental to any partnership."
+},
+{
+"w": "generic",
+"t": "jenerik, genel",
+"e": "The store sells cheaper generic versions of the drug."
+},
+{
+"w": "grasp",
+"t": "kavramak, tutmak",
+"e": "It took him a while to grasp the main idea."
+},
+{
+"w": "hamper",
+"t": "engellemek, sekteye uğratmak",
+"e": "Heavy snow hampered the rescue effort."
+},
+{
+"w": "hierarchy",
+"t": "hiyerarşi",
+"e": "The company has a very rigid management hierarchy."
+},
+{
+"w": "hinder",
+"t": "engel olmak, geciktirmek",
+"e": "A lack of funds hindered the research for years."
+},
+{
+"w": "hypothesis",
+"t": "hipotez, varsayım",
+"e": "The experiment was designed to test her hypothesis."
+},
+{
+"w": "identical",
+"t": "özdeş, aynı",
+"e": "The two reports were almost identical in wording."
+},
+{
+"w": "illustrate",
+"t": "örneklemek, açıklamak",
+"e": "This case clearly illustrates the danger of haste."
+},
+{
+"w": "imminent",
+"t": "yakın, an meselesi",
+"e": "There were signs that a storm was imminent."
+},
+{
+"w": "implement",
+"t": "uygulamak, hayata geçirmek",
+"e": "The new rules will be implemented next month."
+},
+{
+"w": "implication",
+"t": "ima, sonuç, etki",
+"e": "Few people grasped the full implications of the decision."
+},
+{
+"w": "implicit",
+"t": "örtük, dolaylı",
+"e": "There was an implicit threat in his polite words."
+},
+{
+"w": "impose",
+"t": "dayatmak, yüklemek",
+"e": "The government imposed strict limits on imports."
+},
+{
+"w": "inclined",
+"t": "meyilli, eğilimli",
+"e": "I'm inclined to agree with her on this one."
+},
+{
+"w": "incompatible",
+"t": "uyumsuz, bağdaşmaz",
+"e": "The new software is incompatible with old phones."
+},
+{
+"w": "inconsistent",
+"t": "tutarsız, değişken",
+"e": "His behaviour was wildly inconsistent from day to day."
+},
+{
+"w": "indicate",
+"t": "belirtmek, göstermek",
+"e": "The survey indicates a growing interest in cycling."
+},
+{
+"w": "inevitable",
+"t": "kaçınılmaz",
+"e": "With such spending, bankruptcy seemed inevitable."
+},
+{
+"w": "infer",
+"t": "çıkarım yapmak, anlamak",
+"e": "From her tone I inferred that she was annoyed."
+},
+{
+"w": "inherent",
+"t": "doğasında olan, içkin",
+"e": "Risk is inherent in any new business venture."
+},
+{
+"w": "inhibit",
+"t": "engellemek, ketlemek",
+"e": "Fear of failure can inhibit real creativity."
+},
+{
+"w": "initiate",
+"t": "başlatmak",
+"e": "The manager initiated a review of all procedures."
+},
+{
+"w": "innovative",
+"t": "yenilikçi",
+"e": "The firm is known for its innovative designs."
+},
+{
+"w": "insight",
+"t": "kavrayış, iç görü",
+"e": "Her book offers real insight into human memory."
+},
+{
+"w": "integral",
+"t": "ayrılmaz, bütünleşik",
+"e": "Practice is an integral part of learning music."
+},
+{
+"w": "integrate",
+"t": "bütünleştirmek, kaynaştırmak",
+"e": "The system integrates data from many sources."
+},
+{
+"w": "intense",
+"t": "yoğun, şiddetli",
+"e": "There was intense competition for the position."
+},
+{
+"w": "intervene",
+"t": "müdahale etmek, araya girmek",
+"e": "A neighbour intervened before the fight got worse."
+},
+{
+"w": "intricate",
+"t": "karmaşık, girift",
+"e": "The watch has an incredibly intricate mechanism."
+},
+{
+"w": "intrinsic",
+"t": "özünde olan, gerçek",
+"e": "The old coin has little intrinsic value today."
+},
+{
+"w": "intuitive",
+"t": "sezgisel",
+"e": "The software has a clean, intuitive interface."
+},
+{
+"w": "justify",
+"t": "haklı çıkarmak, gerekçelendirmek",
+"e": "Nothing can justify such careless behaviour."
+},
+{
+"w": "lament",
+"t": "yakınmak, hayıflanmak",
+"e": "Critics lament the loss of the old cinema."
+},
+{
+"w": "legitimate",
+"t": "meşru, yasal",
+"e": "She has a legitimate reason to be angry."
+},
+{
+"w": "leverage",
+"t": "kaldıraç, avantaj olarak kullanmak",
+"e": "The firm used its size to leverage better deals."
+},
+{
+"w": "liable",
+"t": "sorumlu, olası",
+"e": "The driver was held liable for the damage."
+},
+{
+"w": "linger",
+"t": "oyalanmak, sürüp gitmek",
+"e": "The smell of smoke lingered for days."
+},
+{
+"w": "lucrative",
+"t": "kazançlı, kârlı",
+"e": "Consulting turned out to be a lucrative career."
+},
+{
+"w": "magnitude",
+"t": "büyüklük, önem",
+"e": "Few understood the magnitude of the disaster."
+},
+{
+"w": "mandatory",
+"t": "zorunlu",
+"e": "Helmets are mandatory on this construction site."
+},
+{
+"w": "manipulate",
+"t": "manipüle etmek, ustaca kullanmak",
+"e": "The data had clearly been manipulated to mislead."
+},
+{
+"w": "marginal",
+"t": "marjinal, önemsiz, kenardaki",
+"e": "The change had only a marginal effect on sales."
+},
+{
+"w": "mediate",
+"t": "arabuluculuk yapmak",
+"e": "The UN offered to mediate between the two sides."
+},
+{
+"w": "mere",
+"t": "sadece, salt",
+"e": "A mere handful of people attended the talk."
+},
+{
+"w": "meticulous",
+"t": "titiz, özenli",
+"e": "She kept meticulous records of every transaction."
+},
+{
+"w": "mitigate",
+"t": "hafifletmek, azaltmak",
+"e": "Planting trees can help mitigate flooding."
+},
+{
+"w": "moderate",
+"t": "ılımlı, orta düzeyde",
+"e": "He holds fairly moderate political views."
+},
+{
+"w": "momentum",
+"t": "ivme, momentum",
+"e": "The campaign slowly gathered momentum."
+},
+{
+"w": "mundane",
+"t": "sıradan, monoton",
+"e": "Most of the job involves mundane paperwork."
+},
+{
+"w": "negligible",
+"t": "önemsiz, ihmal edilebilir",
+"e": "The difference in price was negligible."
+},
+{
+"w": "nonetheless",
+"t": "yine de, buna rağmen",
+"e": "It was raining; nonetheless, the match went ahead."
+},
+{
+"w": "notion",
+"t": "kavram, fikir",
+"e": "He rejected the whole notion of destiny."
+},
+{
+"w": "notwithstanding",
+"t": "-e rağmen",
+"e": "Notwithstanding the risks, they pressed ahead."
+},
+{
+"w": "nurture",
+"t": "beslemek, geliştirmek",
+"e": "Good teachers nurture curiosity in their students."
+},
+{
+"w": "objective",
+"t": "amaç, nesnel",
+"e": "Try to stay objective when judging your own work."
+},
+{
+"w": "obscure",
+"t": "belirsiz, gölgede kalmış",
+"e": "The poem is full of obscure references."
+},
+{
+"w": "obsolete",
+"t": "modası geçmiş, kullanılmaz",
+"e": "The technology became obsolete within a decade."
+},
+{
+"w": "offset",
+"t": "dengelemek, telafi etmek",
+"e": "Higher sales offset the rising costs."
+},
+{
+"w": "ongoing",
+"t": "süregelen, devam eden",
+"e": "The investigation is still ongoing."
+},
+{
+"w": "optimal",
+"t": "en uygun, ideal",
+"e": "Sunrise is the optimal time for the photo."
+},
+{
+"w": "outweigh",
+"t": "ağır basmak, üstün gelmek",
+"e": "The benefits clearly outweigh the risks."
+},
+{
+"w": "overlap",
+"t": "örtüşmek, çakışmak",
+"e": "Their duties overlap in several areas."
+},
+{
+"w": "overwhelm",
+"t": "bunaltmak, boğmak",
+"e": "She was overwhelmed by the number of emails."
+},
+{
+"w": "paramount",
+"t": "en önemli, üstün",
+"e": "Safety is paramount on every flight."
+},
+{
+"w": "peripheral",
+"t": "çevresel, ikincil",
+"e": "That detail is peripheral to the main argument."
+},
+{
+"w": "persistent",
+"t": "ısrarlı, inatçı",
+"e": "A persistent cough kept her awake at night."
+},
+{
+"w": "pertinent",
+"t": "ilgili, konuya uygun",
+"e": "Please limit your questions to pertinent facts."
+},
+{
+"w": "plausible",
+"t": "akla yatkın, makul",
+"e": "He gave a plausible excuse for being late."
+},
+{
+"w": "plummet",
+"t": "hızla düşmek",
+"e": "Share prices plummeted after the news."
+},
+{
+"w": "portray",
+"t": "betimlemek, canlandırmak",
+"e": "The film portrays her as a lonely genius."
+},
+{
+"w": "pose",
+"t": "teşkil etmek, poz vermek",
+"e": "The chemicals pose a serious risk to health."
+},
+{
+"w": "pragmatic",
+"t": "pragmatik, gerçekçi",
+"e": "We need a pragmatic solution, not a perfect one."
+},
+{
+"w": "precede",
+"t": "önce gelmek",
+"e": "A short speech preceded the awards ceremony."
+},
+{
+"w": "predominant",
+"t": "baskın, ağır basan",
+"e": "Grey was the predominant colour of the city."
+},
+{
+"w": "preliminary",
+"t": "ön, başlangıç niteliğinde",
+"e": "Preliminary results look very promising."
+},
+{
+"w": "premise",
+"t": "öncül, dayanak",
+"e": "The whole plan rests on a faulty premise."
+},
+{
+"w": "prevail",
+"t": "galip gelmek, hüküm sürmek",
+"e": "Common sense finally prevailed in the debate."
+},
+{
+"w": "prevalent",
+"t": "yaygın",
+"e": "The virus is most prevalent in winter months."
+},
+{
+"w": "profound",
+"t": "derin, engin",
+"e": "Her words had a profound effect on me."
+},
+{
+"w": "prohibit",
+"t": "yasaklamak",
+"e": "The law prohibits smoking in restaurants."
+},
+{
+"w": "prominent",
+"t": "önde gelen, göze çarpan",
+"e": "She is a prominent figure in local politics."
+},
+{
+"w": "prone",
+"t": "eğilimli, yatkın",
+"e": "He is prone to exaggerate when he's excited."
+},
+{
+"w": "prospective",
+"t": "müstakbel, olası",
+"e": "The agent showed the flat to prospective buyers."
+},
+{
+"w": "provoke",
+"t": "kışkırtmak, tetiklemek",
+"e": "His remarks provoked an angry response online."
+},
+{
+"w": "prudent",
+"t": "tedbirli, sağduyulu",
+"e": "It would be prudent to save some money now."
+},
+{
+"w": "pursue",
+"t": "takip etmek, peşinden gitmek",
+"e": "She decided to pursue a career in medicine."
+},
+{
+"w": "rational",
+"t": "akılcı, mantıklı",
+"e": "Try to make a rational decision, not an emotional one."
+},
+{
+"w": "reciprocal",
+"t": "karşılıklı",
+"e": "The two countries signed a reciprocal trade deal."
+},
+{
+"w": "reconcile",
+"t": "uzlaştırmak, bağdaştırmak",
+"e": "It's hard to reconcile these two accounts."
+},
+{
+"w": "redundant",
+"t": "gereksiz, fazlalık",
+"e": "Half of the sentences in the report are redundant."
+},
+{
+"w": "refine",
+"t": "inceltmek, geliştirmek",
+"e": "They spent months refining the design."
+},
+{
+"w": "refute",
+"t": "çürütmek, reddetmek",
+"e": "New data refutes the earlier theory."
+},
+{
+"w": "reinforce",
+"t": "pekiştirmek, güçlendirmek",
+"e": "The results reinforce what we already suspected."
+},
+{
+"w": "reluctant",
+"t": "isteksiz, gönülsüz",
+"e": "She was reluctant to share her real opinion."
+},
+{
+"w": "render",
+"t": "kılmak, sunmak",
+"e": "The injury rendered him unable to work."
+},
+{
+"w": "reservation",
+"t": "çekince, rezervasyon",
+"e": "I have serious reservations about the plan."
+},
+{
+"w": "resilient",
+"t": "dayanıklı, çabuk toparlanan",
+"e": "Children are often remarkably resilient."
+},
+{
+"w": "resolve",
+"t": "çözmek, kararlılık",
+"e": "They finally resolved the long-standing dispute."
+},
+{
+"w": "retain",
+"t": "elde tutmak, korumak",
+"e": "The soil retains water well after rain."
+},
+{
+"w": "retrieve",
+"t": "geri almak, kurtarmak",
+"e": "She managed to retrieve the deleted files."
+},
+{
+"w": "reveal",
+"t": "açığa çıkarmak, ifşa etmek",
+"e": "The study revealed a surprising pattern."
+},
+{
+"w": "rigorous",
+"t": "titiz, sıkı",
+"e": "The drug went through rigorous safety testing."
+},
+{
+"w": "robust",
+"t": "sağlam, gürbüz",
+"e": "The system needs a more robust security design."
+},
+{
+"w": "scarce",
+"t": "kıt, az bulunur",
+"e": "Clean water is scarce in many regions."
+},
+{
+"w": "scrutiny",
+"t": "dikkatli inceleme",
+"e": "The accounts came under close scrutiny."
+},
+{
+"w": "sedentary",
+"t": "hareketsiz, oturarak yapılan",
+"e": "A sedentary lifestyle can harm your health."
+},
+{
+"w": "seldom",
+"t": "nadiren",
+"e": "He seldom speaks about his early years."
+},
+{
+"w": "sequence",
+"t": "dizi, sıralama",
+"e": "The events happened in a strange sequence."
+},
+{
+"w": "setback",
+"t": "aksilik, gerileme",
+"e": "The delay was a major setback for the team."
+},
+{
+"w": "simultaneous",
+"t": "eşzamanlı",
+"e": "The two events were almost simultaneous."
+},
+{
+"w": "sophisticated",
+"t": "gelişmiş, sofistike",
+"e": "The lab uses highly sophisticated equipment."
+},
+{
+"w": "sparse",
+"t": "seyrek, az",
+"e": "Information about the author is sparse."
+},
+{
+"w": "speculate",
+"t": "tahmin yürütmek, spekülasyon yapmak",
+"e": "Reporters speculated about the cause for days."
+},
+{
+"w": "sporadic",
+"t": "düzensiz, ara sıra olan",
+"e": "There was only sporadic fighting after the truce."
+},
+{
+"w": "stagnant",
+"t": "durgun",
+"e": "The economy has been stagnant for two years."
+},
+{
+"w": "stark",
+"t": "çıplak, sert, keskin",
+"e": "There is a stark contrast between the two districts."
+},
+{
+"w": "steadfast",
+"t": "sarsılmaz, sadık",
+"e": "She remained steadfast in her beliefs."
+},
+{
+"w": "stimulate",
+"t": "uyarmak, teşvik etmek",
+"e": "Lower rates should stimulate the economy."
+},
+{
+"w": "straightforward",
+"t": "dolaysız, basit",
+"e": "The instructions were refreshingly straightforward."
+},
+{
+"w": "subsequent",
+"t": "sonraki, müteakip",
+"e": "Subsequent tests confirmed the first result."
+},
+{
+"w": "subtle",
+"t": "ince, sezilmesi zor",
+"e": "There was a subtle change in her tone."
+},
+{
+"w": "sufficient",
+"t": "yeterli",
+"e": "We had sufficient supplies for a week."
+},
+{
+"w": "superficial",
+"t": "yüzeysel",
+"e": "His knowledge of the subject is rather superficial."
+},
+{
+"w": "surpass",
+"t": "geçmek, aşmak",
+"e": "Sales surpassed all expectations this year."
+},
+{
+"w": "susceptible",
+"t": "duyarlı, açık",
+"e": "Young plants are susceptible to frost."
+},
+{
+"w": "sustain",
+"t": "sürdürmek, ayakta tutmak",
+"e": "It's hard to sustain that pace for long."
+},
+{
+"w": "tangible",
+"t": "somut, elle tutulur",
+"e": "We need tangible results, not vague promises."
+},
+{
+"w": "tedious",
+"t": "sıkıcı, usandırıcı",
+"e": "Filling in the forms was a tedious task."
+},
+{
+"w": "tentative",
+"t": "geçici, çekingen",
+"e": "They reached a tentative agreement last night."
+},
+{
+"w": "terminate",
+"t": "sonlandırmak",
+"e": "The contract was terminated without warning."
+},
+{
+"w": "threshold",
+"t": "eşik",
+"e": "Her pain threshold is remarkably high."
+},
+{
+"w": "thrive",
+"t": "gelişmek, serpilmek",
+"e": "These plants thrive in cool, damp soil."
+},
+{
+"w": "transient",
+"t": "geçici, kısa süreli",
+"e": "Fame is often transient and fragile."
+},
+{
+"w": "transparent",
+"t": "şeffaf, saydam",
+"e": "The company promised a transparent process."
+},
+{
+"w": "trigger",
+"t": "tetiklemek, tetik",
+"e": "The news triggered a wave of panic buying."
+},
+{
+"w": "undermine",
+"t": "baltalamak, zayıflatmak",
+"e": "Constant delays undermined public trust."
+},
+{
+"w": "undertake",
+"t": "üstlenmek, girişmek",
+"e": "She agreed to undertake the difficult task."
+},
+{
+"w": "uniform",
+"t": "tekdüze, aynı",
+"e": "The quality is uniform across all branches."
+},
+{
+"w": "utilize",
+"t": "kullanmak, yararlanmak",
+"e": "We should utilize the space more efficiently."
+},
+{
+"w": "valid",
+"t": "geçerli, sağlam",
+"e": "That is a perfectly valid point."
+},
+{
+"w": "versatile",
+"t": "çok yönlü, çok amaçlı",
+"e": "The tool is small but surprisingly versatile."
+},
+{
+"w": "viable",
+"t": "uygulanabilir, yaşayabilir",
+"e": "Solar power is now a viable alternative."
+},
+{
+"w": "vibrant",
+"t": "canlı, hareketli",
+"e": "The old town has a vibrant night life."
+},
+{
+"w": "vigorous",
+"t": "güçlü, enerjik",
+"e": "The plan met with vigorous opposition."
+},
+{
+"w": "vivid",
+"t": "canlı, net",
+"e": "She has vivid memories of that summer."
+},
+{
+"w": "void",
+"t": "geçersiz, boşluk",
+"e": "The contract was declared null and void."
+},
+{
+"w": "vulnerable",
+"t": "savunmasız, kırılgan",
+"e": "Elderly people are especially vulnerable to the cold."
+},
+{
+"w": "widespread",
+"t": "yaygın",
+"e": "The reform enjoys widespread public support."
+},
+{
+"w": "withhold",
+"t": "esirgemek, alıkoymak",
+"e": "They chose to withhold the information for now."
+},
+{
+"w": "yield",
+"t": "vermek, boyun eğmek",
+"e": "The investment yielded a modest profit."
+},
+{
+"w": "adhere",
+"t": "bağlı kalmak, yapışmak",
+"e": "All members must adhere to the club's rules."
+},
+{
+"w": "akin",
+"t": "benzer, yakın",
+"e": "His style is akin to that of early jazz players."
+},
+{
+"w": "ambivalent",
+"t": "kararsız, çelişik duygulu",
+"e": "She felt ambivalent about leaving her home town."
+},
+{
+"w": "analogy",
+"t": "benzeşim, kıyas",
+"e": "He explained gravity using a simple analogy."
+},
+{
+"w": "anomaly",
+"t": "anormallik, aykırılık",
+"e": "The reading was an anomaly and had to be checked."
+},
+{
+"w": "apt",
+"t": "uygun, eğilimli",
+"e": "That was an apt description of the situation."
+},
+{
+"w": "array",
+"t": "dizi, çeşitlilik",
+"e": "The shop offers a dazzling array of choices."
+},
+{
+"w": "assert",
+"t": "iddia etmek, öne sürmek",
+"e": "She asserted that the data were reliable."
+},
+{
+"w": "assemble",
+"t": "bir araya getirmek, toplamak",
+"e": "A crowd assembled outside the courthouse."
+},
+{
+"w": "augment",
+"t": "artırmak, çoğaltmak",
+"e": "He took a second job to augment his income."
+},
+{
+"w": "avert",
+"t": "önlemek, savuşturmak",
+"e": "Quick thinking averted a serious accident."
+},
+{
+"w": "barren",
+"t": "çorak, verimsiz",
+"e": "Nothing grows on that barren hillside."
+},
+{
+"w": "belittle",
+"t": "küçümsemek",
+"e": "Don't belittle your own achievements."
+},
+{
+"w": "blur",
+"t": "bulanıklaştırmak, bulanıklık",
+"e": "Tears blurred her vision for a moment."
+},
+{
+"w": "brittle",
+"t": "kırılgan, gevrek",
+"e": "The old paper had become brittle with age."
+},
+{
+"w": "cater",
+"t": "hizmet sunmak, karşılamak",
+"e": "The menu caters to every kind of diet."
+},
+{
+"w": "cautious",
+"t": "temkinli, dikkatli",
+"e": "Be cautious when signing any contract."
+},
+{
+"w": "cite",
+"t": "alıntılamak, örnek göstermek",
+"e": "She cited three studies to support her claim."
+},
+{
+"w": "clarify",
+"t": "açıklığa kavuşturmak",
+"e": "Let me clarify what I actually meant."
+},
+{
+"w": "coerce",
+"t": "zorlamak, baskı yapmak",
+"e": "No one can coerce you into signing this."
+},
+{
+"w": "commodity",
+"t": "meta, emtia",
+"e": "Water is becoming an increasingly precious commodity."
+},
+{
+"w": "compliance",
+"t": "uyum, itaat",
+"e": "The firm was fined for failure of compliance."
+},
+{
+"w": "comply",
+"t": "uymak",
+"e": "All drivers must comply with the speed limit."
+},
+{
+"w": "component",
+"t": "bileşen, parça",
+"e": "Each component is tested before assembly."
+},
+{
+"w": "compound",
+"t": "bileşik, karmaşıklaştırmak",
+"e": "Bad weather compounded their difficulties."
+},
+{
+"w": "comprehend",
+"t": "kavramak, anlamak",
+"e": "The child could not comprehend the bad news."
+},
+{
+"w": "conform",
+"t": "uymak, uydurmak",
+"e": "New buildings must conform to strict codes."
+},
+{
+"w": "consequence",
+"t": "sonuç, netice",
+"e": "He never thinks about the consequences of his actions."
+},
+{
+"w": "conserve",
+"t": "korumak, tasarruf etmek",
+"e": "We must conserve energy wherever we can."
+},
+{
+"w": "consolidate",
+"t": "pekiştirmek, birleştirmek",
+"e": "The company consolidated its position in the market."
+},
+{
+"w": "conspicuous",
+"t": "göze çarpan, belirgin",
+"e": "Her red coat made her conspicuous in the crowd."
+},
+{
+"w": "constrain",
+"t": "kısıtlamak, sınırlamak",
+"e": "A tight budget constrained their choices."
+},
+{
+"w": "contend",
+"t": "iddia etmek, mücadele etmek",
+"e": "Critics contend that the law is unfair."
+},
+{
+"w": "contingent",
+"t": "bağlı, koşullu",
+"e": "Payment is contingent on delivery."
+},
+{
+"w": "contrary",
+"t": "aksi, zıt",
+"e": "Contrary to rumours, the shop is not closing."
+},
+{
+"w": "converge",
+"t": "birleşmek, yakınsamak",
+"e": "Three roads converge at the old market."
+},
+{
+"w": "convict",
+"t": "mahkûm etmek, hükümlü",
+"e": "He was convicted of fraud last year."
+},
+{
+"w": "cordial",
+"t": "içten, dostça",
+"e": "They exchanged cordial greetings at the door."
+},
+{
+"w": "counterpart",
+"t": "muadil, benzeri",
+"e": "The minister met her French counterpart in Paris."
+},
+{
+"w": "covert",
+"t": "gizli, örtülü",
+"e": "The agency ran a covert operation for months."
+},
+{
+"w": "culminate",
+"t": "doruğa ulaşmak, son bulmak",
+"e": "Years of work culminated in a single discovery."
+},
+{
+"w": "deduce",
+"t": "çıkarsamak, sonuç çıkarmak",
+"e": "From the clues she deduced the killer's identity."
+},
+{
+"w": "deem",
+"t": "saymak, addetmek",
+"e": "The plan was deemed too risky to approve."
+},
+{
+"w": "defer",
+"t": "ertelemek, saygı göstermek",
+"e": "They agreed to defer the decision until spring."
+},
+{
+"w": "deficit",
+"t": "açık, eksik",
+"e": "The country ran a large trade deficit."
+},
+{
+"w": "degrade",
+"t": "bozmak, itibarını düşürmek",
+"e": "Plastic can degrade water quality for decades."
+},
+{
+"w": "delegate",
+"t": "yetki vermek, temsilci",
+"e": "A good leader knows how to delegate tasks."
+},
+{
+"w": "demonstrate",
+"t": "göstermek, kanıtlamak",
+"e": "The results demonstrate a clear trend."
+},
+{
+"w": "denounce",
+"t": "kınamak, ihbar etmek",
+"e": "The bishop denounced the practice as cruel."
+},
+{
+"w": "depict",
+"t": "betimlemek, resmetmek",
+"e": "The mural depicts the town's long history."
+},
+{
+"w": "deprive",
+"t": "yoksun bırakmak",
+"e": "The prisoners were deprived of sleep."
+},
+{
+"w": "derive",
+"t": "türetmek, elde etmek",
+"e": "The word derives from an old Latin root."
+},
+{
+"w": "designate",
+"t": "belirlemek, atamak",
+"e": "This area is designated a nature reserve."
+},
+{
+"w": "deter",
+"t": "caydırmak, engellemek",
+"e": "High fines are meant to deter speeding."
+},
+{
+"w": "devote",
+"t": "adamak, ayırmak",
+"e": "She devotes her weekends to volunteering."
+},
+{
+"w": "diagnose",
+"t": "teşhis koymak",
+"e": "Doctors struggled to diagnose the illness."
+},
+{
+"w": "dilute",
+"t": "sulandırmak, seyreltmek",
+"e": "The syrup should be diluted with water."
+},
+{
+"w": "discard",
+"t": "atmak, elden çıkarmak",
+"e": "Please discard any out-of-date medicine."
+},
+{
+"w": "disclose",
+"t": "açıklamak, ifşa etmek",
+"e": "The report failed to disclose key facts."
+},
+{
+"w": "discourage",
+"t": "cesaretini kırmak",
+"e": "Don't let one failure discourage you."
+},
+{
+"w": "disguise",
+"t": "gizlemek, kılık değiştirmek",
+"e": "He could not disguise his disappointment."
+},
+{
+"w": "dismiss",
+"t": "reddetmek, kovmak",
+"e": "She dismissed the idea as impractical."
+},
+{
+"w": "dispose",
+"t": "bertaraf etmek, elden çıkarmak",
+"e": "Please dispose of the batteries safely."
+},
+{
+"w": "dissolve",
+"t": "çözmek, dağıtmak",
+"e": "Sugar dissolves quickly in hot tea."
+},
+{
+"w": "distort",
+"t": "çarpıtmak, bozmak",
+"e": "The report distorted what she had said."
+},
+{
+"w": "distract",
+"t": "dikkatini dağıtmak",
+"e": "Loud music distracts me while I work."
+},
+{
+"w": "diverge",
+"t": "ayrılmak, sapmak",
+"e": "Their opinions began to diverge sharply."
+},
+{
+"w": "drastic",
+"t": "köklü, sert",
+"e": "The company took drastic measures to cut costs."
+},
+{
+"w": "dwell",
+"t": "ikamet etmek, üzerinde durmak",
+"e": "Try not to dwell on past mistakes."
+},
+{
+"w": "ecstatic",
+"t": "coşkulu, mest olmuş",
+"e": "She was ecstatic when she heard the news."
+},
+{
+"w": "embark",
+"t": "başlamak, girişmek",
+"e": "They embarked on an ambitious new project."
+},
+{
+"w": "enclose",
+"t": "çevrelemek, iliştirmek",
+"e": "Please enclose a copy of your receipt."
+},
+{
+"w": "encounter",
+"t": "karşılaşmak, karşılaşma",
+"e": "We encountered several problems along the way."
+},
+{
+"w": "enforce",
+"t": "uygulamak, dayatmak",
+"e": "The police must enforce the new rules."
+},
+{
+"w": "enrich",
+"t": "zenginleştirmek",
+"e": "Travel can greatly enrich your understanding."
+},
+{
+"w": "ensue",
+"t": "ardından gelmek, izlemek",
+"e": "A heated argument ensued after the vote."
+},
+{
+"w": "entice",
+"t": "cezbetmek, kandırmak",
+"e": "Low prices entice shoppers into the store."
+},
+{
+"w": "enumerate",
+"t": "sıralamak, saymak",
+"e": "She enumerated the reasons one by one."
+},
+{
+"w": "erratic",
+"t": "düzensiz, değişken",
+"e": "His driving was dangerously erratic."
+},
+{
+"w": "escalate",
+"t": "tırmanmak, artmak",
+"e": "The dispute quickly escalated into violence."
+},
+{
+"w": "exceptional",
+"t": "istisnai, olağanüstü",
+"e": "She showed exceptional talent from a young age."
+},
+{
+"w": "excerpt",
+"t": "alıntı, parça",
+"e": "He read an excerpt from his new novel."
+},
+{
+"w": "exclude",
+"t": "dışlamak, hariç tutmak",
+"e": "The price excludes tax and delivery."
+},
+{
+"w": "exhibit",
+"t": "sergilemek, göstermek",
+"e": "The patient exhibited unusual symptoms."
+},
+{
+"w": "expel",
+"t": "kovmak, atmak",
+"e": "Two students were expelled for cheating."
+},
+{
+"w": "expenditure",
+"t": "harcama, gider",
+"e": "Public expenditure rose sharply last year."
+},
+{
+"w": "expire",
+"t": "sona ermek, geçerliliğini yitirmek",
+"e": "Your passport expires next month."
+},
+{
+"w": "exquisite",
+"t": "enfes, zarif",
+"e": "The dress was made of exquisite silk."
+},
+{
+"w": "fabricate",
+"t": "uydurmak, imal etmek",
+"e": "He was accused of fabricating the whole story."
+},
+{
+"w": "fluctuation",
+"t": "dalgalanma",
+"e": "Sudden fluctuations in price worry investors."
+},
+{
+"w": "forfeit",
+"t": "kaybetmek, feragat etmek",
+"e": "By quitting, he forfeited his bonus."
+},
+{
+"w": "formidable",
+"t": "ürkütücü, çetin",
+"e": "They faced a formidable opponent in the final."
+},
+{
+"w": "fraud",
+"t": "dolandırıcılık, sahtekârlık",
+"e": "She was jailed for tax fraud."
+},
+{
+"w": "futile",
+"t": "beyhude, boşuna",
+"e": "All their efforts proved futile."
+},
+{
+"w": "gauge",
+"t": "ölçmek, değerlendirmek",
+"e": "It's hard to gauge public opinion on this."
+},
+{
+"w": "glimpse",
+"t": "kısa bakış, göz atmak",
+"e": "She caught a glimpse of him in the crowd."
+},
+{
+"w": "gratitude",
+"t": "minnettarlık",
+"e": "He expressed his deep gratitude to the team."
+},
+{
+"w": "hostile",
+"t": "düşmanca",
+"e": "The proposal met with a hostile reception."
+},
+{
+"w": "humble",
+"t": "alçakgönüllü, mütevazı",
+"e": "Despite his fame, he remained humble."
+},
+{
+"w": "illuminate",
+"t": "aydınlatmak",
+"e": "Candles illuminated the entire hall."
+},
+{
+"w": "immerse",
+"t": "daldırmak, kendini kaptırmak",
+"e": "She immersed herself completely in the work."
+},
+{
+"w": "impair",
+"t": "bozmak, zayıflatmak",
+"e": "Lack of sleep can impair your judgement."
+},
+{
+"w": "impartial",
+"t": "tarafsız",
+"e": "A judge must remain impartial at all times."
+},
+{
+"w": "impede",
+"t": "engellemek, geciktirmek",
+"e": "Debris impeded the flow of the river."
+},
+{
+"w": "imperative",
+"t": "zorunlu, buyurgan",
+"e": "It is imperative that we act now."
+},
+{
+"w": "incentive",
+"t": "teşvik, güdü",
+"e": "Tax breaks act as an incentive to invest."
+},
+{
+"w": "incur",
+"t": "maruz kalmak, üstlenmek",
+"e": "They incurred heavy losses last quarter."
+},
+{
+"w": "indispensable",
+"t": "vazgeçilmez",
+"e": "A good dictionary is indispensable for learners."
+},
+{
+"w": "induce",
+"t": "neden olmak, ikna etmek",
+"e": "Nothing could induce him to change his mind."
+},
+{
+"w": "indulge",
+"t": "kendini kaptırmak, şımartmak",
+"e": "Once a week she indulges in a rich dessert."
+},
+{
+"w": "inept",
+"t": "beceriksiz, yetersiz",
+"e": "The response to the crisis was utterly inept."
+},
+{
+"w": "infringe",
+"t": "ihlal etmek, çiğnemek",
+"e": "The design infringes an existing patent."
+},
+{
+"w": "ingenious",
+"t": "dâhiyane, yaratıcı",
+"e": "She came up with an ingenious solution."
+},
+{
+"w": "inhabit",
+"t": "-de yaşamak, oturmak",
+"e": "Rare birds inhabit these remote islands."
+},
+{
+"w": "insert",
+"t": "eklemek, sokmak",
+"e": "Insert the card and enter your code."
+},
+{
+"w": "instill",
+"t": "aşılamak",
+"e": "Good coaches instill confidence in players."
+},
+{
+"w": "intact",
+"t": "sağlam, bozulmamış",
+"e": "The ancient vase was found completely intact."
+},
+{
+"w": "intercept",
+"t": "yolunu kesmek, ele geçirmek",
+"e": "The message was intercepted before it arrived."
+},
+{
+"w": "interpret",
+"t": "yorumlamak, çevirmek",
+"e": "How you interpret the poem is up to you."
+},
+{
+"w": "intimidate",
+"t": "gözünü korkutmak",
+"e": "He tried to intimidate the smaller boys."
+},
+{
+"w": "intrude",
+"t": "izinsiz girmek, rahatsız etmek",
+"e": "I don't want to intrude on your evening."
+},
+{
+"w": "invaluable",
+"t": "paha biçilmez",
+"e": "Her advice proved absolutely invaluable."
+},
+{
+"w": "inventory",
+"t": "envanter, stok",
+"e": "The shop does a full inventory every month."
+},
+{
+"w": "irrelevant",
+"t": "ilgisiz, konu dışı",
+"e": "That fact is completely irrelevant here."
+},
+{
+"w": "lavish",
+"t": "cömert, savurgan",
+"e": "They threw a lavish party for the launch."
+},
+{
+"w": "legacy",
+"t": "miras, kalıt",
+"e": "The war left a bitter legacy of distrust."
+},
+{
+"w": "lenient",
+"t": "hoşgörülü, yumuşak",
+"e": "The judge was unusually lenient with him."
+},
+{
+"w": "liberate",
+"t": "özgür bırakmak, kurtarmak",
+"e": "The city was liberated after a long siege."
+},
+{
+"w": "literal",
+"t": "birebir, harfi harfine",
+"e": "That is the literal meaning of the phrase."
+}
+]

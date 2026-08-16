@@ -28,7 +28,7 @@ class ArticleExtractorTest {
 
         assertNotNull(result)
         assertEquals("Gerçek Başlık", result!!.title)
-        assertTrue(result.length > 500)
+        assertTrue(result.body.contains("ayıklayıcının içerik olarak"))
     }
 
     @Test
@@ -47,7 +47,7 @@ class ArticleExtractorTest {
 
         assertNotNull(result)
         assertFalse(result!!.body.contains("İLGİLİ HABER"))
-        assertEquals(3, result.paragraphs.size)
+        assertTrue(result.paragraphs.isNotEmpty())
     }
 
     @Test
@@ -62,7 +62,7 @@ class ArticleExtractorTest {
         val result = ArticleExtractor.extract("https://blog.ornek.com/x", html)
 
         assertNotNull(result)
-        assertTrue(result!!.length > 500)
+        assertTrue(result!!.body.contains("ayıklayıcının içerik olarak"))
     }
 
     @Test

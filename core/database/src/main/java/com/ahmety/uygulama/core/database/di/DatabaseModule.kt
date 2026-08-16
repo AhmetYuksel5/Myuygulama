@@ -9,6 +9,7 @@ import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
 import com.ahmety.uygulama.core.database.dao.TagDao
 import com.ahmety.uygulama.core.database.dao.SyncStateDao
+import com.ahmety.uygulama.core.database.dao.VocabDao
 import com.ahmety.uygulama.core.database.dao.TaskDao
 import com.ahmety.uygulama.core.database.sync.DeviceId
 import com.ahmety.uygulama.core.database.sync.Now
@@ -67,6 +68,9 @@ object DatabaseModule {
 
     @Provides
     fun provideSyncStateDao(database: MerkezDatabase): SyncStateDao = database.syncStateDao()
+
+    @Provides
+    fun provideVocabDao(database: MerkezDatabase): VocabDao = database.vocabDao()
 
     @Provides
     @Singleton

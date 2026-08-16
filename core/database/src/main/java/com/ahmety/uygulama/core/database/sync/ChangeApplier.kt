@@ -4,6 +4,7 @@ import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
 import com.ahmety.uygulama.core.database.dao.TagDao
 import com.ahmety.uygulama.core.database.dao.TaskDao
+import com.ahmety.uygulama.core.database.dao.VocabDao
 import com.ahmety.uygulama.core.database.entity.ChangeEntityType
 import com.ahmety.uygulama.core.database.entity.EntryEntity
 import com.ahmety.uygulama.core.database.entity.HabitCheckEntity
@@ -11,6 +12,7 @@ import com.ahmety.uygulama.core.database.entity.HabitEntity
 import com.ahmety.uygulama.core.database.entity.TagEntity
 import com.ahmety.uygulama.core.database.entity.TaskEntity
 import com.ahmety.uygulama.core.database.entity.TaskListEntity
+import com.ahmety.uygulama.core.database.entity.VocabProgressEntity
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,6 +36,7 @@ class ChangeApplier @Inject constructor(
     private val taskDao: TaskDao,
     private val entryDao: EntryDao,
     private val tagDao: TagDao,
+    private val vocabDao: VocabDao,
     private val json: Json,
 ) {
 
@@ -45,6 +48,7 @@ class ChangeApplier @Inject constructor(
             TASK -> applyTask(payload)
             ChangeEntityType.ENTRY -> applyEntry(payload)
             ChangeEntityType.TAG -> applyTag(payload)
+            ChangeEntityType.VOCAB -> applyVocab(payload)
             else -> false
         }
     }.getOrDefault(false)
@@ -96,6 +100,15 @@ class ChangeApplier @Inject constructor(
         if (tagDao.findByUuid(incoming.uuid) != null) return false
         if (tagDao.findByName(incoming.name) != null) return false
         tagDao.insert(incoming.copy(id = 0L))
+        return true
+    }
+
+    private suspend fun applyVocab(payload: String): Boolean {
+        val incoming = json.decodeFromString(VocabProgressEntity.serializer(), payload)
+        val local = vocabDao.get(incoming.word)
+        // word birincil anahtar; id sorunu yok, sadece zaman karşılaştırması.
+        if (local != null && incoming.updatedAt < local.updatedAt) return false
+        vocabDao.upsert(incoming)
         return true
     }
 

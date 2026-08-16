@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,7 @@ import com.ahmety.uygulama.feature.reader.SaveArticleDialog
 import com.ahmety.uygulama.feature.library.NotesRoute
 import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
+import com.ahmety.uygulama.feature.vocab.VocabRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
@@ -56,6 +58,7 @@ private enum class TopLevelDestination(
     TODAY("today", "Bugün", Icons.Outlined.Today),
     TASKS("tasks", "Görevler", Icons.Outlined.CheckCircle),
     LIBRARY("library", "Arşiv", Icons.Outlined.Description),
+    VOCAB("vocab", "Kelime", Icons.Outlined.Translate),
     SEARCH("search", "Ara", Icons.Outlined.Search),
     SETTINGS("settings", "Ayarlar", Icons.Outlined.Settings),
 }
@@ -139,6 +142,9 @@ fun MerkezApp() {
                     onOpenArticle = { navController.navigate("$ARTICLE_ROUTE/$it") },
                     onAddArticle = { showSaveArticle = true },
                 )
+            }
+            composable(TopLevelDestination.VOCAB.route) {
+                VocabRoute()
             }
             composable(TopLevelDestination.SEARCH.route) {
                 SearchRoute(

@@ -49,4 +49,5 @@ object ChangeEntityType {
     const val HABIT_CHECK = "habit_check"
     const val ENTRY = "entry"
     const val TAG = "tag"
+    const val VOCAB = "vocab_progress"
 }
