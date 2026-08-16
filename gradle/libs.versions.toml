@@ -16,6 +16,7 @@ hiltWork = "1.2.0"
 glance = "1.1.1"
 kotlinxDatetime = "0.6.1"
 kotlinxSerialization = "1.7.3"
+kotlinxCoroutines = "1.9.0"
 junit = "4.13.2"
 
 [libraries]
@@ -53,6 +54,7 @@ androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidge
 androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
 
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }

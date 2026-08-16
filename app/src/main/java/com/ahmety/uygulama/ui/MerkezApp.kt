@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahmety.uygulama.feature.habits.HabitsRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -80,10 +81,7 @@ fun MerkezApp() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(TopLevelDestination.TODAY.route) {
-                PlaceholderScreen(
-                    title = "Bugün",
-                    description = "Alışkanlıklar, günün görevleri ve ajanda buraya gelecek.",
-                )
+                HabitsRoute()
             }
             composable(TopLevelDestination.LIBRARY.route) {
                 PlaceholderScreen(
