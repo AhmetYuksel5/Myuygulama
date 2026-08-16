@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.ahmety.uygulama.feature.gestures.GestureFeedback
 import com.ahmety.uygulama.feature.gestures.GestureSettings
 
 /**
@@ -48,6 +49,8 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
     var onRight by remember { mutableStateOf(settings.onRightEdge) }
     var widthDp by remember { mutableIntStateOf(settings.widthDp) }
     var heightDp by remember { mutableIntStateOf(settings.heightDp) }
+    var vibrate by remember { mutableStateOf(settings.vibrateEnabled) }
+    var vibrateStrength by remember { mutableIntStateOf(settings.vibrateStrength) }
 
     // Sistem ayarlarından dönüldüğünde durumu tazeliyoruz.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -174,6 +177,40 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
         ) {
             heightDp = it
             settings.heightDp = it
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Titreşim", style = MaterialTheme.typography.bodyLarge)
+            Switch(
+                checked = vibrate,
+                onCheckedChange = {
+                    vibrate = it
+                    settings.vibrateEnabled = it
+                    if (it) GestureFeedback.vibrate(context, settings)
+                },
+            )
+        }
+
+        if (vibrate) {
+            Text("Titreşim gücü", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Hafif", "Orta", "Güçlü").forEachIndexed { index, label ->
+                    FilterChip(
+                        selected = vibrateStrength == index,
+                        onClick = {
+                            vibrateStrength = index
+                            settings.vibrateStrength = index
+                            // Seçer seçmez hissettir: ayrı bir "dene" düğmesine gerek kalmasın.
+                            GestureFeedback.vibrate(context, settings)
+                        },
+                        label = { Text(label) },
+                    )
+                }
+            }
         }
 
         Text(

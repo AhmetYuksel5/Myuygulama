@@ -1,5 +1,6 @@
 package com.ahmety.uygulama.feature.tasks
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
@@ -44,6 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun TasksRoute(
     modifier: Modifier = Modifier,
+    openAddDialog: Boolean = false,
+    onAddDialogConsumed: () -> Unit = {},
     viewModel: TasksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -52,6 +57,15 @@ fun TasksRoute(
     var showImport by remember { mutableStateOf(false) }
     var showNewList by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var doneExpanded by remember { mutableStateOf(false) }
+
+    // Widget'taki + düğmesi buraya "ekleme kutusunu aç" isteğiyle düşer.
+    LaunchedEffect(openAddDialog) {
+        if (openAddDialog) {
+            showAdd = true
+            onAddDialogConsumed()
+        }
+    }
 
     RefreshTodayOnResume(viewModel::refreshToday)
 
@@ -85,6 +99,18 @@ fun TasksRoute(
                             onClick = {
                                 menuOpen = false
                                 showImport = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (state.hideCompleted) "Tamamlananları göster"
+                                    else "Tamamlananları gizle",
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                viewModel.setHideCompleted(!state.hideCompleted)
                             },
                         )
                     }
@@ -127,24 +153,44 @@ fun TasksRoute(
                     )
                 }
 
-                if (state.doneTasks.isNotEmpty()) {
+                // Tamamlananlar: gizlenebilir, gizli değilse akordiyon olarak altta.
+                if (state.doneTasks.isNotEmpty() && !state.hideCompleted) {
                     item {
                         Column {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            Text(
-                                text = "Tamamlananlar (${state.doneTasks.size})",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { doneExpanded = !doneExpanded }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Tamamlananlar (${state.doneTasks.size})",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(
+                                    imageVector = if (doneExpanded) {
+                                        Icons.Outlined.ExpandLess
+                                    } else {
+                                        Icons.Outlined.ExpandMore
+                                    },
+                                    contentDescription = if (doneExpanded) "Kapat" else "Aç",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
-                    items(state.doneTasks, key = { it.uuid }) { task ->
-                        TaskRow(
-                            task = task,
-                            today = state.today,
-                            onToggle = { viewModel.setCompleted(task, it) },
-                        )
+                    if (doneExpanded) {
+                        items(state.doneTasks, key = { it.uuid }) { task ->
+                            TaskRow(
+                                task = task,
+                                today = state.today,
+                                onToggle = { viewModel.setCompleted(task, it) },
+                            )
+                        }
                     }
                 }
 

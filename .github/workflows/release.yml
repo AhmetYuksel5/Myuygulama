@@ -47,22 +47,17 @@ jobs:
           echo "vars.SIGNING_STORE_PASSWORD     uzunluğu: ${#PASSWORD_AS_VAR}"
 
           if [ -z "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_AS_VAR" ]; then
-            echo "::error::Değerler 'Variables' sekmesine eklenmiş, 'Secrets' sekmesine değil."
-            echo "::error::Aynı sayfada iki sekme var: Secrets | Variables."
-            echo "::error::Variables'taki iki kaydı sil, 'Secrets' sekmesinden"
-            echo "::error::'New repository secret' ile yeniden ekle."
-            exit 1
+            echo "::warning::Değerler 'Variables' sekmesine eklenmiş, 'Secrets' sekmesine değil. Variables'taki kayıtları silip Secrets sekmesinden ekleyin."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::SIGNING_KEYSTORE_BASE64 secret'ı boş ya da tanımlı değil."
-            echo "::error::Settings > Secrets and variables > Actions > SECRETS sekmesi >"
-            echo "::error::Repository secrets altında olmalı (Environment secrets değil)."
-            exit 1
-          fi
-          if [ -z "$STORE_PASSWORD" ]; then
-            echo "::error::SIGNING_STORE_PASSWORD secret'ı boş ya da tanımlı değil."
-            exit 1
+          # Teşhis tamamlandı: anahtar eksikse artık işi kırmızıya boyamıyoruz,
+          # uyarı verip sürümü atlıyoruz. Secret eklendiği anda sonraki push yayınlar.
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ]; then
+            echo "::warning::İmzalama secret'ları eksik; sürüm yayınlanmadı. https://github.com/AhmetYuksel5/Myuygulama/settings/secrets/actions adresinde Repository secrets altına SIGNING_KEYSTORE_BASE64 ve SIGNING_STORE_PASSWORD ekleyin."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           # Yapıştırırken araya giren satır sonları base64'ü bozar; temizliyoruz.
@@ -76,6 +71,7 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: İmzalı APK derle
+        if: steps.keystore.outputs.ready == 'true'
         env:
           BUILD_NUMBER: ${{ github.run_number }}
           SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/merkez-release.jks
@@ -86,11 +82,13 @@ jobs:
           ./gradlew --no-daemon assembleRelease
 
       - name: APK'yı adlandır
+        if: steps.keystore.outputs.ready == 'true'
         run: |
           mkdir -p yayin
           cp app/build/outputs/apk/release/app-release.apk "yayin/merkez-0.${{ github.run_number }}.apk"
 
       - name: Sürümü yayınla
+        if: steps.keystore.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.${{ github.run_number }}

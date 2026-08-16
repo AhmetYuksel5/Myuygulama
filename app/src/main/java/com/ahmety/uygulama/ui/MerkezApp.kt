@@ -19,7 +19,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -58,6 +63,23 @@ fun MerkezApp() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
+    // Widget'tan gelen "görevlere git / görev ekle" istekleri.
+    val navRequest by NavRequestBus.target.collectAsState()
+    var pendingAddTask by remember { mutableStateOf(false) }
+    LaunchedEffect(navRequest) {
+        when (navRequest) {
+            NavRequestBus.TARGET_TASKS, NavRequestBus.TARGET_ADD_TASK -> {
+                if (navRequest == NavRequestBus.TARGET_ADD_TASK) pendingAddTask = true
+                navController.navigate(TopLevelDestination.TASKS.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        }
+        if (navRequest != null) NavRequestBus.consume()
+    }
+
     Scaffold(
         bottomBar = {
             NavigationBar {
@@ -92,7 +114,10 @@ fun MerkezApp() {
                 TodayScreen()
             }
             composable(TopLevelDestination.TASKS.route) {
-                TasksRoute()
+                TasksRoute(
+                    openAddDialog = pendingAddTask,
+                    onAddDialogConsumed = { pendingAddTask = false },
+                )
             }
             composable(TopLevelDestination.LIBRARY.route) {
                 NotesRoute(onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") })

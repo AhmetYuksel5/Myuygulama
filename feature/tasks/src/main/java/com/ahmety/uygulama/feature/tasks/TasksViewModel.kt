@@ -1,15 +1,18 @@
 package com.ahmety.uygulama.feature.tasks
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.database.importer.ImportResult
 import com.ahmety.uygulama.core.database.importer.TodoImportParser
+import com.ahmety.uygulama.core.database.prefs.TaskViewPrefs
 import com.ahmety.uygulama.core.database.repository.TaskRepository
 import com.ahmety.uygulama.core.model.RecurrenceRule
 import com.ahmety.uygulama.core.model.Task
 import com.ahmety.uygulama.core.model.TaskList
 import com.ahmety.uygulama.core.model.TaskPriority
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +33,7 @@ data class TasksUiState(
     val selectedListUuid: String? = null,
     val tasks: List<Task> = emptyList(),
     val today: Int = 0,
+    val hideCompleted: Boolean = false,
 ) {
     val openTasks: List<Task> get() = tasks.filterNot { it.isCompleted }
     val doneTasks: List<Task> get() = tasks.filter { it.isCompleted }
@@ -46,10 +50,13 @@ data class TodayTasksUiState(
 @HiltViewModel
 class TasksViewModel @Inject constructor(
     private val repository: TaskRepository,
+    @ApplicationContext context: Context,
 ) : ViewModel() {
 
+    private val prefs = TaskViewPrefs(context)
     private val selectedListUuid = MutableStateFlow<String?>(null)
     private val todayFlow = MutableStateFlow(currentEpochDay())
+    private val hideCompletedFlow = MutableStateFlow(prefs.hideCompleted)
 
     /** Son içe aktarma özeti; kullanıcıya "kaç görev geldi" demek için. */
     private val _importMessage = MutableStateFlow<String?>(null)
@@ -66,9 +73,10 @@ class TasksViewModel @Inject constructor(
         repository.observeLists(),
         selectedListUuid,
         todayFlow,
-    ) { lists, selected, today ->
-        Triple(lists, selected ?: lists.firstOrNull()?.uuid, today)
-    }.flatMapLatest { (lists, selected, today) ->
+        hideCompletedFlow,
+    ) { lists, selected, today, hideCompleted ->
+        Quad(lists, selected ?: lists.firstOrNull()?.uuid, today, hideCompleted)
+    }.flatMapLatest { (lists, selected, today, hideCompleted) ->
         val tasksFlow = if (selected == null) flowOf(emptyList()) else repository.observeTasks(selected)
         tasksFlow.map { tasks ->
             TasksUiState(
@@ -76,9 +84,15 @@ class TasksViewModel @Inject constructor(
                 selectedListUuid = selected,
                 tasks = tasks,
                 today = today,
+                hideCompleted = hideCompleted,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TasksUiState())
+
+    fun setHideCompleted(hide: Boolean) {
+        prefs.hideCompleted = hide
+        hideCompletedFlow.value = hide
+    }
 
     val todayState: StateFlow<TodayTasksUiState> = todayFlow.flatMapLatest { today ->
         combine(
@@ -157,3 +171,5 @@ class TasksViewModel @Inject constructor(
 
 internal fun currentEpochDay(): Int =
     Clock.System.todayIn(TimeZone.currentSystemDefault()).toEpochDays()
+
+private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)

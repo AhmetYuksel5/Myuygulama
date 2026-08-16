@@ -105,7 +105,7 @@ class EdgeGestureService : AccessibilityService() {
             MotionEvent.ACTION_UP -> {
                 val dy = event.rawY - downY
                 val dx = event.rawX - downX
-                when {
+                val handled = when {
                     // Dikey hareket yataydan baskınsa yukarı/aşağı komutları.
                     abs(dy) > abs(dx) && dy < -threshold ->
                         performGlobalAction(GLOBAL_ACTION_RECENTS)
@@ -118,6 +118,8 @@ class EdgeGestureService : AccessibilityService() {
 
                     else -> false
                 }
+                // Jest gerçekten bir komuta dönüştüyse dokunsal onay ver.
+                if (handled) GestureFeedback.vibrate(this, GestureSettings(this))
                 true
             }
 

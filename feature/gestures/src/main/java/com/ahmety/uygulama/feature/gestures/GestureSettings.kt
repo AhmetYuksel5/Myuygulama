@@ -38,6 +38,15 @@ class GestureSettings(context: Context) {
         get() = prefs.getInt(KEY_COLOR, DEFAULT_COLOR)
         set(value) = prefs.edit().putInt(KEY_COLOR, value).apply()
 
+    var vibrateEnabled: Boolean
+        get() = prefs.getBoolean(KEY_VIBRATE, true)
+        set(value) = prefs.edit().putBoolean(KEY_VIBRATE, value).apply()
+
+    /** 0 = hafif, 1 = orta, 2 = güçlü. */
+    var vibrateStrength: Int
+        get() = prefs.getInt(KEY_VIBRATE_STRENGTH, 1)
+        set(value) = prefs.edit().putInt(KEY_VIBRATE_STRENGTH, value.coerceIn(0, 2)).apply()
+
     companion object {
         private const val PREFS_NAME = "merkez_kenar"
         private const val KEY_ENABLED = "enabled"
@@ -46,6 +55,8 @@ class GestureSettings(context: Context) {
         private const val KEY_HEIGHT = "height_dp"
         private const val KEY_OFFSET = "offset_dp"
         private const val KEY_COLOR = "color"
+        private const val KEY_VIBRATE = "vibrate"
+        private const val KEY_VIBRATE_STRENGTH = "vibrate_strength"
 
         /** Yarı saydam beyaz: koyu ve açık arayüzlerde de seçilebiliyor. */
         private const val DEFAULT_COLOR = 0x66FFFFFF
