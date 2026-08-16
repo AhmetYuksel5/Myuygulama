@@ -1,0 +1,45 @@
+name: Android CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Derle ve APK üret
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: JDK 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle hazırla
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: gradlew çalıştırılabilir olsun
+        run: chmod +x ./gradlew
+
+      - name: Debug APK derle
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Birim testleri
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: APK'yı yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: merkez-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

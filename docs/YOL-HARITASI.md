@@ -42,6 +42,22 @@ Bunun getirdikleri — ve "entelektüel birikim" isteğinin gerçek cevabı bu:
 
 ---
 
+## 0.1 Alınan kararlar (16 Ağustos 2026)
+
+1. **İlk hedef: "Bugün" ekranı.** Faz 0'dan sonra alışkanlıklar + görevler + takvim +
+   widget'lar geliyor. Uygulamanın her sabah açılan bir şey olması önceliği.
+2. **Microsoft To Do bırakılıyor.** Görevler tamamen bu uygulamada yaşayacak.
+   → Azure uygulama kaydı, MSAL, Graph delta senkronu, çakışma çözümü — hepsi kapsam dışı.
+   Bu, projeden **tam bir fazı** siliyor (eski Faz 3). Mevcut görevlerin için tek seferlik
+   içe aktarma yolu sunacağız (To Do → CSV/liste yapıştırma).
+   Takvim senkronu bundan etkilenmiyor; Google takvimi `CalendarContract` üzerinden çalışmaya devam.
+3. **Yapay zekâ sağlayıcısı: OpenAI.** Anahtar sonra verilecek. Kod `AiProvider` arayüzü
+   üzerinden yazılıyor; anahtar yokken uygulamanın hiçbir çekirdek işlevi durmuyor.
+4. **Dağıtım: GitHub Actions.** Her push'ta CI derler, hatalar CI kayıtlarından okunup
+   düzeltilir; faz sonlarında kurulabilir APK yayınlanır.
+
+---
+
 ## 1. Teknoloji kararları (ve neden)
 
 | Konu | Karar | Gerekçe |
@@ -58,8 +74,8 @@ Bunun getirdikleri — ve "entelektüel birikim" isteğinin gerçek cevabı bu:
 | Makale süzme | Jsoup + Readability4J | Mozilla Readability'nin JVM portu = Pocket'ın yaptığı iş |
 | PDF | Görüntüleme: `PdfRenderer` (sistemde var) · İşaretleme: PDFBox-Android | Aşağıdaki PDF notuna bak |
 | Takvim | **CalendarContract** (cihazın takvim sağlayıcısı) | Aşağıdaki takvim notuna bak — OAuth'a hiç girmiyoruz |
-| Microsoft To Do | MSAL + Microsoft Graph (`/me/todo/lists`, delta sorgu) | Tek resmî yol, API'si var |
-| Yapay zekâ | Claude API, anahtar cihazda şifreli; arayüz soyut (`AiProvider`) | Kelime cümlesi, makale özeti, haber derlemesi |
+| Görevler | **Tamamen yerel** (Microsoft To Do bırakıldı) | Bkz. Bölüm 0.1 — alınan kararlar |
+| Yapay zekâ | OpenAI API, anahtar cihazda şifreli; arayüz soyut (`AiProvider`) | Kelime cümlesi, makale özeti, haber derlemesi |
 | Derleme | Gradle Kotlin DSL + version catalog, KSP (kapt yok) | Hız |
 | Dağıtım | GitHub Actions → imzalı APK → telefona indir | Bölüm 6 |
 
@@ -138,13 +154,13 @@ yerine doğrudan bu sağlayıcıyı okuyup yazacağız:
 
 Bu, projenin en büyük "az işle çok kazanç" kararı. İhtiyaç: `READ_CALENDAR` + `WRITE_CALENDAR`.
 
-### Microsoft To Do — burada kestirme yol yok
-Cihazda içerik sağlayıcısı yok, tek yol Microsoft Graph API. Gerekenler:
-Azure'da ücretsiz bir "uygulama kaydı" (senin yapman gereken ~10 dakikalık bir işlem,
-adım adım yazacağım), MSAL ile giriş, `delta` sorgularıyla artımlı senkron, çakışma çözümü.
-**Orta-büyük efor.** Bu yüzden Faz 1'de görevleri önce yerel yazıyoruz, Graph senkronunu
-Faz 3'te üstüne takıyoruz — sen Faz 1'den itibaren uygulamayı kullanabilir hâlde oluyorsun.
-(Alternatif: To Do'yu tamamen terk edip görevleri buraya taşımak. Sana soruyorum.)
+### Görevler — Microsoft To Do'yu bıraktığımız için işimiz çok kolaylaştı
+Cihazda To Do için içerik sağlayıcısı yok; tek yol Microsoft Graph API idi (Azure kaydı,
+MSAL, delta sorguları, çakışma çözümü). Karar gereği bunların hiçbirini yapmıyoruz.
+Görevler doğrudan bizim veritabanımızda yaşıyor — bu sayede alt görev, tekrar kuralı,
+etiket, göreve not/dosya iliştirme gibi To Do'nun veri modeline sığmayan şeyleri de
+serbestçe ekleyebiliyoruz. Mevcut görevlerin için tek seferlik içe aktarma
+(liste yapıştırma / CSV) Faz 1'in içinde.
 
 ### PDF ve depolama alanı endişen — haklısın, ama çözümü var
 "PDF'ler okuma/yazma alanımı yer mi?" diye sordun. Ölçüler şöyle:
@@ -202,7 +218,7 @@ GitHub Actions ile imzalı APK üretimi.
 ### Faz 1 — Günlük çekirdek (L)
 - **Alışkanlıklar:** günlük/haftalık/x-kere hedefler, seri (streak) takibi, hatırlatıcı,
   günlük–aylık–yıllık görünümler.
-- **Görevler:** yerel liste, alt görev, tarih, öncelik, tekrar.
+- **Görevler:** liste, alt görev, tarih, öncelik, tekrar, etiket; To Do'dan tek seferlik içe aktarma.
 - **Takvim:** CalendarContract ile okuma/yazma, gün ve ay görünümü.
 - **Bugün ekranı:** alışkanlıklar + bugünün görevleri + ajanda tek ekranda.
 - **Widget'lar:** Bugün, alışkanlık haftalık, alışkanlık yıllık, ay takvimi.
@@ -218,39 +234,34 @@ GitHub Actions ile imzalı APK üretimi.
 - **Kenar hareketleri:** Bölüm 2'deki güvenli Fluid NG yerine geçen modül.
 → **Çıktı:** Keep, Pocket ve Fluid NG telefondan silinir.
 
-### Faz 3 — Senkronizasyon (M)
-Microsoft To Do çift yönlü senkron (Azure kaydı + MSAL + delta), takvim ince ayar,
-çakışma çözümü, senkron durumu ekranı.
-→ **Çıktı:** To Do'daki her şey uygulamada, uygulamadaki her şey To Do'da.
-
-### Faz 4 — İngilizce kelime (M)
+### Faz 3 — İngilizce kelime (M)
 Kelime listesi içe aktarma (CSV/TXT), yapay zekâ ile anlam + örnek cümle + eş anlamlı +
 telaffuz, aralıklı tekrar (SM-2 algoritması), günlük tekrar kartları, "Günün kelimesi"
 widget'ı, okuduğun makale/PDF içinden kelime madenciliği (bilmediğin kelimeyi seç → listeye ekle),
 bildiklerin/öğrenmekte olduklarınla ilerleme istatistikleri.
 
-### Faz 5 — Haberler (S-M)
+### Faz 4 — Haberler (S-M)
 RSS/Atom motoru, OPML içe aktarma, ilgi klasörleri, anahtar kelime filtresi,
 günlük yapay zekâ derlemesi, tek dokunuşla "oku-sonra"ya at.
 
-### Faz 6 — Dokümanlar ve kasa (L)
+### Faz 5 — Dokümanlar ve kasa (L)
 PDF görüntüleyici (kaydırma, yakınlaştırma, içindekiler, arama), vurgulama/not/çizim
 katmanı, alıntı → Entry akışı, düz kopya dışa aktarma.
 **Kasa:** önemli dosyalar için şifreli depo, kategori/etiket, hızlı önizleme,
 biyometrik kilit, depolama paneli.
 
-### Faz 7 — Finans (L)
+### Faz 6 — Finans (L)
 Hesaplar ve varlıklar (nakit, banka, altın, döviz, yatırım), gelir/gider defteri,
 kategoriler, tekrarlayan işlemler, aylık bütçe, Excel/CSV içe aktarma
 (banka ekstresi eşleme sihirbazı ile), grafikler, ay sonu raporu,
 opsiyonel döviz/altın kuru güncelleme.
 → **Not:** Bu faz açılmadan **önce** veritabanı şifrelemesi (SQLCipher) devreye alınır.
 
-### Faz 8 — Cilalama (sürekli)
+### Faz 7 — Cilalama (sürekli)
 Performans, pil, animasyon, yedek/geri yükleme testi, arama iyileştirme,
 kullandıkça çıkan istekler.
 
-**Efor işaretleri:** S = küçük, M = orta, L = büyük. Faz 1, 6 ve 7 en ağır olanlar.
+**Efor işaretleri:** S = küçük, M = orta, L = büyük. Faz 1, 5 ve 6 en ağır olanlar.
 
 ---
 
@@ -259,12 +270,11 @@ kullandıkça çıkan istekler.
 | Ne zaman | Ne gerekiyor |
 |---|---|
 | Faz 0 | Uygulama adı ve paket adı; APK imzalama anahtarı (ben üretirim, sen saklarsın) |
-| Faz 1 | Alışkanlık listen; widget'ları nasıl dizmek istediğin |
+| Faz 1 | Alışkanlık listen; widget'ları nasıl dizmek istediğin; To Do'daki mevcut görevlerin |
 | Faz 2 | Keep yedeğin (Google Takeout) |
-| Faz 3 | Azure'da ücretsiz uygulama kaydı (adımlarını yazacağım) |
-| Faz 4 | Claude API anahtarı; varsa mevcut kelime listen |
-| Faz 5 | Takip ettiğin siteler / ilgi alanların |
-| Faz 7 | Örnek Excel dosyaların (kolon yapısını görmem için), hesap/kategori listen |
+| Faz 3 | OpenAI API anahtarı; varsa mevcut kelime listen |
+| Faz 4 | Takip ettiğin siteler / ilgi alanların |
+| Faz 6 | Örnek Excel dosyaların (kolon yapısını görmem için), hesap/kategori listen |
 
 ---
 
@@ -293,6 +303,6 @@ En iyisi ikisi birden: 1 zaten kalıcı dağıtım kanalı, 2 geliştirme hızı
   bu, işin yarısını eliyor. İleride ikinci cihaz istersen yedek dosyası üzerinden çözeriz.
 - **Kendi kendine güncelleme yok** (Play Store olmadığı için). GitHub Release + uygulama
   içinde "yeni sürüm var" bildirimi ile telafi ediyoruz.
-- **Yapay zekâ özellikleri internet ve API anahtarı ister.** Çekirdek işlevlerin hiçbiri buna bağlı değil.
-- **PDF işaretleme, uygulamanın en zor teknik parçası.** Faz 6'ya konmasının sebebi bu;
+- **Yapay zekâ özellikleri internet ve OpenAI API anahtarı ister.** Çekirdek işlevlerin hiçbiri buna bağlı değil.
+- **PDF işaretleme, uygulamanın en zor teknik parçası.** Faz 5'e konmasının sebebi bu;
   gerekirse önce "oku + vurgula", sonra "serbest çizim" diye ikiye bölünür.
