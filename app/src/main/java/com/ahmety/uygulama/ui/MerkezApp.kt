@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -24,7 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.ahmety.uygulama.feature.habits.HabitsRoute
+import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -39,6 +40,7 @@ private enum class TopLevelDestination(
     val icon: ImageVector,
 ) {
     TODAY("today", "Bugün", Icons.Outlined.Today),
+    TASKS("tasks", "Görevler", Icons.Outlined.CheckCircle),
     LIBRARY("library", "Arşiv", Icons.Outlined.Description),
     SEARCH("search", "Ara", Icons.Outlined.Search),
     SETTINGS("settings", "Ayarlar", Icons.Outlined.Settings),
@@ -81,7 +83,10 @@ fun MerkezApp() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(TopLevelDestination.TODAY.route) {
-                HabitsRoute()
+                TodayScreen()
+            }
+            composable(TopLevelDestination.TASKS.route) {
+                TasksRoute()
             }
             composable(TopLevelDestination.LIBRARY.route) {
                 PlaceholderScreen(

@@ -7,6 +7,7 @@ import com.ahmety.uygulama.core.database.dao.ChangeLogDao
 import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
 import com.ahmety.uygulama.core.database.dao.TagDao
+import com.ahmety.uygulama.core.database.dao.TaskDao
 import com.ahmety.uygulama.core.database.sync.DeviceId
 import com.ahmety.uygulama.core.database.sync.Now
 import dagger.Module
@@ -39,6 +40,9 @@ object DatabaseModule {
 
     @Provides
     fun provideHabitDao(database: MerkezDatabase): HabitDao = database.habitDao()
+
+    @Provides
+    fun provideTaskDao(database: MerkezDatabase): TaskDao = database.taskDao()
 
     @Provides
     fun provideChangeLogDao(database: MerkezDatabase): ChangeLogDao = database.changeLogDao()
