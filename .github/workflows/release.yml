@@ -30,21 +30,39 @@ jobs:
       - name: Gradle hazırla
         uses: gradle/actions/setup-gradle@v4
 
+      # Anahtar eksikse sessizce atlamıyoruz: yeşil tik alıp hiçbir şey
+      # yayınlamamak, sorunu saatlerce görünmez kılıyor.
       - name: İmzalama anahtarını çöz
         id: keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         run: |
+          echo "SIGNING_KEYSTORE_BASE64 uzunluğu: ${#KEYSTORE_BASE64}"
+          echo "SIGNING_STORE_PASSWORD uzunluğu: ${#STORE_PASSWORD}"
+
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Anahtar yok; sürüm yayınlanmayacak."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::SIGNING_KEYSTORE_BASE64 secret'ı boş ya da tanımlı değil."
+            echo "::error::Settings > Secrets and variables > Actions > Repository secrets altında,"
+            echo "::error::adı tam olarak SIGNING_KEYSTORE_BASE64 olmalı (Environment secret değil)."
+            exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/merkez-release.jks"
+          if [ -z "$STORE_PASSWORD" ]; then
+            echo "::error::SIGNING_STORE_PASSWORD secret'ı boş ya da tanımlı değil."
+            exit 1
+          fi
+
+          # Yapıştırırken araya giren satır sonları base64'ü bozar; temizliyoruz.
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/merkez-release.jks"
+
+          if [ ! -s "$RUNNER_TEMP/merkez-release.jks" ]; then
+            echo "::error::Anahtar çözülemedi. base64 metni eksik kopyalanmış olabilir."
+            exit 1
+          fi
+          echo "Anahtar dosyası boyutu: $(stat -c%s "$RUNNER_TEMP/merkez-release.jks") bayt (beklenen 4376)"
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: İmzalı APK derle
-        if: steps.keystore.outputs.ready == 'true'
         env:
           BUILD_NUMBER: ${{ github.run_number }}
           SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/merkez-release.jks
@@ -55,13 +73,11 @@ jobs:
           ./gradlew --no-daemon assembleRelease
 
       - name: APK'yı adlandır
-        if: steps.keystore.outputs.ready == 'true'
         run: |
           mkdir -p yayin
           cp app/build/outputs/apk/release/app-release.apk "yayin/merkez-0.${{ github.run_number }}.apk"
 
       - name: Sürümü yayınla
-        if: steps.keystore.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.${{ github.run_number }}
