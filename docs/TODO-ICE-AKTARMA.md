@@ -50,14 +50,32 @@ uygulama kaydı veya API anahtarı gerekmiyor — sadece kendi hesabınla giriş
 <https://developer.microsoft.com/graph/graph-explorer>
 Sağ üstten **Sign in** ile To Do'yu kullandığın Microsoft hesabınla gir.
 
-### 2. Listeleri çek
+### 2. `Tasks.Read` iznini elle onayla (bu adım atlanamaz)
+Graph Explorer izinleri kendiliğinden istemez. Onaylamadan sorgu çalıştırırsan
+**boş mesajlı `401 Unauthorized`** alırsın — yetkisiz olduğun için değil,
+token'da o kapsam olmadığı için.
+
+1. Adres kutusunun altındaki **Modify Permissions** sekmesine tıkla
+2. Arama kutusuna `Tasks` yaz
+3. **`Tasks.Read`** satırının sağındaki **Consent** düğmesine bas
+4. Microsoft'un onay penceresinde **Accept** de
+
+`Tasks.ReadWrite` gerekmiyor; yalnızca okuyoruz.
+
+> **Consent düğmesi görünmüyorsa** sağ üstten çıkış yapıp tekrar gir;
+> Graph Explorer izin listesini oturum açarken kuruyor ve bazen eksik kalıyor.
+>
+> **Hâlâ 401 alıyorsan** giriş yaptığın hesabın To Do listelerinin bulunduğu
+> hesap olduğundan emin ol. **Access token** sekmesindeki token'ı
+> [jwt.ms](https://jwt.ms) üzerine yapıştırıp `scp` alanında `Tasks.Read`
+> var mı diye bakabilirsin.
+
+### 3. Listeleri çek
 Adres kutusuna şunu yaz ve **Run query**:
 
 ```
 GET  https://graph.microsoft.com/v1.0/me/todo/lists
 ```
-
-İlk seferde izin isteyebilir (`Tasks.Read`); **Consent** deyip onayla.
 
 Gelen JSON'un tamamını kopyala → uygulamada **Görevler → menü → İçe aktar** →
 yapıştır → **İçe aktar**. Bu adım **listeleri** oluşturur.
@@ -75,7 +93,7 @@ yapıştır → **İçe aktar**. Bu adım **listeleri** oluşturur.
 
 Bu `id`'leri bir sonraki adımda kullanacaksın.
 
-### 3. Her listenin görevlerini çek
+### 4. Her listenin görevlerini çek
 Her liste için sırayla (yukarıdaki `id`'yi yapıştırarak):
 
 ```
@@ -86,12 +104,12 @@ Gelen JSON'u yine kopyala ve içe aktar. Bu adımda başlık, tamamlanma durumu,
 tarih, önem derecesi, notlar ve **alt görevler** (checklist) birlikte gelir.
 
 > **Not:** Aynı adlı liste ikinci kez içe aktarılırsa yeni liste açılmaz,
-> görevler mevcut listeye eklenir. Yani adım 2 ve 3'ü peş peşe yapman sorun değil.
+> görevler mevcut listeye eklenir. Yani adım 3 ve 4'ü peş peşe yapman sorun değil.
 
 > **200'den fazla görev varsa:** çıktının sonunda bir `@odata.nextLink` adresi
 > olur; onu adres kutusuna yapıştırıp çalıştırınca kalanı gelir.
 
-### 4. Tamamlanmışları da istiyor musun?
+### 5. Tamamlanmışları da istiyor musun?
 Varsayılan olarak To Do tamamlanmış görevleri de döndürür. İstemiyorsan sorguya
 şunu ekleyebilirsin:
 
