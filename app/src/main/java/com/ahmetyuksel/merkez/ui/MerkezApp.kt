@@ -1,5 +1,6 @@
 package com.ahmetyuksel.merkez.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahmetyuksel.merkez.ui.permissions.PermissionsScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -95,12 +98,33 @@ fun MerkezApp() {
                 )
             }
             composable(TopLevelDestination.SETTINGS.route) {
-                PlaceholderScreen(
-                    title = "Ayarlar",
-                    description = "İzinler, yedekleme ve modül ayarları.",
+                SettingsScreen(
+                    onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                 )
             }
+            composable(PERMISSIONS_ROUTE) {
+                PermissionsScreen(onContinue = { navController.popBackStack() })
+            }
         }
+    }
+}
+
+private const val PERMISSIONS_ROUTE = "permissions"
+
+@Composable
+private fun SettingsScreen(onOpenPermissions: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(text = "Ayarlar", style = MaterialTheme.typography.headlineMedium)
+        ListItem(
+            headlineContent = { Text("İzinler") },
+            supportingContent = { Text("Bildirim, takvim, alarm, dosya erişimi") },
+            modifier = Modifier.clickable(onClick = onOpenPermissions),
+        )
     }
 }
 
