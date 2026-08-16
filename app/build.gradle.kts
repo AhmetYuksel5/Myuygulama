@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ahmetyuksel.merkez"
+    namespace = "com.ahmety.uygulama"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.ahmetyuksel.merkez"
+        applicationId = "com.ahmety.uygulama"
         minSdk = 29
         targetSdk = 35
         versionCode = 1

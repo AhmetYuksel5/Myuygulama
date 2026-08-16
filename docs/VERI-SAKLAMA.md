@@ -1,7 +1,7 @@
 # Veri nerede duracak? (ve Firebase neden değil)
 
 > Kısa cevap: **veri telefonda, SQLite'ta duracak.** Bulut, verinin *yaşadığı* yer değil,
-> *yedeğinin* durduğu yer olacak.
+> cihazlar arasında *taşındığı* ve *yedeklendiği* yer olacak.
 
 ---
 
@@ -9,8 +9,10 @@
 
 Firebase, personel takip gibi işlerde doğru araç: çok kullanıcı var, herkes farklı
 cihazdan aynı veriye bakıyor, yetkilendirme gerekiyor, sunucu yazmak istemiyorsun.
-Bizim durumumuz bunların **hiçbiri** değil — tek kullanıcı, tek cihaz. Bu fark,
-tercihi tamamen değiştiriyor. Somut sebepler:
+Bizim durumumuzda bunların yalnızca biri var: iki cihaz. Tek kullanıcı, yetkilendirme
+yok, paylaşım yok, sunucuda çalışması gereken mantık yok. İki cihazı senkronlamak için
+veriyi buluta taşımak gerekmiyor — bunu Bölüm "İkinci cihaz"da anlatılan değişiklik
+günlüğüyle çözüyoruz. Firebase'i eleyen somut sebepler:
 
 **1. Yapmak istediğimiz sorgular Firestore'un yapamadığı sorgular.**
 Planın merkezinde şunlar var: tek arama kutusundan tüm kayıtlarda tam metin arama,
@@ -46,7 +48,7 @@ karmaşıklığın yanında çok daha basit.
 ## Kurduğumuz üç katman
 
 ### 1. Veritabanı — telefon içi, uygulamaya özel alan
-`SQLite` (Room ile), uygulamanın özel dizininde: `/data/data/com.ahmetyuksel.merkez/`.
+`SQLite` (Room ile), uygulamanın özel dizininde: `/data/data/com.ahmety.uygulama/`.
 Buraya başka hiçbir uygulama erişemez. Notlar, görevler, alışkanlıklar, kelimeler,
 etiketler, PDF işaretlemeleri, finans kayıtları — yani **metin olan her şey** burada.
 Bin sayfa not bile birkaç megabayt tutar.
@@ -80,26 +82,27 @@ verin okunabilir kalsın diye.
 
 ---
 
-## İleride ikinci cihaz istersen
+## İkinci cihaz — artık gerçek bir gereksinim
 
-Bugün buna ihtiyacın yok, o yüzden bugün **yapmıyoruz**. Ama kapıyı açık bırakmak
-neredeyse bedava olduğu için şunu şimdiden yaptık: her kaydın
+İki telefon kullanıyorsun ve hangisinden girersen gir verinin aynı olmasını istiyorsun.
+Bu, "ileride bakarız" maddesi olmaktan çıkıp **Faz 2** oldu.
 
-- otomatik artan `id`'sinin yanında cihazdan bağımsız bir **`uuid`**'si,
-- `updatedAt` zaman damgası,
-- ve silindiğinde satırı yok etmek yerine işaretleyen bir **`deletedAt` mezar taşı**
+Faz 0'da attığımız temel tam da bunun içindi: her kaydın otomatik artan `id`'sinin
+yanında cihazdan bağımsız bir **`uuid`**'si, bir **`updatedAt`** zaman damgası ve
+silindiğinde satırı yok etmek yerine işaretleyen bir **`deletedAt` mezar taşı** var.
+Bu üçü, herhangi bir senkron algoritmasının ihtiyaç duyduğu asgari zemin.
 
-alanı var. Bu üçü, herhangi bir senkron algoritmasının ihtiyaç duyduğu asgari zemindir.
-Sonradan eklemek veri göçü demek; şimdi eklemenin maliyeti sıfır.
+Önemli olan şu: **veritabanı dosyasını Drive'a atıp indirmek işe yaramaz** — iki
+cihazda da yazma yapıldığı anda birinin o günkü girdileri sessizce kaybolur.
+Bunun yerine her cihaz kendi **değişiklik günlüğünü** yazacak, karşı taraf onu
+okuyup uygulayacak. Böylece "A'da not yazdım, B'de görev tamamladım" durumunda
+ikisi de yaşar.
 
-İkinci cihaz gerçekten gerekirse seçenekler, tercih sırasıyla:
-1. Yedek dosyasını taşımak (en basit, çoğu durumda yeter).
-2. `Merkez/` klasörünü Syncthing ile eşlemek (sunucusuz, uçtan uca).
-3. Kendi sunucunda küçük bir senkron ucu (Supabase/Postgres) — ancak o zaman.
+Taşıyıcı olarak **Google Drive**'ı uygulama içinden kullanacağız (`drive.file`
+kapsamı — Drive'ının geri kalanını görmez), yedek yol olarak da herhangi bir
+klasör + Syncthing/FolderSync. Paylaşılan alana giden her şey cihazda şifrelenir.
 
-Hiçbirinde uygulamanın çekirdeğini değiştirmemiz gerekmiyor; senkron **üstte duran
-bir katman** olarak kalıyor. Firebase seçseydik tam tersi olurdu: veritabanı
-bulutta olurdu ve her özellik ona bağımlı yazılırdı.
+Tasarımın tamamı: [`SENKRON.md`](SENKRON.md)
 
 ---
 

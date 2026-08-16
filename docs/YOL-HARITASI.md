@@ -1,6 +1,6 @@
 # Kişisel Süper Uygulama — Yol Haritası
 
-> Tek APK, tek cihaz, tek kullanıcı (sen). Play Store yok, kısıtlama yok, veri senin cihazında.
+> Tek APK, tek kullanıcı (sen), iki telefon. Play Store yok, kısıtlama yok, veri senin cihazlarında.
 
 ---
 
@@ -55,6 +55,12 @@ Bunun getirdikleri — ve "entelektüel birikim" isteğinin gerçek cevabı bu:
    üzerinden yazılıyor; anahtar yokken uygulamanın hiçbir çekirdek işlevi durmuyor.
 4. **Dağıtım: GitHub Actions.** Her push'ta CI derler, hatalar CI kayıtlarından okunup
    düzeltilir; faz sonlarında kurulabilir APK yayınlanır.
+5. **Paket adı: `com.ahmety.uygulama`.**
+6. **İki cihaz senkronizasyonu gereksinim oldu** (yeni Faz 2). Veritabanı dosyası
+   kopyalanmayacak; cihaz başına değişiklik günlüğü yazılacak. Taşıyıcı olarak
+   Google Drive (`drive.file`), yedek yol olarak klasör + Syncthing.
+   Bu yüzden Faz 1'de yazılacak tüm tablolar baştan `uuid`/`updatedAt`/`deletedAt`
+   taşıyacak ve yazmalar değişiklik günlüğü bırakan tek katmandan geçecek.
 
 ---
 
@@ -75,6 +81,7 @@ Bunun getirdikleri — ve "entelektüel birikim" isteğinin gerçek cevabı bu:
 | PDF | Görüntüleme: `PdfRenderer` (sistemde var) · İşaretleme: PDFBox-Android | Aşağıdaki PDF notuna bak |
 | Takvim | **CalendarContract** (cihazın takvim sağlayıcısı) | Aşağıdaki takvim notuna bak — OAuth'a hiç girmiyoruz |
 | Görevler | **Tamamen yerel** (Microsoft To Do bırakıldı) | Bkz. Bölüm 0.1 — alınan kararlar |
+| Senkron | Değişiklik günlüğü + Google Drive (`drive.file`) | [`SENKRON.md`](SENKRON.md) |
 | Yapay zekâ | OpenAI API, anahtar cihazda şifreli; arayüz soyut (`AiProvider`) | Kelime cümlesi, makale özeti, haber derlemesi |
 | Derleme | Gradle Kotlin DSL + version catalog, KSP (kapt yok) | Hız |
 | Dağıtım | GitHub Actions → imzalı APK → telefona indir | Bölüm 6 |
@@ -224,7 +231,17 @@ GitHub Actions ile imzalı APK üretimi.
 - **Widget'lar:** Bugün, alışkanlık haftalık, alışkanlık yıllık, ay takvimi.
 → **Çıktı:** uygulamayı her gün açmaya başlarsın. Projenin kaderi bu fazda belli olur.
 
-### Faz 2 — Yakala ve sakla (M) + Kenar hareketleri (S)
+### Faz 2 — İki cihaz senkronizasyonu (M)
+Cihaz başına ekleme-yapılır değişiklik günlüğü, son-yazan-kazanır çakışma çözümü,
+mezar taşları, periyodik özet (snapshot), içerik adresli dosya senkronu
+(ihtiyaç anında indirme), cihazda şifreleme + kurtarma cümlesi.
+Taşıyıcı: Google Drive (`drive.file` kapsamı, uygulama içinden) — yedek yol olarak
+herhangi bir klasör + Syncthing/FolderSync.
+→ **Neden burada:** altyapı bir kez kurulunca sonraki her modül (notlar, kelimeler,
+makaleler, finans) senkrona bedava biner. Sona bıraksak hepsine geri dönmemiz gerekirdi.
+→ Tasarımın tamamı: [`SENKRON.md`](SENKRON.md)
+
+### Faz 3 — Yakala ve sakla (M) + Kenar hareketleri (S)
 - **Notlar:** Markdown editör, etiket, sabitleme, hatırlatıcı, kontrol listesi, arşiv.
   Keep'ten Google Takeout JSON'u ile toplu içe aktarma.
 - **Paylaş hedefi:** herhangi bir uygulamadan "Paylaş" → uygulamamıza not/link/kelime olarak düşer.
@@ -234,34 +251,34 @@ GitHub Actions ile imzalı APK üretimi.
 - **Kenar hareketleri:** Bölüm 2'deki güvenli Fluid NG yerine geçen modül.
 → **Çıktı:** Keep, Pocket ve Fluid NG telefondan silinir.
 
-### Faz 3 — İngilizce kelime (M)
+### Faz 4 — İngilizce kelime (M)
 Kelime listesi içe aktarma (CSV/TXT), yapay zekâ ile anlam + örnek cümle + eş anlamlı +
 telaffuz, aralıklı tekrar (SM-2 algoritması), günlük tekrar kartları, "Günün kelimesi"
 widget'ı, okuduğun makale/PDF içinden kelime madenciliği (bilmediğin kelimeyi seç → listeye ekle),
 bildiklerin/öğrenmekte olduklarınla ilerleme istatistikleri.
 
-### Faz 4 — Haberler (S-M)
+### Faz 5 — Haberler (S-M)
 RSS/Atom motoru, OPML içe aktarma, ilgi klasörleri, anahtar kelime filtresi,
 günlük yapay zekâ derlemesi, tek dokunuşla "oku-sonra"ya at.
 
-### Faz 5 — Dokümanlar ve kasa (L)
+### Faz 6 — Dokümanlar ve kasa (L)
 PDF görüntüleyici (kaydırma, yakınlaştırma, içindekiler, arama), vurgulama/not/çizim
 katmanı, alıntı → Entry akışı, düz kopya dışa aktarma.
 **Kasa:** önemli dosyalar için şifreli depo, kategori/etiket, hızlı önizleme,
 biyometrik kilit, depolama paneli.
 
-### Faz 6 — Finans (L)
+### Faz 7 — Finans (L)
 Hesaplar ve varlıklar (nakit, banka, altın, döviz, yatırım), gelir/gider defteri,
 kategoriler, tekrarlayan işlemler, aylık bütçe, Excel/CSV içe aktarma
 (banka ekstresi eşleme sihirbazı ile), grafikler, ay sonu raporu,
 opsiyonel döviz/altın kuru güncelleme.
 → **Not:** Bu faz açılmadan **önce** veritabanı şifrelemesi (SQLCipher) devreye alınır.
 
-### Faz 7 — Cilalama (sürekli)
+### Faz 8 — Cilalama (sürekli)
 Performans, pil, animasyon, yedek/geri yükleme testi, arama iyileştirme,
 kullandıkça çıkan istekler.
 
-**Efor işaretleri:** S = küçük, M = orta, L = büyük. Faz 1, 5 ve 6 en ağır olanlar.
+**Efor işaretleri:** S = küçük, M = orta, L = büyük. Faz 1, 6 ve 7 en ağır olanlar.
 
 ---
 
@@ -269,12 +286,13 @@ kullandıkça çıkan istekler.
 
 | Ne zaman | Ne gerekiyor |
 |---|---|
-| Faz 0 | Uygulama adı ve paket adı; APK imzalama anahtarı (ben üretirim, sen saklarsın) |
+| Faz 0 | ~~Uygulama adı ve paket adı~~ ✔ `com.ahmety.uygulama`; APK imzalama anahtarı |
 | Faz 1 | Alışkanlık listen; widget'ları nasıl dizmek istediğin; To Do'daki mevcut görevlerin |
-| Faz 2 | Keep yedeğin (Google Takeout) |
-| Faz 3 | OpenAI API anahtarı; varsa mevcut kelime listen |
-| Faz 4 | Takip ettiğin siteler / ilgi alanların |
-| Faz 6 | Örnek Excel dosyaların (kolon yapısını görmem için), hesap/kategori listen |
+| Faz 2 | Ücretsiz Google Cloud projesi + OAuth istemcisi (adımlarını yazacağım) |
+| Faz 3 | Keep yedeğin (Google Takeout) |
+| Faz 4 | OpenAI API anahtarı; varsa mevcut kelime listen |
+| Faz 5 | Takip ettiğin siteler / ilgi alanların |
+| Faz 7 | Örnek Excel dosyaların (kolon yapısını görmem için), hesap/kategori listen |
 
 ---
 
@@ -299,8 +317,8 @@ En iyisi ikisi birden: 1 zaten kalıcı dağıtım kanalı, 2 geliştirme hızı
 
 - **Kapsam büyük.** 12 modül tek seferde bitmez; fazlara bölünmesinin sebebi bu.
   Her faz sonunda kullanılabilir bir uygulama olması pazarlık dışı.
-- **Tek kullanıcı varsayımı.** Çok cihaz/çok kullanıcı senaryosu için tasarlamıyoruz;
-  bu, işin yarısını eliyor. İleride ikinci cihaz istersen yedek dosyası üzerinden çözeriz.
+- **Tek kullanıcı, iki cihaz.** Çok kullanıcı/paylaşım senaryosu için tasarlamıyoruz;
+  bu hâlâ işin yarısını eliyor. İki cihaz senkronu Faz 2'de çözülüyor.
 - **Kendi kendine güncelleme yok** (Play Store olmadığı için). GitHub Release + uygulama
   içinde "yeni sürüm var" bildirimi ile telafi ediyoruz.
 - **Yapay zekâ özellikleri internet ve OpenAI API anahtarı ister.** Çekirdek işlevlerin hiçbiri buna bağlı değil.

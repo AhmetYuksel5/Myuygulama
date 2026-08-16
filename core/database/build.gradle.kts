@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.ahmetyuksel.merkez.core.database"
+    namespace = "com.ahmety.uygulama.core.database"
     compileSdk = 35
 
     defaultConfig {

@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.ahmetyuksel.merkez.core.model"
+    namespace = "com.ahmety.uygulama.core.model"
     compileSdk = 35
 
     defaultConfig {
