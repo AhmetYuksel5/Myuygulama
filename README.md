@@ -21,8 +21,26 @@ takvim (CalendarContract üzerinden ajanda), "Bugün" ekranı, ana ekran widget'
 AES-GCM şifreleme, kayıt düzeyinde çakışma çözümü.
 Google Drive taşıyıcısı henüz eklenmedi (OAuth kurulumu gerekiyor).
 
-**Faz 3 — Yakala ve sakla** ◐ kenar hareketleri (Fluid NG yerine) yazıldı.
-Notlar, oku-sonra ve genel arama sırada.
+**Faz 3 — Yakala ve sakla** ✔ notlar (Markdown editör, etiket), oku-sonra
+(URL → okunabilir makale, Readability), tüm kayıtlarda genel arama.
+
+**Faz 4 — Kelime** ✔ 400 upper-intermediate kelimelik sürüklenebilir kart destesi
+(sola biliyorum / sağa bilmiyorum), "bilmediklerim" çalışma modu.
+
+**Kenar hareketleri (Fluid NG yerine)** ✔ sağ + sol bağımsız, her jest (yukarı/
+aşağı/içeri/uzun bas) ayrı eyleme atanabilir, canlı boyut/konum ayarı, ayarlanabilir
+titreşim.
+
+**Tek elle imleç (Quick Cursor muadili)** ✔ kenardaki topla trackpad gibi kontrol
+edilen sanal imleç; ulaşılamayan köşelere dokunur.
+
+**Tasarım** ✔ modern tema (çivit mor kimlik, tonlu yüzeyler, geniş köşeler),
+alışkanlıklarda 7 gün nokta şeridi + haptik + sade seviye/puan.
+
+### Sırada
+- Google Drive senkron taşıyıcısı (OAuth kurulumu gerekiyor)
+- Haberler (RSS), PDF + işaretleme, dosya kasası, finans
+- OpenAI ile kelime örnek cümlesi/haber derlemesi (anahtar verilince)
 
 ## Kurulum ve güncelleme
 
