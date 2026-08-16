@@ -77,6 +77,57 @@ class TodoImportParserTest {
     }
 
     @Test
+    fun `toplu graph yanitinda liste adlari istek kimliginden gelir`() {
+        val input = """
+            {
+              "responses": [
+                {
+                  "id": "Alışveriş",
+                  "status": 200,
+                  "body": {
+                    "value": [
+                      { "title": "Süt al", "status": "notStarted" },
+                      { "title": "Ekmek al", "status": "completed" }
+                    ]
+                  }
+                },
+                {
+                  "id": "İş",
+                  "status": 200,
+                  "body": { "value": [ { "title": "Rapor yaz", "status": "notStarted" } ] }
+                },
+                {
+                  "id": "Erişilemeyen",
+                  "status": 403,
+                  "body": { "error": { "code": "Forbidden" } }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val result = TodoImportParser.parse(input)
+
+        assertEquals(ImportFormat.GRAPH_BATCH, result.format)
+        // Hatalı yanıt atlanır; kalan iki liste adıyla birlikte gelir.
+        assertEquals(listOf("Alışveriş", "İş"), result.lists.map { it.name })
+        assertEquals(3, result.taskCount)
+        assertTrue(result.lists[0].tasks[1].completed)
+    }
+
+    @Test
+    fun `toplu yanitta bos liste de olusturulur`() {
+        val input = """
+            { "responses": [ { "id": "Boş liste", "status": 200, "body": { "value": [] } } ] }
+        """.trimIndent()
+
+        val result = TodoImportParser.parse(input)
+
+        // Liste boş olsa da oluşturulmalı; yapı korunuyor.
+        assertEquals(listOf("Boş liste"), result.lists.map { it.name })
+        assertEquals(0, result.taskCount)
+    }
+
+    @Test
     fun `basliksiz gorevler atlanir`() {
         val input = """{ "value": [ { "id": "X", "title": "   " }, { "id": "Y", "title": "Gerçek" } ] }"""
         val result = TodoImportParser.parse(input)

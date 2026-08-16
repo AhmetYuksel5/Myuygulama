@@ -29,7 +29,7 @@ data class ImportResult(
     val taskCount: Int get() = lists.sumOf { it.tasks.size }
 }
 
-enum class ImportFormat { GRAPH_LISTS, GRAPH_TASKS, PLAIN_TEXT, EMPTY }
+enum class ImportFormat { GRAPH_BATCH, GRAPH_LISTS, GRAPH_TASKS, PLAIN_TEXT, EMPTY }
 
 /**
  * Microsoft To Do'nun dışa aktarma aracı yok. Elimizdeki iki pratik yol var:
@@ -60,6 +60,12 @@ object TodoImportParser {
 
     private fun parseJson(input: String, fallbackListName: String): ImportResult? {
         val root = json.parseToJsonElement(input)
+
+        // $batch yanıtı: tek istekte tüm listelerin görevleri.
+        if (root is JsonObject && root["responses"] is JsonArray) {
+            return parseBatch(root["responses"]!!.jsonArray)
+        }
+
         val items: List<JsonElement> = when {
             root is JsonArray -> root
             root is JsonObject && root["value"] is JsonArray -> root["value"]!!.jsonArray
@@ -90,6 +96,30 @@ object TodoImportParser {
 
             else -> null
         }
+    }
+
+    /**
+     * Toplu istek yanıtı. Liste adını `id` alanından okuyoruz — toplu istekte
+     * her alt isteğe istediğimiz kimliği verebildiğimiz için, oraya liste adını
+     * yazıyoruz ve görevlerin hangi listeye ait olduğu kaybolmuyor.
+     */
+    private fun parseBatch(responses: JsonArray): ImportResult {
+        val lists = responses.filterIsInstance<JsonObject>().mapNotNull { response ->
+            val status = response["status"].asStringOrNull()?.toIntOrNull() ?: 200
+            if (status !in 200..299) return@mapNotNull null
+
+            val name = response["id"].asStringOrNull()?.trim()
+            if (name.isNullOrEmpty()) return@mapNotNull null
+
+            val values = (response["body"] as? JsonObject)?.get("value") as? JsonArray
+                ?: return@mapNotNull null
+
+            ImportedList(
+                name = name,
+                tasks = values.filterIsInstance<JsonObject>().mapNotNull(::parseGraphTask),
+            )
+        }
+        return ImportResult(lists, ImportFormat.GRAPH_BATCH)
     }
 
     private fun parseGraphTask(obj: JsonObject): ImportedTask? {

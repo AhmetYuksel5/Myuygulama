@@ -184,8 +184,9 @@ internal fun ImportTasksDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "Graph Explorer'dan aldığın JSON'u ya da düz liste metnini " +
-                        "buraya yapıştır. Adımlar için: docs/TODO-ICE-AKTARMA.md",
+                    text = "Graph Explorer'dan aldığın JSON'u (tekil ya da toplu yanıt) " +
+                        "veya düz liste metnini buraya yapıştır. " +
+                        "Adımlar için: docs/TODO-ICE-AKTARMA.md",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -214,6 +215,10 @@ internal fun ImportTasksDialog(
 
 private fun previewSummary(result: ImportResult): String = when (result.format) {
     ImportFormat.EMPTY -> "Tanınabilir bir şey bulunamadı."
+
+    ImportFormat.GRAPH_BATCH ->
+        "Toplu Graph yanıtı tanındı: ${result.lists.size} liste, ${result.taskCount} görev."
+
     ImportFormat.GRAPH_LISTS ->
         "Graph liste çıktısı tanındı: ${result.lists.size} liste oluşturulacak " +
             "(görevleri ayrıca yapıştırman gerekiyor)."

@@ -1,0 +1,89 @@
+{
+  "requests": [
+    {
+      "id": "Görevler",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAAAIBEgAAAA==/tasks?$top=200"
+    },
+    {
+      "id": "Adsız liste",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYACBawTBMAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Aylık",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAA5KPffUAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Birazcık aklına kazınsın sonra silersin",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAA7LDOCYAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Burgaz apartmanı",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYACJ-fGGYAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Español",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAB17Fn-UAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Ev günlükleri",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYACDr4VYIAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Günlük",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYABCk1MHUAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Güzelleştirme günlükleri",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYACHp6ACKgAAAA/tasks?$top=200"
+    },
+    {
+      "id": "Haftalık 29",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYACAK4sr4AAAA=/tasks?$top=200"
+    },
+    {
+      "id": "İnkilizce kelimeler",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAAy9jqk4AAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Kısa geçici not",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAAy9jqlAAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Merdiven",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAAy9jqlcAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Mobil İş",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAAy9jqlYAAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Parasal Notlar",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYAAy9jqk0AAAA=/tasks?$top=200"
+    },
+    {
+      "id": "Site seo reklam uygulama",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYACS0MDACAAAAA/tasks?$top=200"
+    },
+    {
+      "id": "Yıllık",
+      "method": "GET",
+      "url": "/me/todo/lists/AQMkADAwATYwMAItOWM4ZS1jZDY5LTAwAi0wMAoALgAAA_ekSa8TDAFPkxzN6hKnZZ8BADJUPGGvOghDocg0JDpRSJYACAqFhQDFAAAA/tasks?$top=200"
+    }
+  ]
+}

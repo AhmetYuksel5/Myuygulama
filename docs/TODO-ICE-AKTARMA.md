@@ -93,21 +93,53 @@ yapıştır → **İçe aktar**. Bu adım **listeleri** oluşturur.
 
 Bu `id`'leri bir sonraki adımda kullanacaksın.
 
-### 4. Her listenin görevlerini çek
-Her liste için sırayla (yukarıdaki `id`'yi yapıştırarak):
+### 4. Tüm listelerin görevlerini **tek istekte** çek
 
+Adım 3'ün çıktısı yalnızca liste başlıklarıdır — görevler orada değildir.
+Her listeyi ayrı ayrı çekmek yerine Graph'ın **toplu istek** (`$batch`)
+özelliğini kullanıyoruz: 20 sorguya kadar tek seferde çalıştırıyor.
+
+1. Graph Explorer'da yöntemi **GET → POST** olarak değiştir
+2. Adresi şu yap:
+   ```
+   https://graph.microsoft.com/v1.0/$batch
+   ```
+3. **Request Body** sekmesine şu yapıdaki gövdeyi yapıştır:
+   ```json
+   {
+     "requests": [
+       { "id": "Alışveriş", "method": "GET", "url": "/me/todo/lists/LISTE_ID_1/tasks?$top=200" },
+       { "id": "İş",        "method": "GET", "url": "/me/todo/lists/LISTE_ID_2/tasks?$top=200" }
+     ]
+   }
+   ```
+4. **Run query** → gelen JSON'un tamamını uygulamaya yapıştır
+
+**`id` alanına liste adını yazmak önemli.** Toplu yanıt hangi görevin hangi
+listeye ait olduğunu başka türlü söylemiyor; ayrıştırıcı liste adını buradan
+okuyor. Adres yerine ad yazarsan görevler doğru listelere düşer.
+
+Hazır gövde: [`todo-batch-istegi.json`](todo-batch-istegi.json) — bu depodaki
+dosya senin 17 listenle önceden doldurulmuş durumda, olduğu gibi kopyalayabilirsin.
+(Sistem listesi olan "Flagged Emails" bilerek dışarıda bırakıldı.)
+
+Bu adımda başlık, tamamlanma durumu, tarih, önem derecesi, notlar ve
+**alt görevler** (checklist) birlikte gelir.
+
+> **20'den fazla listen varsa** gövdeyi ikiye böl, iki kez çalıştır.
+>
+> **Bir listede 200'den fazla görev varsa** o listenin yanıtında bir
+> `@odata.nextLink` adresi olur; onu ayrıca çalıştırıp gelen çıktıyı da yapıştır.
+>
+> **Aynı adlı liste ikinci kez içe aktarılırsa** yeni liste açılmaz, görevler
+> mevcut listeye eklenir. Yani adımları peş peşe yapman sorun değil.
+
+#### Tek listeyi çekmek istersen
 ```
 GET  https://graph.microsoft.com/v1.0/me/todo/lists/{LISTE_ID}/tasks?$top=200
 ```
-
-Gelen JSON'u yine kopyala ve içe aktar. Bu adımda başlık, tamamlanma durumu,
-tarih, önem derecesi, notlar ve **alt görevler** (checklist) birlikte gelir.
-
-> **Not:** Aynı adlı liste ikinci kez içe aktarılırsa yeni liste açılmaz,
-> görevler mevcut listeye eklenir. Yani adım 3 ve 4'ü peş peşe yapman sorun değil.
-
-> **200'den fazla görev varsa:** çıktının sonunda bir `@odata.nextLink` adresi
-> olur; onu adres kutusuna yapıştırıp çalıştırınca kalanı gelir.
+Bu biçim de tanınıyor; sadece görevler hangi listeye ait bilinmediği için
+hepsi "İçe aktarılan" adlı tek listeye düşer.
 
 ### 5. Tamamlanmışları da istiyor musun?
 Varsayılan olarak To Do tamamlanmış görevleri de döndürür. İstemiyorsan sorguya
