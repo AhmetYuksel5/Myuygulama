@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gesture_service_label">Kenar hareketleri</string>
+    <string name="gesture_service_description">Ekranın kenarındaki şeritten yukarı kaydırınca son uygulamaları, aşağı kaydırınca bildirim panelini açar. Ekran içeriğini okumaz.</string>
+</resources>

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
+import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -105,6 +106,7 @@ fun MerkezApp() {
                 SettingsScreen(
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
+                    onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                 )
             }
             composable(PERMISSIONS_ROUTE) {
@@ -113,17 +115,22 @@ fun MerkezApp() {
             composable(SYNC_ROUTE) {
                 SyncScreen()
             }
+            composable(GESTURES_ROUTE) {
+                GestureSettingsScreen()
+            }
         }
     }
 }
 
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
+private const val GESTURES_ROUTE = "gestures"
 
 @Composable
 private fun SettingsScreen(
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
+    onOpenGestures: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -141,6 +148,11 @@ private fun SettingsScreen(
             headlineContent = { Text("Senkronizasyon") },
             supportingContent = { Text("İki telefon arasında paylaşılan klasör") },
             modifier = Modifier.clickable(onClick = onOpenSync),
+        )
+        ListItem(
+            headlineContent = { Text("Kenar hareketleri") },
+            supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
+            modifier = Modifier.clickable(onClick = onOpenGestures),
         )
     }
 }
