@@ -34,6 +34,7 @@ data class TaskListEntity(
         Index("dueDate"),
         Index("completedAt"),
         Index("deletedAt"),
+        Index("externalId"),
     ],
 )
 data class TaskEntity(
@@ -42,6 +43,12 @@ data class TaskEntity(
     val listUuid: String,
     val title: String,
     val notes: String = "",
+    /**
+     * İçe aktarıldığı kaynaktaki kimliği (ör. Microsoft To Do görev id'si).
+     * Aynı görevin ikinci kez içeri girmesini engeller — büyük listeler
+     * sayfa sayfa aktarıldığında sayfalar üst üste binebiliyor.
+     */
+    val externalId: String? = null,
     /** Epoch gün sayısı; null ise tarihsiz. */
     val dueDate: Int? = null,
     val dueMinuteOfDay: Int? = null,

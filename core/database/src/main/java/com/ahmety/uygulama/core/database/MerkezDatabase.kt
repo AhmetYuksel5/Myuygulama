@@ -35,7 +35,7 @@ import com.ahmety.uygulama.core.database.entity.TaskListEntity
         ChangeLogEntity::class,
         SyncStateEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

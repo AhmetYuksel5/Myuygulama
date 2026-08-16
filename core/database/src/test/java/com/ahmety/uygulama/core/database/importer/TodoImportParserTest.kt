@@ -77,6 +77,15 @@ class TodoImportParserTest {
     }
 
     @Test
+    fun `graph gorev kimligi mukerrer aktarim icin saklanir`() {
+        // Binlerce görevlik liste sayfa sayfa aktarılırken sayfalar üst üste
+        // binebiliyor; kimlik olmadan aynı görev birkaç kez eklenirdi.
+        val input = """{ "value": [ { "id": "AAMkAD123", "title": "Süt al" } ] }"""
+        val result = TodoImportParser.parse(input)
+        assertEquals("AAMkAD123", result.lists[0].tasks[0].externalId)
+    }
+
+    @Test
     fun `toplu graph yanitinda liste adlari istek kimliginden gelir`() {
         val input = """
             {

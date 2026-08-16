@@ -2,6 +2,7 @@ package com.ahmety.uygulama.core.database.di
 
 import android.content.Context
 import androidx.room.Room
+import com.ahmety.uygulama.core.database.ALL_MIGRATIONS
 import com.ahmety.uygulama.core.database.MerkezDatabase
 import com.ahmety.uygulama.core.database.dao.ChangeLogDao
 import com.ahmety.uygulama.core.database.dao.EntryDao
@@ -31,6 +32,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): MerkezDatabase =
         Room.databaseBuilder(context, MerkezDatabase::class.java, MerkezDatabase.NAME)
+            .addMigrations(*ALL_MIGRATIONS)
             .build()
 
     @Provides

@@ -138,8 +138,15 @@ class TasksViewModel @Inject constructor(
 
     fun import(result: ImportResult) {
         viewModelScope.launch {
-            val count = repository.importTasks(result)
-            _importMessage.value = "$count görev içe aktarıldı."
+            val summary = repository.importTasks(result)
+            _importMessage.value = buildString {
+                append("${summary.imported} görev içe aktarıldı")
+                if (summary.skipped > 0) {
+                    // Sayfa sayfa aktarımda üst üste binen görevler burada görünür.
+                    append(", ${summary.skipped} tanesi zaten vardı")
+                }
+                append(".")
+            }
         }
     }
 

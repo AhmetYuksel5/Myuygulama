@@ -13,6 +13,8 @@ data class ImportedSubtask(val title: String, val completed: Boolean = false)
 
 data class ImportedTask(
     val title: String,
+    /** Kaynaktaki kimlik (Graph görev id'si); mükerrer aktarımı engeller. */
+    val externalId: String? = null,
     val notes: String = "",
     val dueDate: Int? = null,
     val completed: Boolean = false,
@@ -158,6 +160,7 @@ object TodoImportParser {
 
         return ImportedTask(
             title = title,
+            externalId = obj["id"].asStringOrNull()?.takeIf { it.isNotBlank() },
             notes = notes,
             dueDate = due,
             completed = completed,

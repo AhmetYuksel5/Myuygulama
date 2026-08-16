@@ -128,11 +128,46 @@ Bu adımda başlık, tamamlanma durumu, tarih, önem derecesi, notlar ve
 
 > **20'den fazla listen varsa** gövdeyi ikiye böl, iki kez çalıştır.
 >
-> **Bir listede 200'den fazla görev varsa** o listenin yanıtında bir
-> `@odata.nextLink` adresi olur; onu ayrıca çalıştırıp gelen çıktıyı da yapıştır.
->
 > **Aynı adlı liste ikinci kez içe aktarılırsa** yeni liste açılmaz, görevler
 > mevcut listeye eklenir. Yani adımları peş peşe yapman sorun değil.
+
+### Çok büyük listeler (binlerce görev)
+
+Graph tek yanıtta sınırlı sayıda kayıt döndürür ve toplu isteğin de yanıt boyutu
+sınırı vardır. Binlerce görevi olan bir listeyi **toplu istekten çıkar** ve
+ayrıca çek:
+
+1. `todo-batch-istegi.json` içinden o listenin satırını sil
+2. O listeyi tek başına, sayfa boyutunu büyüterek çek:
+   ```
+   GET  https://graph.microsoft.com/v1.0/me/todo/lists/{LISTE_ID}/tasks?$top=999
+   ```
+3. Gelen çıktıyı yapıştır
+4. Yanıtın **en altındaki `@odata.nextLink`** adresini kopyala, adres kutusuna
+   yapıştır, **Run query** → gelen çıktıyı da yapıştır
+5. `@odata.nextLink` kalmayana kadar 4. adımı tekrarla
+
+2500 görev için bu yaklaşık 3 tur demek.
+
+**Sayfalar üst üste binerse ne olur?** Hiçbir şey — her görevin Microsoft
+tarafındaki kimliği kaydediliyor ve daha önce görülmüş görev atlanıyor.
+İçe aktarma sonunda "1.847 görev içe aktarıldı, 653 tanesi zaten vardı"
+gibi bir özet görürsün. Aynı sayfayı iki kez yapıştırsan bile mükerrer kayıt oluşmaz.
+
+**Yanıtı küçültmek istersen** yalnızca gereken alanları iste:
+```
+GET  .../tasks?$top=999&$select=id,title,status,importance,dueDateTime,body
+```
+
+**Tamamlanmışları istemiyorsan** (2500'ün çoğu muhtemelen tamamlanmış):
+```
+GET  .../tasks?$top=999&$filter=status ne 'completed'
+```
+Bu, aktarılacak görev sayısını büyük ihtimalle onda birine indirir.
+
+> **Alt görevler (checklist)** varsayılan olarak gelmez; istiyorsan sorguya
+> `&$expand=checklistItems` ekle. Çok büyük listelerde yanıtı şişirdiği için
+> orada eklememek daha iyi.
 
 #### Tek listeyi çekmek istersen
 ```

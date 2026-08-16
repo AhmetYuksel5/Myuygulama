@@ -38,6 +38,9 @@ interface TaskDao {
     @Query("SELECT * FROM task WHERE uuid = :uuid LIMIT 1")
     suspend fun getByUuid(uuid: String): TaskEntity?
 
+    @Query("SELECT * FROM task WHERE externalId = :externalId AND deletedAt IS NULL LIMIT 1")
+    suspend fun getByExternalId(externalId: String): TaskEntity?
+
     @Query(
         """
         SELECT * FROM task

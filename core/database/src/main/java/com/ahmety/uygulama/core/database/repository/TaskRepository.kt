@@ -20,6 +20,9 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** İçe aktarma sonucu; kullanıcıya "kaç geldi, kaç zaten vardı" demek için. */
+data class ImportSummary(val imported: Int, val skipped: Int)
+
 private const val TASK_ENTITY = "task"
 private const val TASK_LIST_ENTITY = "task_list"
 
@@ -83,6 +86,7 @@ class TaskRepository @Inject constructor(
         parentUuid: String? = null,
         recurrence: RecurrenceRule? = null,
         completed: Boolean = false,
+        externalId: String? = null,
     ): String {
         val timestamp = now.millis()
         val entity = TaskEntity(
@@ -90,6 +94,7 @@ class TaskRepository @Inject constructor(
             listUuid = listUuid,
             title = title.trim(),
             notes = notes.trim(),
+            externalId = externalId,
             dueDate = dueDate,
             dueMinuteOfDay = dueMinuteOfDay,
             completedAt = if (completed) timestamp else null,
@@ -176,15 +181,28 @@ class TaskRepository @Inject constructor(
     }
 
     /**
-     * İçe aktarılan listeleri ve görevleri yazar. Aynı adlı liste varsa
-     * yenisi oluşturulmaz, mevcut listeye eklenir — iki kez içe aktarırsan
-     * liste çoğalmasın diye.
+     * İçe aktarılan listeleri ve görevleri yazar.
+     *
+     * İki mükerrerlik koruması var:
+     * - Aynı adlı liste varsa yenisi oluşturulmaz, mevcut listeye eklenir.
+     * - Kaynaktaki kimliği (`externalId`) daha önce görülmüş görev atlanır.
+     *   Binlerce görevlik bir liste sayfa sayfa aktarılırken sayfalar üst üste
+     *   binebiliyor; bu koruma olmasa aynı görev birkaç kez eklenirdi.
      */
-    suspend fun importTasks(result: ImportResult): Int {
+    suspend fun importTasks(result: ImportResult): ImportSummary {
         var imported = 0
+        var skipped = 0
+
         result.lists.forEach { list ->
             val listUuid = taskDao.getListByName(list.name)?.uuid ?: createList(list.name)
+
             list.tasks.forEach { task ->
+                val existing = task.externalId?.let { taskDao.getByExternalId(it) }
+                if (existing != null) {
+                    skipped++
+                    return@forEach
+                }
+
                 val parentUuid = createTask(
                     listUuid = listUuid,
                     title = task.title,
@@ -192,8 +210,10 @@ class TaskRepository @Inject constructor(
                     dueDate = task.dueDate,
                     priority = task.priority,
                     completed = task.completed,
+                    externalId = task.externalId,
                 )
                 imported++
+
                 task.subtasks.forEach { subtask ->
                     createTask(
                         listUuid = listUuid,
@@ -205,7 +225,7 @@ class TaskRepository @Inject constructor(
                 }
             }
         }
-        return imported
+        return ImportSummary(imported = imported, skipped = skipped)
     }
 
     private suspend fun writeTask(entity: TaskEntity) {
