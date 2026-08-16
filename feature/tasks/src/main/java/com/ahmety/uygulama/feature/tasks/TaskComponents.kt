@@ -78,8 +78,10 @@ internal fun TaskRow(
     }
 }
 
-private fun Task.isOverdue(today: Int): Boolean =
-    !isCompleted && dueDate != null && dueDate < today
+private fun Task.isOverdue(today: Int): Boolean {
+    val due = dueDate ?: return false
+    return !isCompleted && due < today
+}
 
 private fun taskMeta(task: Task, today: Int): String {
     val parts = mutableListOf<String>()

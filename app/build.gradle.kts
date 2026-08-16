@@ -55,6 +55,7 @@ dependencies {
     implementation(project(":feature:habits"))
     implementation(project(":feature:tasks"))
     implementation(project(":feature:calendar"))
+    implementation(project(":feature:widget"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
