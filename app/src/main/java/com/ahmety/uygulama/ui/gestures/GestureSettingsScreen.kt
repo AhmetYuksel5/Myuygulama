@@ -1,6 +1,7 @@
 package com.ahmety.uygulama.ui.gestures
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,8 +11,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,16 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.ahmety.uygulama.feature.gestures.GestureAction
 import com.ahmety.uygulama.feature.gestures.GestureFeedback
 import com.ahmety.uygulama.feature.gestures.GestureSettings
 
-/**
- * Kenar hareketlerinin ayar ekranı — Fluid NG'nin yerine geçen modül.
- *
- * Servisin kendisi yalnızca sistem ayarlarından açılabiliyor; Android bir
- * uygulamanın kendi erişilebilirlik servisini programatik olarak açmasına
- * izin vermiyor ve bu doğru bir kısıt. Biz sadece oraya yönlendiriyoruz.
- */
 @Composable
 fun GestureSettingsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -46,13 +44,18 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
 
     var serviceEnabled by remember { mutableStateOf(GestureSettings.isServiceEnabled(context)) }
     var enabled by remember { mutableStateOf(settings.enabled) }
-    var onRight by remember { mutableStateOf(settings.onRightEdge) }
+    var showLeft by remember { mutableStateOf(settings.showLeft) }
+    var showRight by remember { mutableStateOf(settings.showRight) }
     var widthDp by remember { mutableIntStateOf(settings.widthDp) }
     var heightDp by remember { mutableIntStateOf(settings.heightDp) }
+    var offsetDp by remember { mutableIntStateOf(settings.verticalOffsetDp) }
     var vibrate by remember { mutableStateOf(settings.vibrateEnabled) }
     var vibrateStrength by remember { mutableIntStateOf(settings.vibrateStrength) }
+    var up by remember { mutableStateOf(settings.swipeUpAction) }
+    var down by remember { mutableStateOf(settings.swipeDownAction) }
+    var inward by remember { mutableStateOf(settings.swipeInAction) }
+    var longPress by remember { mutableStateOf(settings.longPressAction) }
 
-    // Sistem ayarlarından dönüldüğünde durumu tazeliyoruz.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -68,135 +71,75 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Kenar hareketleri", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text = "Ekranın kenarındaki şeritten yukarı kaydırınca son uygulamalar, " +
-                "aşağı kaydırınca bildirim paneli, içeri kaydırınca geri.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+        ServiceCard(
+            enabled = serviceEnabled,
+            explanation = "\"Son uygulamalar\", \"bildirimler\" gibi komutları verebilmenin " +
+                "tek yolu erişilebilirlik servisi. Farkımız: bu servis ekran içeriğini " +
+                "okuma bayrağı kapalı — şifreni, bakiyeni göremez, yalnızca jesti alır.",
+            onOpen = { context.startActivity(GestureSettings.accessibilitySettingsIntent()) },
         )
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text("Neden erişilebilirlik izni?", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = "\"Son uygulamaları aç\" ve \"bildirim panelini indir\" " +
-                        "komutlarını verebilmenin tek yolu bu API. Fluid NG'nin " +
-                        "Play Store'a çıkamamasının sebebi de buydu.\n\n" +
-                        "Farkımız: bu servis ekran içeriğini okuma bayrağı kapalı " +
-                        "tanımlandı. Yani yazdığın şifreyi, banka bakiyeni, gelen " +
-                        "SMS'i göremez — sadece jesti alıp komutu tetikler.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        Toggle("Şeridi göster", enabled) {
+            enabled = it
+            settings.enabled = it
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = if (serviceEnabled) "Servis açık." else "Servis kapalı.",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = "Sistem ayarlarında Erişilebilirlik → İndirilen uygulamalar → " +
-                        "Kenar hareketleri.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    onClick = {
-                        context.startActivity(GestureSettings.accessibilitySettingsIntent())
-                    },
-                ) {
-                    Text(if (serviceEnabled) "Ayarları aç" else "Servisi aç")
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Şeridi göster", style = MaterialTheme.typography.bodyLarge)
-            Switch(
-                checked = enabled,
-                onCheckedChange = {
-                    enabled = it
-                    settings.enabled = it
-                },
-            )
-        }
-
-        Text("Kenar", style = MaterialTheme.typography.labelLarge)
+        Text("Hangi kenarlar", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
-                selected = !onRight,
+                selected = showLeft,
                 onClick = {
-                    onRight = false
-                    settings.onRightEdge = false
+                    showLeft = !showLeft
+                    settings.showLeft = showLeft
                 },
                 label = { Text("Sol") },
             )
             FilterChip(
-                selected = onRight,
+                selected = showRight,
                 onClick = {
-                    onRight = true
-                    settings.onRightEdge = true
+                    showRight = !showRight
+                    settings.showRight = showRight
                 },
                 label = { Text("Sağ") },
             )
         }
+        Text(
+            text = "İkisini birden açabilirsin.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
-        Stepper(
-            label = "Kalınlık",
-            value = widthDp,
-            range = 2..16,
-            suffix = "dp",
-        ) {
-            widthDp = it
-            settings.widthDp = it
+        Text("Jestlere atanan eylemler", style = MaterialTheme.typography.labelLarge)
+        ActionPicker("Yukarı kaydır", up) { up = it; settings.swipeUpAction = it }
+        ActionPicker("Aşağı kaydır", down) { down = it; settings.swipeDownAction = it }
+        ActionPicker("İçeri kaydır", inward) { inward = it; settings.swipeInAction = it }
+        ActionPicker("Uzun bas", longPress) { longPress = it; settings.longPressAction = it }
+
+        Text("Boyut ve konum", style = MaterialTheme.typography.labelLarge)
+        Stepper("Kalınlık", widthDp, 2..16, suffix = "dp") { widthDp = it; settings.widthDp = it }
+        Stepper("Uzunluk", heightDp, 60..500, step = 20, suffix = "dp") {
+            heightDp = it; settings.heightDp = it
         }
-
-        Stepper(
-            label = "Uzunluk",
-            value = heightDp,
-            range = 60..400,
-            step = 20,
-            suffix = "dp",
-        ) {
-            heightDp = it
-            settings.heightDp = it
+        Stepper("Dikey konum", offsetDp, -300..300, step = 20, suffix = "dp") {
+            offsetDp = it; settings.verticalOffsetDp = it
         }
+        Text(
+            text = "Negatif yukarı, pozitif aşağı taşır. Değişiklikler anında uygulanır.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Titreşim", style = MaterialTheme.typography.bodyLarge)
-            Switch(
-                checked = vibrate,
-                onCheckedChange = {
-                    vibrate = it
-                    settings.vibrateEnabled = it
-                    if (it) GestureFeedback.vibrate(context, settings)
-                },
-            )
+        Toggle("Titreşim", vibrate) {
+            vibrate = it
+            settings.vibrateEnabled = it
+            if (it) GestureFeedback.vibrate(context, settings)
         }
-
         if (vibrate) {
-            Text("Titreşim gücü", style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Hafif", "Orta", "Güçlü").forEachIndexed { index, label ->
                     FilterChip(
@@ -204,7 +147,6 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
                         onClick = {
                             vibrateStrength = index
                             settings.vibrateStrength = index
-                            // Seçer seçmez hissettir: ayrı bir "dene" düğmesine gerek kalmasın.
                             GestureFeedback.vibrate(context, settings)
                         },
                         label = { Text(label) },
@@ -212,18 +154,80 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
-
-        Text(
-            text = "Değişikliklerin görünmesi için servisi kapatıp açman gerekebilir; " +
-                "katman servis başlarken çiziliyor.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
 @Composable
-private fun Stepper(
+internal fun ServiceCard(
+    enabled: Boolean,
+    explanation: String,
+    onOpen: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = if (enabled) "Servis açık." else "Servis kapalı.",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = explanation,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(onClick = onOpen) {
+                Text(if (enabled) "Erişilebilirlik ayarları" else "Servisi aç")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActionPicker(
+    label: String,
+    value: GestureAction,
+    onChange: (GestureAction) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Box {
+            OutlinedButton(onClick = { open = true }) { Text(value.label) }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                GestureAction.entries.forEach { action ->
+                    DropdownMenuItem(
+                        text = { Text(action.label) },
+                        onClick = {
+                            open = false
+                            onChange(action)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+internal fun Stepper(
     label: String,
     value: Int,
     range: IntRange,
@@ -236,18 +240,12 @@ private fun Stepper(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text = label, style = MaterialTheme.typography.bodyMedium)
-        TextButton(
-            enabled = value > range.first,
-            onClick = { onChange((value - step).coerceIn(range)) },
-        ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        TextButton(enabled = value > range.first, onClick = { onChange((value - step).coerceIn(range)) }) {
             Text("−")
         }
-        Text(text = "$value $suffix", style = MaterialTheme.typography.bodyLarge)
-        TextButton(
-            enabled = value < range.last,
-            onClick = { onChange((value + step).coerceIn(range)) },
-        ) {
+        Text("$value $suffix", style = MaterialTheme.typography.bodyLarge)
+        TextButton(enabled = value < range.last, onClick = { onChange((value + step).coerceIn(range)) }) {
             Text("+")
         }
     }

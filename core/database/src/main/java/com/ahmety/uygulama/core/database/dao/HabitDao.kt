@@ -64,4 +64,8 @@ interface HabitDao {
         """,
     )
     fun observeChecksForHabit(habitUuid: String): Flow<List<HabitCheckEntity>>
+
+    /** Tüm zamanların toplam tamamlama günü sayısı (puan hesabı için). */
+    @Query("SELECT COUNT(*) FROM habit_check WHERE deletedAt IS NULL AND count > 0")
+    fun observeTotalCompletions(): Flow<Int>
 }

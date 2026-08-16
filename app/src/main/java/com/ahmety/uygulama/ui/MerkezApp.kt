@@ -36,6 +36,7 @@ import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
+import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
 import com.ahmety.uygulama.ui.update.UpdateScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -150,6 +151,7 @@ fun MerkezApp() {
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
+                    onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenUpdates = { navController.navigate(UPDATE_ROUTE) },
                 )
             }
@@ -161,6 +163,9 @@ fun MerkezApp() {
             }
             composable(GESTURES_ROUTE) {
                 GestureSettingsScreen()
+            }
+            composable(CURSOR_ROUTE) {
+                QuickCursorScreen()
             }
             composable(UPDATE_ROUTE) {
                 UpdateScreen()
@@ -189,6 +194,7 @@ fun MerkezApp() {
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
+private const val CURSOR_ROUTE = "cursor"
 private const val NOTE_ROUTE = "note"
 private const val UPDATE_ROUTE = "update"
 private const val ARTICLE_ROUTE = "article"
@@ -198,6 +204,7 @@ private fun SettingsScreen(
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenGestures: () -> Unit,
+    onOpenCursor: () -> Unit,
     onOpenUpdates: () -> Unit,
 ) {
     Column(
@@ -221,6 +228,11 @@ private fun SettingsScreen(
             headlineContent = { Text("Kenar hareketleri") },
             supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
             modifier = Modifier.clickable(onClick = onOpenGestures),
+        )
+        ListItem(
+            headlineContent = { Text("Tek elle imleç") },
+            supportingContent = { Text("Ulaşılamayan köşelere basmak için sanal imleç") },
+            modifier = Modifier.clickable(onClick = onOpenCursor),
         )
         ListItem(
             headlineContent = { Text("Güncellemeler") },

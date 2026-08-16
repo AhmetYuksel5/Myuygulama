@@ -3,7 +3,9 @@ package com.ahmety.uygulama.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -81,10 +83,17 @@ fun TodayScreen(
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text(
-                text = todayHeadline(),
-                style = MaterialTheme.typography.headlineSmall,
-            )
+            Column {
+                Text(
+                    text = todayHeadline(),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                LevelBar(
+                    level = habitsState.level.level,
+                    progress = habitsState.level.progress,
+                    pointsToNext = habitsState.level.pointsToNext,
+                )
+            }
 
             HabitsSection(
                 state = habitsState,
@@ -147,6 +156,38 @@ fun TodayScreen(
                 tasksViewModel.addTask(title, due, priority, recurrence)
                 showAddTask = false
             },
+        )
+    }
+}
+
+@Composable
+private fun LevelBar(level: Int, progress: Float, pointsToNext: Int) {
+    // Sade oyunlaştırma: seviye numarası + ince ilerleme çubuğu. Rozet/emoji yok.
+    val animated by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = progress,
+        label = "levelProgress",
+    )
+    Column(modifier = Modifier.padding(top = 6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Seviye $level",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = "sonraki seviyeye $pointsToNext puan",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { animated },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
         )
     }
 }

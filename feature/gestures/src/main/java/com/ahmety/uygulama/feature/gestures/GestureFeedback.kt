@@ -32,6 +32,13 @@ object GestureFeedback {
         runCatching { vibrator.vibrate(effect) }
     }
 
+    /** Ayardan bağımsız kısa titreşim (Quick Cursor gibi kendi geri bildirimi olanlar için). */
+    fun vibrateOnce(context: Context, durationMs: Long) {
+        val vibrator = resolveVibrator(context) ?: return
+        val effect = VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE)
+        runCatching { vibrator.vibrate(effect) }
+    }
+
     private fun resolveVibrator(context: Context): Vibrator? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)

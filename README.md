@@ -1,4 +1,4 @@
-# Myuygulama
+# Uygulama
 
 Kişisel, tek kullanıcılık Android "süper uygulaması". Alışkanlık takibi, görevler,
 takvim, notlar, oku-sonra, İngilizce kelime çalışması, haber derleme, PDF okuma ve

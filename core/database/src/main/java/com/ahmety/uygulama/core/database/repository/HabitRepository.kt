@@ -42,6 +42,8 @@ class HabitRepository @Inject constructor(
     fun observeChecksForHabit(habitUuid: String): Flow<List<HabitCheck>> =
         habitDao.observeChecksForHabit(habitUuid).map { list -> list.map(HabitCheckEntity::toDomain) }
 
+    fun observeTotalCompletions(): Flow<Int> = habitDao.observeTotalCompletions()
+
     suspend fun getHabit(uuid: String): Habit? = habitDao.getByUuid(uuid)?.toDomain()
 
     /** Yeni alışkanlık oluşturur ve kalıcı kimliğini (uuid) döndürür. */

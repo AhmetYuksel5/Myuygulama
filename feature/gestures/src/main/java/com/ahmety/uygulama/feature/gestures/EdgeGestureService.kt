@@ -2,8 +2,11 @@ package com.ahmety.uygulama.feature.gestures
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -12,29 +15,36 @@ import android.view.accessibility.AccessibilityEvent
 import kotlin.math.abs
 
 /**
- * Ekranın kenarındaki ince şeritten yapılan kaydırmaları sistem komutlarına çevirir.
- * Fluid NG'nin yaptığı işin aynısı — ama kapalı kaynak bir APK'ya değil, kendi
- * uygulamana yetki vermiş oluyorsun.
+ * Ekranın kenar(lar)ındaki ince şeritten yapılan kaydırmaları sistem
+ * komutlarına çevirir. Fluid NG'nin yaptığı işin aynısı — ama kapalı kaynak
+ * bir APK'ya değil, kendi uygulamana yetki vermiş oluyorsun.
  *
- * **Güvenlik notu:** Erişilebilirlik servislerinin asıl riski ekrandaki metni
- * okuyabilmeleridir (banka bakiyesi, şifre, SMS). Bu servis
- * `accessibility_service_config.xml` içinde `canRetrieveWindowContent="false"`
- * ile tanımlı; yani ekran içeriğini **okuyamaz**. Yaptığı tek şey jesti alıp
- * global bir komut tetiklemek.
+ * **Güvenlik notu:** `accessibility_service_config.xml` içinde
+ * `canRetrieveWindowContent="false"`; servis ekran içeriğini **okuyamaz**,
+ * yalnızca jesti alıp global komut tetikler.
  *
- * Katman `TYPE_ACCESSIBILITY_OVERLAY` ile çiziliyor: "diğer uygulamaların
- * üstünde göster" iznine gerek kalmıyor ve tam ekran uygulamalarda da çalışıyor.
+ * Katman `TYPE_ACCESSIBILITY_OVERLAY` ile çiziliyor. Sağ ve sol kenar bağımsız;
+ * ikisi aynı anda etkin olabiliyor. Ayarlar SharedPreferences dinleyicisiyle
+ * canlı uygulanıyor — kalınlık/uzunluk/konum değişince katman anında yeniden
+ * çiziliyor, servisi kapatıp açmaya gerek kalmıyor.
  */
 class EdgeGestureService : AccessibilityService() {
 
     private var windowManager: WindowManager? = null
-    private var edgeView: View? = null
-    private var downY = 0f
-    private var downX = 0f
+    private val edgeViews = mutableListOf<View>()
+    private val handler = Handler(Looper.getMainLooper())
+
+    private lateinit var settings: GestureSettings
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        // Herhangi bir ayar değişince en basit ve doğru yol: baştan çiz.
+        handler.post { rebuild() }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        showEdge()
+        settings = GestureSettings(this)
+        settings.prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        rebuild()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -44,28 +54,29 @@ class EdgeGestureService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
-        hideEdge()
+        settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        removeAll()
         super.onDestroy()
     }
 
-    private fun showEdge() {
-        if (edgeView != null) return
-        val settings = GestureSettings(this)
+    private fun rebuild() {
+        removeAll()
         if (!settings.enabled) return
-
         val manager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = manager
+        if (settings.showLeft) addEdge(manager, onRight = false)
+        if (settings.showRight) addEdge(manager, onRight = true)
+    }
 
+    private fun addEdge(manager: WindowManager, onRight: Boolean) {
         val density = resources.displayMetrics.density
         val widthPx = (settings.widthDp * density).toInt().coerceAtLeast(4)
         val heightPx = (settings.heightDp * density).toInt().coerceAtLeast(48)
 
-        val view = View(this).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = widthPx / 2f
-                setColor(settings.colorArgb)
-            }
-            setOnTouchListener { _, motionEvent -> handleTouch(motionEvent, density) }
+        val view = EdgeTouchView(this, onRight, density)
+        view.background = GradientDrawable().apply {
+            cornerRadius = widthPx / 2f
+            setColor(settings.colorArgb)
         }
 
         val params = WindowManager.LayoutParams(
@@ -77,61 +88,102 @@ class EdgeGestureService : AccessibilityService() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = (if (settings.onRightEdge) Gravity.END else Gravity.START) or Gravity.CENTER_VERTICAL
+            gravity = (if (onRight) Gravity.END else Gravity.START) or Gravity.CENTER_VERTICAL
             y = (settings.verticalOffsetDp * density).toInt()
         }
 
         runCatching {
             manager.addView(view, params)
-            edgeView = view
+            edgeViews += view
         }
     }
 
-    private fun hideEdge() {
-        val view = edgeView ?: return
-        runCatching { windowManager?.removeView(view) }
-        edgeView = null
+    private fun removeAll() {
+        edgeViews.forEach { view -> runCatching { windowManager?.removeView(view) } }
+        edgeViews.clear()
     }
 
-    private fun handleTouch(event: MotionEvent, density: Float): Boolean {
-        val threshold = SWIPE_THRESHOLD_DP * density
-        return when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                downY = event.rawY
-                downX = event.rawX
-                true
-            }
+    /** Tek bir kenar şeridinin dokunuşlarını yorumlayan görünüm. */
+    private inner class EdgeTouchView(
+        context: Context,
+        private val onRight: Boolean,
+        private val density: Float,
+    ) : View(context) {
 
-            MotionEvent.ACTION_UP -> {
-                val dy = event.rawY - downY
-                val dx = event.rawX - downX
-                val handled = when {
-                    // Dikey hareket yataydan baskınsa yukarı/aşağı komutları.
-                    abs(dy) > abs(dx) && dy < -threshold ->
-                        performGlobalAction(GLOBAL_ACTION_RECENTS)
+        private var downX = 0f
+        private var downY = 0f
+        private var longPressFired = false
+        private val longPressRunnable = Runnable {
+            longPressFired = true
+            perform(settings.longPressAction)
+        }
 
-                    abs(dy) > abs(dx) && dy > threshold ->
-                        performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
-
-                    // Şeritten içeri doğru kaydırma: geri.
-                    abs(dx) > threshold -> performGlobalAction(GLOBAL_ACTION_BACK)
-
-                    else -> false
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            val threshold = SWIPE_THRESHOLD_DP * density
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    longPressFired = false
+                    handler.postDelayed(longPressRunnable, LONG_PRESS_MS)
+                    return true
                 }
-                // Jest gerçekten bir komuta dönüştüyse dokunsal onay ver.
-                if (handled) GestureFeedback.vibrate(this, GestureSettings(this))
-                true
-            }
 
-            else -> true
+                MotionEvent.ACTION_MOVE -> {
+                    // Belirgin hareket başladıysa bu bir kaydırma; uzun basışı iptal et.
+                    if (abs(event.rawX - downX) > threshold || abs(event.rawY - downY) > threshold) {
+                        handler.removeCallbacks(longPressRunnable)
+                    }
+                    return true
+                }
+
+                MotionEvent.ACTION_UP -> {
+                    handler.removeCallbacks(longPressRunnable)
+                    if (longPressFired) return true // eylem zaten tetiklendi
+
+                    val dy = event.rawY - downY
+                    val dx = event.rawX - downX
+                    // İçeri = şeritten ekranın ortasına doğru (sağ kenarda sola, solda sağa).
+                    val inward = if (onRight) -dx else dx
+                    val action = when {
+                        abs(dy) > abs(dx) && dy < -threshold -> settings.swipeUpAction
+                        abs(dy) > abs(dx) && dy > threshold -> settings.swipeDownAction
+                        inward > threshold -> settings.swipeInAction
+                        else -> null
+                    }
+                    if (action != null) perform(action)
+                    return true
+                }
+
+                MotionEvent.ACTION_CANCEL -> {
+                    handler.removeCallbacks(longPressRunnable)
+                    return true
+                }
+            }
+            return true
         }
+    }
+
+    private fun perform(action: GestureAction) {
+        if (action == GestureAction.NONE) return
+        val ok = when (action) {
+            GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
+            GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
+            GestureAction.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            GestureAction.NOTIFICATIONS -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            GestureAction.QUICK_SETTINGS -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+            GestureAction.LOCK_SCREEN -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+            GestureAction.SCREENSHOT -> performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
+            GestureAction.POWER_DIALOG -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
+            GestureAction.NONE -> false
+        }
+        if (ok) GestureFeedback.vibrate(this, settings)
     }
 
     companion object {
         private const val SWIPE_THRESHOLD_DP = 24f
+        private const val LONG_PRESS_MS = 350L
 
-        /** Ayar değiştiğinde servisin katmanı yeniden çizmesi için. */
-        fun isRunning(context: Context): Boolean =
-            GestureSettings(context).enabled
+        fun isRunning(context: Context): Boolean = GestureSettings(context).enabled
     }
 }

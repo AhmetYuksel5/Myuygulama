@@ -2,4 +2,6 @@
 <resources>
     <string name="gesture_service_label">Kenar hareketleri</string>
     <string name="gesture_service_description">Ekranın kenarındaki şeritten yukarı kaydırınca son uygulamaları, aşağı kaydırınca bildirim panelini açar. Ekran içeriğini okumaz.</string>
+    <string name="quick_cursor_label">Tek elle imleç</string>
+    <string name="quick_cursor_description">Kenardaki topa parmağını gezdirerek ekranda bir imleç dolaştırır, bırakınca oraya dokunur. Tek elle ulaşılamayan köşeler için. Ekran içeriğini okumaz.</string>
 </resources>
