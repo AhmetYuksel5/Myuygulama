@@ -1,5 +1,7 @@
 package com.ahmety.uygulama.core.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Uygulamanın tüm modüllerinin paylaştığı tek kayıt tipi.
  *
@@ -32,6 +34,7 @@ data class Entry(
     val tags: List<Tag> = emptyList(),
 )
 
+@Serializable
 enum class EntryType {
     NOTE,
     ARTICLE,
@@ -61,6 +64,7 @@ data class EntryLink(
     val relation: LinkRelation = LinkRelation.REFERENCES,
 )
 
+@Serializable
 enum class LinkRelation {
     /** Kaynak kayıt hedefe atıf veriyor. */
     REFERENCES,

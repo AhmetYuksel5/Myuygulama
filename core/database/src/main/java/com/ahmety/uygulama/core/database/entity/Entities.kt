@@ -6,9 +6,11 @@ import androidx.room.ForeignKey
 import androidx.room.Fts4
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.LinkRelation
 
+@Serializable
 @Entity(
     tableName = "entry",
     indices = [
@@ -46,6 +48,7 @@ data class EntryFtsEntity(
     val body: String,
 )
 
+@Serializable
 @Entity(
     tableName = "tag",
     indices = [

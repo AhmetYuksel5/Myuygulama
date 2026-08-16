@@ -20,18 +20,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahmety.uygulama.feature.library.NoteEditorRoute
+import com.ahmety.uygulama.feature.library.NotesRoute
+import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import androidx.navigation.navArgument
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -91,16 +94,10 @@ fun MerkezApp() {
                 TasksRoute()
             }
             composable(TopLevelDestination.LIBRARY.route) {
-                PlaceholderScreen(
-                    title = "Arşiv",
-                    description = "Notlar, makaleler, dokümanlar ve alıntılar tek listede.",
-                )
+                NotesRoute(onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") })
             }
             composable(TopLevelDestination.SEARCH.route) {
-                PlaceholderScreen(
-                    title = "Ara",
-                    description = "Tüm kayıtlarda tam metin arama.",
-                )
+                SearchRoute(onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") })
             }
             composable(TopLevelDestination.SETTINGS.route) {
                 SettingsScreen(
@@ -118,6 +115,15 @@ fun MerkezApp() {
             composable(GESTURES_ROUTE) {
                 GestureSettingsScreen()
             }
+            composable(
+                route = "$NOTE_ROUTE/{noteId}",
+                arguments = listOf(navArgument("noteId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                NoteEditorRoute(
+                    noteId = backStackEntry.arguments?.getLong("noteId") ?: 0L,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }
@@ -125,6 +131,7 @@ fun MerkezApp() {
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
+private const val NOTE_ROUTE = "note"
 
 @Composable
 private fun SettingsScreen(
@@ -153,25 +160,6 @@ private fun SettingsScreen(
             headlineContent = { Text("Kenar hareketleri") },
             supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
             modifier = Modifier.clickable(onClick = onOpenGestures),
-        )
-    }
-}
-
-@Composable
-private fun PlaceholderScreen(title: String, description: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = title, style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp),
         )
     }
 }

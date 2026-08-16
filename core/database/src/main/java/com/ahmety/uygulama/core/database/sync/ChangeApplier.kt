@@ -1,10 +1,14 @@
 package com.ahmety.uygulama.core.database.sync
 
+import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
+import com.ahmety.uygulama.core.database.dao.TagDao
 import com.ahmety.uygulama.core.database.dao.TaskDao
 import com.ahmety.uygulama.core.database.entity.ChangeEntityType
+import com.ahmety.uygulama.core.database.entity.EntryEntity
 import com.ahmety.uygulama.core.database.entity.HabitCheckEntity
 import com.ahmety.uygulama.core.database.entity.HabitEntity
+import com.ahmety.uygulama.core.database.entity.TagEntity
 import com.ahmety.uygulama.core.database.entity.TaskEntity
 import com.ahmety.uygulama.core.database.entity.TaskListEntity
 import kotlinx.serialization.json.Json
@@ -28,6 +32,8 @@ import javax.inject.Singleton
 class ChangeApplier @Inject constructor(
     private val habitDao: HabitDao,
     private val taskDao: TaskDao,
+    private val entryDao: EntryDao,
+    private val tagDao: TagDao,
     private val json: Json,
 ) {
 
@@ -37,6 +43,8 @@ class ChangeApplier @Inject constructor(
             ChangeEntityType.HABIT_CHECK -> applyHabitCheck(payload)
             TASK_LIST -> applyTaskList(payload)
             TASK -> applyTask(payload)
+            ChangeEntityType.ENTRY -> applyEntry(payload)
+            ChangeEntityType.TAG -> applyTag(payload)
             else -> false
         }
     }.getOrDefault(false)
@@ -74,6 +82,25 @@ class ChangeApplier @Inject constructor(
         return true
     }
 
+    private suspend fun applyEntry(payload: String): Boolean {
+        val incoming = json.decodeFromString(EntryEntity.serializer(), payload)
+        val local = entryDao.getByUuid(incoming.uuid)
+        if (local != null && !incoming.wins(local.updatedAt, payload, local.serialized())) return false
+        entryDao.upsert(incoming.copy(id = local?.id ?: 0L))
+        return true
+    }
+
+    private suspend fun applyTag(payload: String): Boolean {
+        val incoming = json.decodeFromString(TagEntity.serializer(), payload)
+        // Etiketin adı benzersiz; aynı adlı etiket zaten varsa yenisini yazmıyoruz.
+        if (tagDao.findByUuid(incoming.uuid) != null) return false
+        if (tagDao.findByName(incoming.name) != null) return false
+        tagDao.insert(incoming.copy(id = 0L))
+        return true
+    }
+
+    private fun EntryEntity.serialized(): String = json.encodeToString(EntryEntity.serializer(), this)
+
     private fun HabitEntity.serialized(): String = json.encodeToString(HabitEntity.serializer(), this)
     private fun TaskEntity.serialized(): String = json.encodeToString(TaskEntity.serializer(), this)
     private fun TaskListEntity.serialized(): String =
@@ -97,6 +124,7 @@ private fun Any.wins(
     localPayload: String,
 ): Boolean {
     val incomingUpdatedAt = when (this) {
+        is EntryEntity -> updatedAt
         is HabitEntity -> updatedAt
         is TaskEntity -> updatedAt
         is TaskListEntity -> updatedAt
