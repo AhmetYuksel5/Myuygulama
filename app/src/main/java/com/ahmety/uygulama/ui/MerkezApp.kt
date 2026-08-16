@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
+import com.ahmety.uygulama.ui.sync.SyncScreen
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -103,19 +104,27 @@ fun MerkezApp() {
             composable(TopLevelDestination.SETTINGS.route) {
                 SettingsScreen(
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
+                    onOpenSync = { navController.navigate(SYNC_ROUTE) },
                 )
             }
             composable(PERMISSIONS_ROUTE) {
                 PermissionsScreen(onContinue = { navController.popBackStack() })
+            }
+            composable(SYNC_ROUTE) {
+                SyncScreen()
             }
         }
     }
 }
 
 private const val PERMISSIONS_ROUTE = "permissions"
+private const val SYNC_ROUTE = "sync"
 
 @Composable
-private fun SettingsScreen(onOpenPermissions: () -> Unit) {
+private fun SettingsScreen(
+    onOpenPermissions: () -> Unit,
+    onOpenSync: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,6 +136,11 @@ private fun SettingsScreen(onOpenPermissions: () -> Unit) {
             headlineContent = { Text("İzinler") },
             supportingContent = { Text("Bildirim, takvim, alarm, dosya erişimi") },
             modifier = Modifier.clickable(onClick = onOpenPermissions),
+        )
+        ListItem(
+            headlineContent = { Text("Senkronizasyon") },
+            supportingContent = { Text("İki telefon arasında paylaşılan klasör") },
+            modifier = Modifier.clickable(onClick = onOpenSync),
         )
     }
 }

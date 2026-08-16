@@ -7,6 +7,7 @@ import com.ahmety.uygulama.core.database.dao.ChangeLogDao
 import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
 import com.ahmety.uygulama.core.database.dao.TagDao
+import com.ahmety.uygulama.core.database.dao.SyncStateDao
 import com.ahmety.uygulama.core.database.dao.TaskDao
 import com.ahmety.uygulama.core.database.sync.DeviceId
 import com.ahmety.uygulama.core.database.sync.Now
@@ -61,6 +62,9 @@ object DatabaseModule {
         prefs.edit().putString(KEY_DEVICE_ID, generated).apply()
         return generated
     }
+
+    @Provides
+    fun provideSyncStateDao(database: MerkezDatabase): SyncStateDao = database.syncStateDao()
 
     @Provides
     @Singleton
