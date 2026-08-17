@@ -14,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,15 +41,11 @@ import com.ahmety.uygulama.core.model.EntryType
 @Composable
 fun NotesRoute(
     onOpenNote: (Long) -> Unit,
-    onOpenArticle: (Long) -> Unit,
-    onAddArticle: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: NotesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val createdNoteId by viewModel.createdNoteId.collectAsStateWithLifecycle()
-    var showArticles by remember { mutableStateOf(false) }
-    var fabMenuOpen by remember { mutableStateOf(false) }
 
     // Yeni not oluşturulunca doğrudan editöre geçiyoruz; boş bir satır
     // listeye düşüp kullanıcının ayrıca dokunmasını beklemek fazladan adım olurdu.
@@ -73,25 +68,70 @@ fun NotesRoute(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                Text("Arşiv", style = MaterialTheme.typography.headlineSmall)
+                Text("Notlar", style = MaterialTheme.typography.headlineSmall)
             }
 
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !showArticles,
-                        onClick = { showArticles = false },
-                        label = { Text("Notlar (${state.notes.size})") },
-                    )
-                    FilterChip(
-                        selected = showArticles,
-                        onClick = { showArticles = true },
-                        label = { Text("Makaleler (${state.articles.size})") },
+            if (state.loaded && state.notes.isEmpty()) {
+                item {
+                    Text(
+                        text = "Henüz not yok. Sağ alttaki düğmeyle ilk notunu yazabilirsin.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
 
-            if (state.loaded && showArticles && state.articles.isEmpty()) {
+            items(state.notes, key = { it.id }) { entry ->
+                EntryCard(
+                    entry = entry,
+                    onClick = { onOpenNote(entry.id) },
+                    onArchive = { viewModel.archive(entry) },
+                    onDelete = { viewModel.delete(entry) },
+                )
+            }
+        }
+
+        FloatingActionButton(
+            onClick = { viewModel.createNote() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "Not yaz")
+        }
+    }
+}
+
+/**
+ * Pocket muadili: kaydedilen makaleler (oku-sonra). Arşivdeki notlardan ayrı
+ * bir sekmede yaşıyor. URL yapıştırıp ya da başka bir uygulamadan paylaşıp
+ * kaydedersin; sayfa okunabilir hâle getirilip çevrimdışı saklanır.
+ */
+@Composable
+fun PocketRoute(
+    onOpenArticle: (Long) -> Unit,
+    onAddArticle: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: NotesViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 16.dp,
+                bottom = 96.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item {
+                Text("Pocket", style = MaterialTheme.typography.headlineSmall)
+            }
+
+            if (state.loaded && state.articles.isEmpty()) {
                 item {
                     Text(
                         text = "Henüz makale yok. Sağ alttaki düğmeden URL yapıştırabilir " +
@@ -103,55 +143,23 @@ fun NotesRoute(
                 }
             }
 
-            if (state.loaded && !showArticles && state.notes.isEmpty()) {
-                item {
-                    Text(
-                        text = "Henüz not yok. Sağ alttaki düğmeyle ilk notunu yazabilirsin.\n\n" +
-                            "Kaydettiğin makaleler, PDF alıntıların ve kelimelerin de " +
-                            "buraya düşecek — hepsi aynı arşivde yaşıyor.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            val visible = if (showArticles) state.articles else state.notes
-            items(visible, key = { it.id }) { entry ->
+            items(state.articles, key = { it.id }) { entry ->
                 EntryCard(
                     entry = entry,
-                    onClick = {
-                        if (showArticles) onOpenArticle(entry.id) else onOpenNote(entry.id)
-                    },
+                    onClick = { onOpenArticle(entry.id) },
                     onArchive = { viewModel.archive(entry) },
                     onDelete = { viewModel.delete(entry) },
                 )
             }
         }
 
-        Box(
+        FloatingActionButton(
+            onClick = onAddArticle,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         ) {
-            FloatingActionButton(onClick = { fabMenuOpen = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Ekle")
-            }
-            DropdownMenu(expanded = fabMenuOpen, onDismissRequest = { fabMenuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text("Not yaz") },
-                    onClick = {
-                        fabMenuOpen = false
-                        viewModel.createNote()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Makale kaydet (URL)") },
-                    onClick = {
-                        fabMenuOpen = false
-                        onAddArticle()
-                    },
-                )
-            }
+            Icon(Icons.Filled.Add, contentDescription = "Makale kaydet")
         }
     }
 }

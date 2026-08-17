@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Search
@@ -33,6 +34,7 @@ import com.ahmety.uygulama.feature.library.NoteEditorRoute
 import com.ahmety.uygulama.feature.reader.ArticleRoute
 import com.ahmety.uygulama.feature.reader.SaveArticleDialog
 import com.ahmety.uygulama.feature.library.NotesRoute
+import com.ahmety.uygulama.feature.library.PocketRoute
 import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
@@ -57,7 +59,8 @@ private enum class TopLevelDestination(
 ) {
     TODAY("today", "Bugün", Icons.Outlined.Today),
     TASKS("tasks", "Görevler", Icons.Outlined.CheckCircle),
-    LIBRARY("library", "Arşiv", Icons.Outlined.Description),
+    LIBRARY("library", "Notlar", Icons.Outlined.Description),
+    POCKET("pocket", "Pocket", Icons.Outlined.Bookmark),
     VOCAB("vocab", "Kelime", Icons.Outlined.Translate),
     SEARCH("search", "Ara", Icons.Outlined.Search),
     SETTINGS("settings", "Ayarlar", Icons.Outlined.Settings),
@@ -139,6 +142,10 @@ fun MerkezApp() {
             composable(TopLevelDestination.LIBRARY.route) {
                 NotesRoute(
                     onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") },
+                )
+            }
+            composable(TopLevelDestination.POCKET.route) {
+                PocketRoute(
                     onOpenArticle = { navController.navigate("$ARTICLE_ROUTE/$it") },
                     onAddArticle = { showSaveArticle = true },
                 )
