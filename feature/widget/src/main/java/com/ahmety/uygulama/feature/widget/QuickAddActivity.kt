@@ -109,8 +109,12 @@ private fun QuickAddDialog(
     val keyboard = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-        keyboard?.show()
+        // Alan henüz yerleşmediyse requestFocus istisna atabiliyor; kutunun
+        // açılmaması pahasına klavyeyi zorlamıyoruz.
+        runCatching {
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
     }
 
     Surface(
