@@ -1,5 +1,11 @@
 package com.ahmety.uygulama.launcher
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.provider.ContactsContract
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,8 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 
 /** Düzenleyicideki eylem türleri; her biri bir [LauncherAction]'a çevrilir. */
 private enum class ActionKind(val label: String) {
@@ -152,6 +160,12 @@ fun FavoriteEditorDialog(
 
                 if (favorite.type == FavoriteType.SHORTCUT) {
                     Text("Kişi hızlı kurulum", style = MaterialTheme.typography.labelLarge)
+                    ContactPickerButton(
+                        onPicked = { name, phone ->
+                            contactPhone = phone
+                            if (label.isBlank() || label == "Kısayol") label = name
+                        },
+                    )
                     OutlinedTextField(
                         value = contactPhone,
                         onValueChange = { contactPhone = it },
@@ -210,6 +224,61 @@ fun FavoriteEditorDialog(
             }
         },
     )
+}
+
+/**
+ * Rehberden kişi seçer ve numarasını okur. Numarayı elle yazmak yerine
+ * kişiyi seçmek hem daha hızlı hem de doğrudan sohbeti açma ihtimalini
+ * artırıyor (kayıtlı kişi bulunursa "aranıyor" ekranı hiç görünmez).
+ */
+@Composable
+private fun ContactPickerButton(onPicked: (name: String, phone: String) -> Unit) {
+    val context = LocalContext.current
+
+    val pickContact = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickContact(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.query(
+                uri,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    onPicked(cursor.getString(1).orEmpty(), cursor.getString(0).orEmpty())
+                }
+            }
+        }
+    }
+
+    val requestPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            pickContact.launch(null)
+        } else {
+            Toast.makeText(context, "Rehber izni verilmedi", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    OutlinedButton(
+        onClick = {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CONTACTS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (granted) pickContact.launch(null) else requestPermission.launch(Manifest.permission.READ_CONTACTS)
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("Rehberden kişi seç")
+    }
 }
 
 @Composable

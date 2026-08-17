@@ -155,7 +155,10 @@ class ToggleTaskAction : ActionCallback {
 @Composable
 private fun TodayWidgetContent(context: Context, data: TodayWidgetData) {
     val openTasksIntent = launchIntent(context, "gorevler")
-    val addTaskIntent = launchIntent(context, "gorev_ekle")
+    // ＋ artık uygulamayı açmıyor; ana ekranın üstünde küçük bir kutu açıyor.
+    val addTaskIntent = Intent(context, QuickAddActivity::class.java).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    }
 
     GlanceTheme {
         Column(
@@ -197,7 +200,7 @@ private fun TodayWidgetContent(context: Context, data: TodayWidgetData) {
                 Box(
                     modifier = GlanceModifier
                         .padding(start = 10.dp)
-                        .let { m -> addTaskIntent?.let { m.clickable(actionStartActivity(it)) } ?: m },
+                        .clickable(actionStartActivity(addTaskIntent)),
                 ) {
                     Text(
                         text = "＋",

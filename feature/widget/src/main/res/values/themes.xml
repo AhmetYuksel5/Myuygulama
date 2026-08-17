@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Hızlı ekleme kutusunun teması: pencere şeffaf ve kayan (floating), arkası
+        karartılıyor. Böylece kutu ana ekranın üzerinde belirir; kullanıcı
+        uygulamaya geçmiş gibi hissetmez.
+    -->
+    <style name="Theme.Merkez.QuickAdd" parent="@android:style/Theme.DeviceDefault.Dialog.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+
+</resources>

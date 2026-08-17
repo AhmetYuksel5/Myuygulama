@@ -52,6 +52,7 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
     var opacity by remember { mutableIntStateOf(settings.opacityPercent) }
     var vibrate by remember { mutableStateOf(settings.vibrateEnabled) }
     var sound by remember { mutableStateOf(settings.soundEnabled) }
+    var soundVolume by remember { mutableIntStateOf(settings.soundVolume) }
     var vibrateStrength by remember { mutableIntStateOf(settings.vibrateStrength) }
     var up by remember { mutableStateOf(settings.swipeUpAction) }
     var down by remember { mutableStateOf(settings.swipeDownAction) }
@@ -178,6 +179,14 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
             sound = it
             settings.soundEnabled = it
             if (it) GestureFeedback.beep(settings)
+        }
+        if (sound) {
+            Stepper("Ses yüksekliği", soundVolume, 5..100, step = 5, suffix = "%") {
+                soundVolume = it
+                settings.soundVolume = it
+                // Değişikliği duyabilmek için hemen çal.
+                GestureFeedback.beep(settings)
+            }
         }
         Text(
             text = "Jest başarıyla algılanınca hafif bir \"bip\" çalar.",

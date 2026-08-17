@@ -15,6 +15,7 @@ import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.SearchQuery
 import com.ahmety.uygulama.core.model.Tag
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -53,6 +54,10 @@ class EntryRepository @Inject constructor(
         entryDao.observeBacklinks(entryId).map { rows -> rows.map(EntryWithTags::toDomain) }
 
     suspend fun getById(id: Long): Entry? = entryDao.getById(id)?.toDomain(emptyList())
+
+    /** Tek seferlik okuma (akış gerekmeyen yerler için). */
+    suspend fun listByType(type: EntryType): List<Entry> =
+        entryDao.observeByType(type).first().map(EntryWithTags::toDomain)
 
     /**
      * Tüm modüllerde tek seferde arama. Boş/anlamsız sorguda sonuç döndürmüyoruz;

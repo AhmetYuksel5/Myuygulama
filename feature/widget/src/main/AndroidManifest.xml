@@ -2,6 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
+        <!--
+            Widget'tan hızlı ekleme kutusu. Şeffaf diyalog teması ile ana ekranın
+            üstünde beliriyor; uygulamaya geçiş yok. excludeFromRecents: son
+            uygulamalar listesini kirletmesin.
+        -->
+        <activity
+            android:name=".QuickAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Merkez.QuickAdd"
+            android:windowSoftInputMode="adjustResize" />
+
         <receiver
             android:name=".TodayWidgetReceiver"
             android:exported="true"

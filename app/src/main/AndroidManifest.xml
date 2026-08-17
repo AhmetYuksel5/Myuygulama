@@ -19,6 +19,11 @@
     -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!--
+        Kişi kısayolunun numarayı "aranıyor" ekranına düşürmeden doğrudan
+        WhatsApp sohbetini açabilmesi için kişinin WhatsApp satırını okuruz.
+    -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />

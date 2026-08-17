@@ -45,11 +45,24 @@ object GestureFeedback {
     @Volatile
     private var tone: ToneGenerator? = null
 
+    /** Üretecin hangi ses seviyesiyle kurulduğu; seviye değişince yenilenmeli. */
+    @Volatile
+    private var toneVolume = -1
+
     fun beep(settings: GestureSettings) {
         if (!settings.soundEnabled) return
+        val volume = settings.soundVolume
+
+        // ToneGenerator ses seviyesini yalnızca kuruluşta alıyor; kullanıcı
+        // seviyeyi değiştirdiyse üreteci yeniden kuruyoruz.
+        if (tone != null && toneVolume != volume) releaseTone()
+
         val generator = tone ?: runCatching {
-            ToneGenerator(AudioManager.STREAM_SYSTEM, BEEP_VOLUME)
-        }.getOrNull()?.also { tone = it } ?: return
+            ToneGenerator(AudioManager.STREAM_SYSTEM, volume)
+        }.getOrNull()?.also {
+            tone = it
+            toneVolume = volume
+        } ?: return
 
         val ok = runCatching {
             generator.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
@@ -61,6 +74,7 @@ object GestureFeedback {
     fun releaseTone() {
         val current = tone ?: return
         tone = null
+        toneVolume = -1
         runCatching { current.release() }
     }
 
@@ -80,6 +94,5 @@ object GestureFeedback {
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }?.takeIf { it.hasVibrator() }
 
-    private const val BEEP_VOLUME = 25 // 0–100; "ufak bir bip"
     private const val BEEP_DURATION_MS = 90
 }

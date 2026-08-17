@@ -72,6 +72,11 @@ class GestureSettings(context: Context) {
         get() = prefs.getBoolean(KEY_SOUND, false)
         set(value) = prefs.edit().putBoolean(KEY_SOUND, value).apply()
 
+    /** Bip sesinin yüksekliği: 5–100 arası yüzde. */
+    var soundVolume: Int
+        get() = prefs.getInt(KEY_SOUND_VOLUME, 25)
+        set(value) = prefs.edit().putInt(KEY_SOUND_VOLUME, value.coerceIn(5, 100)).apply()
+
     var vibrateEnabled: Boolean
         get() = prefs.getBoolean(KEY_VIBRATE, true)
         set(value) = prefs.edit().putBoolean(KEY_VIBRATE, value).apply()
@@ -114,6 +119,7 @@ class GestureSettings(context: Context) {
         private const val KEY_COLOR = "color"
         private const val KEY_OPACITY = "opacity"
         private const val KEY_SOUND = "sound"
+        private const val KEY_SOUND_VOLUME = "sound_volume"
         private const val KEY_VIBRATE = "vibrate"
         private const val KEY_VIBRATE_STRENGTH = "vibrate_strength"
         private const val KEY_ACTION_UP = "action_up"

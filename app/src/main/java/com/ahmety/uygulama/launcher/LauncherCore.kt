@@ -1,9 +1,14 @@
 package com.ahmety.uygulama.launcher
 
+import android.Manifest
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.ContactsContract
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
@@ -42,10 +47,24 @@ sealed interface LauncherAction {
         }
     }
 
-    /** WhatsApp sohbetini açar (wa.me). */
+    /**
+     * WhatsApp sohbetini açar.
+     *
+     * Önce rehberdeki kişinin WhatsApp satırı aranır ve doğrudan o sohbet
+     * açılır. `wa.me` yolu yalnızca yedek: o yol her seferinde numarayı
+     * doğrulayan ara ekrandan geçiyor ("aranıyor"), kayıtlı kişide bile.
+     */
     data class WhatsApp(val phone: String) : LauncherAction {
         override fun encode() = "wa:$phone"
         override fun run(context: Context) {
+            whatsAppContactIntent(context, phone)?.let { direct ->
+                try {
+                    context.startActivity(direct)
+                    return
+                } catch (e: Exception) {
+                    // Kişi satırı bulundu ama açılamadı: yedek yola düş.
+                }
+            }
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${toInternational(phone)}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivityCatching(intent, "WhatsApp açılamadı")
@@ -134,6 +153,53 @@ sealed interface LauncherAction {
             }
         }
     }
+}
+
+/** WhatsApp'ın rehberde açtığı "mesaj gönder" satırının türü. */
+private const val WHATSAPP_MESSAGE_MIME = "vnd.android.cursor.item/vnd.com.whatsapp.profile"
+
+/**
+ * Numaraya karşılık gelen kişinin WhatsApp sohbetini doğrudan açan intent.
+ * Rehber izni yoksa, kişi kayıtlı değilse veya WhatsApp'ta yoksa null döner —
+ * çağıran taraf `wa.me` yedeğine düşer.
+ */
+private fun whatsAppContactIntent(context: Context, phone: String): Intent? {
+    val granted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.READ_CONTACTS,
+    ) == PackageManager.PERMISSION_GRANTED
+    if (!granted || phone.isBlank()) return null
+
+    return runCatching {
+        val lookupUri = Uri.withAppendedPath(
+            ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+            Uri.encode(phone),
+        )
+        val contactId = context.contentResolver.query(
+            lookupUri,
+            arrayOf(ContactsContract.PhoneLookup.CONTACT_ID),
+            null,
+            null,
+            null,
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+            ?: return@runCatching null
+
+        val dataId = context.contentResolver.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data._ID),
+            "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(contactId.toString(), WHATSAPP_MESSAGE_MIME),
+            null,
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+            ?: return@runCatching null
+
+        Intent(
+            Intent.ACTION_VIEW,
+            ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, dataId),
+        )
+            .setPackage("com.whatsapp")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }.getOrNull()
 }
 
 /**
