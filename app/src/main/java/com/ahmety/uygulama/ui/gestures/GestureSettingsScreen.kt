@@ -49,7 +49,9 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
     var widthDp by remember { mutableIntStateOf(settings.widthDp) }
     var heightDp by remember { mutableIntStateOf(settings.heightDp) }
     var offsetDp by remember { mutableIntStateOf(settings.verticalOffsetDp) }
+    var opacity by remember { mutableIntStateOf(settings.opacityPercent) }
     var vibrate by remember { mutableStateOf(settings.vibrateEnabled) }
+    var sound by remember { mutableStateOf(settings.soundEnabled) }
     var vibrateStrength by remember { mutableIntStateOf(settings.vibrateStrength) }
     var up by remember { mutableStateOf(settings.swipeUpAction) }
     var down by remember { mutableStateOf(settings.swipeDownAction) }
@@ -128,8 +130,12 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
         Stepper("Dikey konum", offsetDp, -300..300, step = 20, suffix = "dp") {
             offsetDp = it; settings.verticalOffsetDp = it
         }
+        Stepper("Saydamlık", opacity, 0..100, step = 5, suffix = "%") {
+            opacity = it; settings.opacityPercent = it
+        }
         Text(
-            text = "Negatif yukarı, pozitif aşağı taşır. Değişiklikler anında uygulanır.",
+            text = "Negatif yukarı, pozitif aşağı taşır. Saydamlık 0'da şerit görünmez " +
+                "olur ama dokunmayı yine alır. Değişiklikler anında uygulanır.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -154,6 +160,17 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        Toggle("Bip sesi", sound) {
+            sound = it
+            settings.soundEnabled = it
+            if (it) GestureFeedback.beep(settings)
+        }
+        Text(
+            text = "Jest başarıyla algılanınca hafif bir \"bip\" çalar.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

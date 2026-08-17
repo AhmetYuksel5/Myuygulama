@@ -1,7 +1,11 @@
 package com.ahmety.uygulama.feature.gestures
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -32,6 +36,24 @@ object GestureFeedback {
         runCatching { vibrator.vibrate(effect) }
     }
 
+    /**
+     * Jest onaylandığında hafif, kısa bir "bip" sesi. Ayardan kapalıysa sessiz.
+     * Düşük ses seviyeli, tek atımlık bir ton; sistem ses seviyesinden bağımsız
+     * olması için kendi düşük seviyesini kullanır.
+     */
+    fun beep(settings: GestureSettings) {
+        if (!settings.soundEnabled) return
+        runCatching {
+            val tone = ToneGenerator(AudioManager.STREAM_MUSIC, BEEP_VOLUME)
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+            // Ton bitince kaynağı serbest bırak.
+            Handler(Looper.getMainLooper()).postDelayed(
+                { runCatching { tone.release() } },
+                BEEP_DURATION_MS + 120L,
+            )
+        }
+    }
+
     /** Ayardan bağımsız kısa titreşim (Quick Cursor gibi kendi geri bildirimi olanlar için). */
     fun vibrateOnce(context: Context, durationMs: Long) {
         val vibrator = resolveVibrator(context) ?: return
@@ -47,4 +69,7 @@ object GestureFeedback {
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }?.takeIf { it.hasVibrator() }
+
+    private const val BEEP_VOLUME = 55 // 0–100; "ufak bir bip"
+    private const val BEEP_DURATION_MS = 90
 }

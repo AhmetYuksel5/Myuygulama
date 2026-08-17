@@ -59,6 +59,19 @@ class GestureSettings(context: Context) {
         get() = prefs.getInt(KEY_COLOR, DEFAULT_COLOR)
         set(value) = prefs.edit().putInt(KEY_COLOR, value).apply()
 
+    /**
+     * Şeridin görünürlüğü: 0 = tamamen saydam (görünmez ama yine dokunulabilir),
+     * 100 = tam opak. Rengin alfa kanalını bununla eziyoruz.
+     */
+    var opacityPercent: Int
+        get() = prefs.getInt(KEY_OPACITY, DEFAULT_OPACITY)
+        set(value) = prefs.edit().putInt(KEY_OPACITY, value.coerceIn(0, 100)).apply()
+
+    /** Jest algılanınca hafif bir "bip" sesi çalınsın mı. */
+    var soundEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SOUND, false)
+        set(value) = prefs.edit().putBoolean(KEY_SOUND, value).apply()
+
     var vibrateEnabled: Boolean
         get() = prefs.getBoolean(KEY_VIBRATE, true)
         set(value) = prefs.edit().putBoolean(KEY_VIBRATE, value).apply()
@@ -99,6 +112,8 @@ class GestureSettings(context: Context) {
         private const val KEY_HEIGHT = "height_dp"
         private const val KEY_OFFSET = "offset_dp"
         private const val KEY_COLOR = "color"
+        private const val KEY_OPACITY = "opacity"
+        private const val KEY_SOUND = "sound"
         private const val KEY_VIBRATE = "vibrate"
         private const val KEY_VIBRATE_STRENGTH = "vibrate_strength"
         private const val KEY_ACTION_UP = "action_up"
@@ -108,6 +123,9 @@ class GestureSettings(context: Context) {
 
         /** Yarı saydam beyaz: koyu ve açık arayüzlerde de seçilebiliyor. */
         private const val DEFAULT_COLOR = 0x66FFFFFF
+
+        /** 0x66 ≈ %40 alfa; eski varsayılanla aynı görünürlük. */
+        private const val DEFAULT_OPACITY = 40
 
         fun isServiceEnabled(context: Context): Boolean {
             val expected = "${context.packageName}/${EdgeGestureService::class.java.name}"

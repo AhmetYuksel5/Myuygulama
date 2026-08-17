@@ -17,13 +17,14 @@ import android.view.accessibility.AccessibilityEvent
 /**
  * Quick Cursor muadili: tek elle ulaşılamayan yerlere basmak için sanal imleç.
  *
- * Kenardaki topa parmağını basıp gezdirirsin; ekranda bir nişan halkası
- * **trackpad gibi görece** hareket eder (küçük parmak hareketi, hassasiyet
- * kadar büyük imleç hareketi — böylece topun yanından ekranın öbür ucuna
- * ulaşırsın). Parmağını kaldırınca imlecin durduğu yere gerçek bir dokunma
- * gönderilir (`dispatchGesture`).
+ * Kenardaki topa parmağını basınca, imleç topun biraz **üstünde** belirir
+ * (böylece başparmağın altında kalmaz, "Tek elle emret" gibi). Parmağını
+ * gezdirdikçe imleç **trackpad gibi görece** hareket eder (küçük parmak
+ * hareketi, hassasiyet kadar büyük imleç hareketi). Parmağını kaldırınca
+ * imlecin durduğu yere gerçek bir dokunma gönderilir (`dispatchGesture`).
  *
- * Topu taşımak için uzun basıp sürükle. Ayarlar canlı uygulanır.
+ * Topu taşımak için uzun basıp sürükle. Kullanılmadığında top 3 saniye sonra
+ * sönükleşir (fade-out); dokununca yeniden belirir. Ayarlar canlı uygulanır.
  */
 class QuickCursorService : AccessibilityService() {
 
@@ -50,8 +51,13 @@ class QuickCursorService : AccessibilityService() {
     private val longPress = Runnable {
         longPressFired = true
         draggingHandle = true
+        moving = false
+        hideCursor()
         GestureFeedback.vibrateOnce(this@QuickCursorService, 25L)
     }
+
+    // Kullanılmayınca topu sönükleştiren zamanlayıcı.
+    private val fadeOut = Runnable { fadeHandle(idle = true) }
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         handler.post { rebuild() }
@@ -69,6 +75,7 @@ class QuickCursorService : AccessibilityService() {
 
     override fun onDestroy() {
         settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        handler.removeCallbacks(fadeOut)
         removeViews()
         super.onDestroy()
     }
@@ -122,20 +129,25 @@ class QuickCursorService : AccessibilityService() {
             handleParams = hParams
             cursorParams = cParams
         }
+        // Baştan da 3 sn sonra sönükleşsin; dokununca geri gelir.
+        scheduleFade()
     }
 
     private fun onHandleTouch(event: MotionEvent, density: Float): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                wakeHandle()
                 lastX = event.rawX
                 lastY = event.rawY
                 moving = false
                 draggingHandle = false
                 longPressFired = false
                 handler.postDelayed(longPress, LONG_PRESS_MS)
-                // İmleci ekranın ortasından başlat; oradan görece hareket edecek.
-                cursorX = screenW / 2f
-                cursorY = screenH / 2f
+                // İmleci topun biraz ÜSTÜNDE başlat; başparmağın altında kalmasın.
+                // Buradan görece (trackpad) hareket edecek.
+                cursorX = event.rawX.coerceIn(0f, screenW.toFloat())
+                cursorY = (event.rawY - SPAWN_ABOVE_DP * density).coerceIn(0f, screenH.toFloat())
+                showCursor()
                 return true
             }
 
@@ -169,13 +181,17 @@ class QuickCursorService : AccessibilityService() {
                 if (draggingHandle) {
                     persistHandlePosition(density)
                     draggingHandle = false
+                    scheduleFade()
                     return true
                 }
                 if (moving) {
                     hideCursor()
                     tapAt(cursorX, cursorY)
+                } else {
+                    hideCursor()
                 }
                 moving = false
+                scheduleFade()
                 return true
             }
 
@@ -184,6 +200,7 @@ class QuickCursorService : AccessibilityService() {
                 hideCursor()
                 moving = false
                 draggingHandle = false
+                scheduleFade()
                 return true
             }
         }
@@ -207,6 +224,25 @@ class QuickCursorService : AccessibilityService() {
         runCatching { windowManager?.updateViewLayout(view, params) }
     }
 
+    /** Dokununca topu tam görünür yap ve sönükleşme sayacını durdur. */
+    private fun wakeHandle() {
+        handler.removeCallbacks(fadeOut)
+        fadeHandle(idle = false)
+    }
+
+    /** 3 sn kullanılmazsa topu sönükleştir. */
+    private fun scheduleFade() {
+        handler.removeCallbacks(fadeOut)
+        handler.postDelayed(fadeOut, FADE_DELAY_MS)
+    }
+
+    private fun fadeHandle(idle: Boolean) {
+        val view = handle ?: return
+        val target = if (idle) IDLE_ALPHA else 1f
+        val duration = if (idle) FADE_OUT_MS else FADE_IN_MS
+        runCatching { view.animate().alpha(target).setDuration(duration).start() }
+    }
+
     private fun moveHandle(dx: Float, dy: Float, density: Float) {
         val params = handleParams ?: return
         val view = handle ?: return
@@ -220,13 +256,34 @@ class QuickCursorService : AccessibilityService() {
         settings.bottomOffsetDp = (params.y / density).toInt()
     }
 
-    /** İmlecin durduğu noktaya gerçek bir dokunma gönderir. */
+    /**
+     * İmlecin durduğu noktaya gerçek bir dokunma gönderir.
+     *
+     * Parmak daha yeni kalktığı için enjekte edilen dokunmayı **aynı karede**
+     * göndermek girdi sisteminde düşürülüyordu (tıklama olmuyor gibi görünmesinin
+     * sebebi buydu). Kısa bir gecikmeyle, parmak tamamen bırakıldıktan sonra
+     * gönderiyoruz.
+     */
     private fun tapAt(x: Float, y: Float) {
-        val path = Path().apply { moveTo(x.coerceIn(0f, screenW - 1f), y.coerceIn(0f, screenH - 1f)) }
-        val stroke = GestureDescription.StrokeDescription(path, 0L, TAP_DURATION_MS)
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        dispatchGesture(gesture, null, null)
-        GestureFeedback.vibrateOnce(this, 15L)
+        val tx = x.coerceIn(0f, (screenW - 1).toFloat())
+        val ty = y.coerceIn(0f, (screenH - 1).toFloat())
+        handler.postDelayed({
+            val path = Path().apply { moveTo(tx, ty) }
+            val stroke = GestureDescription.StrokeDescription(path, 0L, TAP_DURATION_MS)
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+            val dispatched = runCatching {
+                dispatchGesture(
+                    gesture,
+                    object : GestureResultCallback() {
+                        override fun onCompleted(description: GestureDescription?) {
+                            GestureFeedback.vibrateOnce(this@QuickCursorService, 15L)
+                        }
+                    },
+                    null,
+                )
+            }.getOrDefault(false)
+            if (!dispatched) GestureFeedback.vibrateOnce(this@QuickCursorService, 8L)
+        }, TAP_DELAY_MS)
     }
 
     private fun removeViews() {
@@ -239,6 +296,12 @@ class QuickCursorService : AccessibilityService() {
     companion object {
         private const val LONG_PRESS_MS = 350L
         private const val TOUCH_SLOP = 8f
-        private const val TAP_DURATION_MS = 50L
+        private const val TAP_DURATION_MS = 55L
+        private const val TAP_DELAY_MS = 60L
+        private const val SPAWN_ABOVE_DP = 130f
+        private const val FADE_DELAY_MS = 3_000L
+        private const val FADE_OUT_MS = 450L
+        private const val FADE_IN_MS = 140L
+        private const val IDLE_ALPHA = 0.12f
     }
 }

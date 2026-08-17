@@ -74,9 +74,12 @@ class EdgeGestureService : AccessibilityService() {
         val heightPx = (settings.heightDp * density).toInt().coerceAtLeast(48)
 
         val view = EdgeTouchView(this, onRight, density)
+        // Renk RGB'sini koru, alfayı saydamlık ayarından ez (0–100 → 0–255).
+        val alpha = (settings.opacityPercent * 255 / 100).coerceIn(0, 255)
+        val tintedColor = (settings.colorArgb and 0x00FFFFFF) or (alpha shl 24)
         view.background = GradientDrawable().apply {
             cornerRadius = widthPx / 2f
-            setColor(settings.colorArgb)
+            setColor(tintedColor)
         }
 
         val params = WindowManager.LayoutParams(
@@ -177,7 +180,10 @@ class EdgeGestureService : AccessibilityService() {
             GestureAction.POWER_DIALOG -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
             GestureAction.NONE -> false
         }
-        if (ok) GestureFeedback.vibrate(this, settings)
+        if (ok) {
+            GestureFeedback.vibrate(this, settings)
+            GestureFeedback.beep(settings)
+        }
     }
 
     companion object {
