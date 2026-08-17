@@ -5,4 +5,15 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
     </style>
+
+    <!--
+        Launcher (ana ekran) teması: pencere arkasında sistem duvar kâğıdı görünür,
+        durum/gezinme çubukları saydam. İçerik doğrudan duvar kâğıdının üzerine çizilir.
+    -->
+    <style name="Theme.Merkez.Launcher" parent="Theme.Merkez">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>
