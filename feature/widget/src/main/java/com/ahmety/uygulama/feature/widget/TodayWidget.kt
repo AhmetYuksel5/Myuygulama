@@ -109,12 +109,21 @@ class TodayWidget : GlanceAppWidget() {
             entryPoint.taskRepository().observeCompletedOn(today).first()
         }
 
+        // Yeni eklenen görev listenin sonuna düştüğü için, çok görev varken
+        // widget'ta hiç görünmüyordu — kullanıcı eklediğini kaybolmuş sanıyor.
+        // En son eklenen görevin görünür kalmasını garantiliyoruz.
+        val shown = open.take(MAX_OPEN).toMutableList()
+        val newest = open.maxByOrNull { it.createdAt }
+        if (newest != null && shown.none { it.uuid == newest.uuid }) {
+            if (shown.isNotEmpty()) shown[shown.lastIndex] = newest else shown.add(newest)
+        }
+
         return TodayWidgetData(
             habitsDone = doneHabits,
             habitsDue = dueHabits.size,
-            openTasks = open.take(MAX_OPEN).map { WidgetTask(it.uuid, it.title, false) },
+            openTasks = shown.map { WidgetTask(it.uuid, it.title, false) },
             completedTasks = completed.take(MAX_DONE).map { WidgetTask(it.uuid, it.title, true) },
-            remainingOpenCount = (open.size - MAX_OPEN).coerceAtLeast(0),
+            remainingOpenCount = (open.size - shown.size).coerceAtLeast(0),
         )
     }
 

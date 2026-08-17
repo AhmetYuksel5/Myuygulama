@@ -26,8 +26,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.lifecycle.lifecycleScope
+import com.ahmety.uygulama.core.designsystem.MerkezTheme
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -42,10 +45,12 @@ import kotlinx.datetime.todayIn
  */
 class QuickAddActivity : ComponentActivity() {
 
+    private var saving = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            MerkezTheme {
                 QuickAddDialog(
                     onCancel = { finish() },
                     onSave = { title -> saveTask(title) },
@@ -55,31 +60,39 @@ class QuickAddActivity : ComponentActivity() {
     }
 
     private fun saveTask(title: String) {
+        // Çift dokunuş iki görev eklemesin.
+        if (saving) return
         val trimmed = title.trim()
         if (trimmed.isEmpty()) {
             finish()
             return
         }
+        saving = true
         lifecycleScope.launch {
             runCatching {
-                val entryPoint = EntryPointAccessors.fromApplication(
-                    applicationContext,
-                    WidgetEntryPoint::class.java,
-                )
-                val repository = entryPoint.taskRepository()
-                val listUuid = repository.ensureDefaultList()
-                repository.createTask(
-                    listUuid = listUuid,
-                    title = trimmed,
-                    dueDate = Clock.System.todayIn(TimeZone.currentSystemDefault()).toEpochDays(),
-                )
-                // Kaydeder kaydetmez widget'ı tazele: kullanıcı eklediğini
-                // aynı ekranda, beklemeden görsün. (Ekrandaki her kopyayı
-                // ayrı ayrı güncelliyoruz — widget birden çok kez eklenmiş olabilir.)
-                val widget = TodayWidget()
-                GlanceAppWidgetManager(applicationContext)
-                    .getGlanceIds(TodayWidget::class.java)
-                    .forEach { glanceId -> widget.update(applicationContext, glanceId) }
+                // Ekran kapanınca lifecycleScope iptal ediliyor; yazmayı
+                // iptal edilemez yapmazsak kullanıcı "Ekle"ye basıp dışarı
+                // dokunduğunda görev kaydedilmeden kayboluyordu.
+                withContext(NonCancellable) {
+                    val entryPoint = EntryPointAccessors.fromApplication(
+                        applicationContext,
+                        WidgetEntryPoint::class.java,
+                    )
+                    val repository = entryPoint.taskRepository()
+                    val listUuid = repository.ensureDefaultList()
+                    repository.createTask(
+                        listUuid = listUuid,
+                        title = trimmed,
+                        dueDate = Clock.System.todayIn(TimeZone.currentSystemDefault()).toEpochDays(),
+                    )
+                    // Kaydeder kaydetmez widget'ı tazele: kullanıcı eklediğini
+                    // aynı ekranda, beklemeden görsün. (Ekrandaki her kopyayı
+                    // ayrı ayrı güncelliyoruz — widget birden çok kez eklenmiş olabilir.)
+                    val widget = TodayWidget()
+                    GlanceAppWidgetManager(applicationContext)
+                        .getGlanceIds(TodayWidget::class.java)
+                        .forEach { glanceId -> widget.update(applicationContext, glanceId) }
+                }
             }
             finish()
         }

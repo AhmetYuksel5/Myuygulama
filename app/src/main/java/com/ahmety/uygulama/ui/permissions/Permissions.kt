@@ -58,6 +58,19 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
 
     add(
         PermissionSpec(
+            id = "contacts",
+            title = "Rehber",
+            rationale = "Kişi kısayolları için. İzin verilirse WhatsApp kısayolu " +
+                "doğrudan kişinin sohbetini açar; verilmezse her seferinde " +
+                "numarayı doğrulayan ara ekrandan geçer.",
+            kind = PermissionKind.RUNTIME,
+            manifestPermissions = listOf(Manifest.permission.READ_CONTACTS),
+            isGranted = { it.hasPermission(Manifest.permission.READ_CONTACTS) },
+        ),
+    )
+
+    add(
+        PermissionSpec(
             id = "calendar",
             title = "Takvim",
             rationale = "Google takvimin cihazdaki takvim sağlayıcısı üzerinden okunup " +

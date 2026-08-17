@@ -1,6 +1,7 @@
 package com.ahmety.uygulama.launcher
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import android.widget.Toast
@@ -235,10 +236,12 @@ fun FavoriteEditorDialog(
 private fun ContactPickerButton(onPicked: (name: String, phone: String) -> Unit) {
     val context = LocalContext.current
 
+    // PickContact bir KİŞİ adresi döndürür; numara sütunları orada yoktur.
+    // Doğrudan telefon satırını seçtiriyoruz ki dönen adres numarayı içersin.
     val pickContact = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickContact(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val uri = result.data?.data ?: return@rememberLauncherForActivityResult
         runCatching {
             context.contentResolver.query(
                 uri,
@@ -254,16 +257,28 @@ private fun ContactPickerButton(onPicked: (name: String, phone: String) -> Unit)
                     onPicked(cursor.getString(1).orEmpty(), cursor.getString(0).orEmpty())
                 }
             }
+        }.onFailure {
+            Toast.makeText(context, "Kişi okunamadı", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    fun launchContactPicker() {
+        pickContact.launch(
+            Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI),
+        )
     }
 
     val requestPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) {
-            pickContact.launch(null)
+            launchContactPicker()
         } else {
-            Toast.makeText(context, "Rehber izni verilmedi", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "Rehber izni yok: kısayol numara üzerinden açılacak",
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
 
@@ -273,7 +288,11 @@ private fun ContactPickerButton(onPicked: (name: String, phone: String) -> Unit)
                 context,
                 Manifest.permission.READ_CONTACTS,
             ) == PackageManager.PERMISSION_GRANTED
-            if (granted) pickContact.launch(null) else requestPermission.launch(Manifest.permission.READ_CONTACTS)
+            if (granted) {
+                launchContactPicker()
+            } else {
+                requestPermission.launch(Manifest.permission.READ_CONTACTS)
+            }
         },
         modifier = Modifier.fillMaxWidth(),
     ) {

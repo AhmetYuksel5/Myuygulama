@@ -30,6 +30,7 @@ android {
 
 dependencies {
     implementation(project(":core:database"))
+    implementation(project(":core:designsystem"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.runtime)
@@ -43,6 +44,8 @@ dependencies {
     implementation(libs.androidx.glance.material3)
 
     implementation(libs.androidx.core.ktx)
+    // QuickAddActivity'de lifecycleScope için.
+    implementation(libs.androidx.lifecycle.runtime.ktx)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

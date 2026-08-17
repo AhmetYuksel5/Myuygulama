@@ -332,6 +332,7 @@ fun PocketRoute(
     viewModel: NotesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var showHighlights by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -340,26 +341,72 @@ fun PocketRoute(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                Text("Pocket", style = MaterialTheme.typography.headlineSmall)
-            }
-
-            if (state.loaded && state.articles.isEmpty()) {
-                item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(
-                        text = "Henüz makale yok. Sağ alttaki düğmeden bir URL yapıştır — " +
-                            "sayfa okunabilir hâle getirilip çevrimdışı saklanır.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = if (showHighlights) "Alıntılar" else "Pocket",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.weight(1f),
                     )
+                    // Alıntılar aksi hâlde yalnızca makalenin içinde görünür,
+                    // "kaydettim ama nerede?" hissi doğuyordu.
+                    if (state.highlights.isNotEmpty() || showHighlights) {
+                        OutlinedButton(onClick = { showHighlights = !showHighlights }) {
+                            Text(
+                                if (showHighlights) {
+                                    "Makaleler"
+                                } else {
+                                    "Alıntılar (${state.highlights.size})"
+                                },
+                            )
+                        }
+                    }
                 }
             }
 
-            items(state.articles, key = { it.id }) { entry ->
-                EntryCard(
-                    entry = entry,
-                    onClick = { onOpenArticle(entry.id) },
-                    onDelete = { viewModel.delete(entry) },
-                )
+            if (showHighlights) {
+                if (state.highlights.isEmpty()) {
+                    item {
+                        Text(
+                            text = "Alıntı yok. Bir makalede paragrafa uzun basarak alıntıla.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                items(state.highlights, key = { it.id }) { entry ->
+                    EntryCard(
+                        entry = entry,
+                        onClick = {
+                            entry.source
+                                ?.removePrefix("article:")
+                                ?.toLongOrNull()
+                                ?.let(onOpenArticle)
+                        },
+                        onDelete = { viewModel.delete(entry) },
+                    )
+                }
+            } else {
+                if (state.loaded && state.articles.isEmpty()) {
+                    item {
+                        Text(
+                            text = "Henüz makale yok. Sağ alttaki düğmeden bir URL yapıştır — " +
+                                "sayfa okunabilir hâle getirilip çevrimdışı saklanır.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                items(state.articles, key = { it.id }) { entry ->
+                    EntryCard(
+                        entry = entry,
+                        onClick = { onOpenArticle(entry.id) },
+                        onDelete = { viewModel.delete(entry) },
+                    )
+                }
             }
         }
 
@@ -553,6 +600,12 @@ fun SearchRoute(
                             when (entry.type) {
                                 EntryType.NOTE -> onOpenNote(entry.id)
                                 EntryType.ARTICLE -> onOpenArticle(entry.id)
+                                // Alıntı, alındığı makaleyi açar; aksi hâlde
+                                // sonuca dokunmak hiçbir şey yapmıyordu.
+                                EntryType.HIGHLIGHT -> entry.source
+                                    ?.removePrefix("article:")
+                                    ?.toLongOrNull()
+                                    ?.let(onOpenArticle)
                                 else -> Unit
                             }
                         },

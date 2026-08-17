@@ -19,6 +19,7 @@ data class NotesUiState(
     val notes: List<Entry> = emptyList(),
     val articles: List<Entry> = emptyList(),
     val archivedNotes: List<Entry> = emptyList(),
+    val highlights: List<Entry> = emptyList(),
     val loaded: Boolean = false,
 )
 
@@ -38,13 +39,15 @@ class NotesViewModel @Inject constructor(
         repository.observeByType(EntryType.NOTE),
         repository.observeByType(EntryType.ARTICLE),
         repository.observeArchivedByType(EntryType.NOTE),
-    ) { notes, articles, archived ->
+        repository.observeByType(EntryType.HIGHLIGHT),
+    ) { notes, articles, archived, highlights ->
         // Sabitlenenler üstte; gerisi güncellenme sırasına göre geliyor.
         val sorted = notes.sortedByDescending { NoteStyle.decode(it.source).pinned }
         NotesUiState(
             notes = sorted,
             articles = articles,
             archivedNotes = archived,
+            highlights = highlights,
             loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NotesUiState())

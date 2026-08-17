@@ -189,7 +189,8 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
             }
         }
         Text(
-            text = "Jest başarıyla algılanınca hafif bir \"bip\" çalar.",
+            text = "Jest başarıyla algılanınca kısa bir \"bip\" çalar. Yükseklik " +
+                "ayarı sistem ses seviyesinden bağımsızdır.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
