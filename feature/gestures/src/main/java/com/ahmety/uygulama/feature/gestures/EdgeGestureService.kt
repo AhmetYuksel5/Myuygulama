@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
@@ -54,7 +55,13 @@ class EdgeGestureService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
-        settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        // Bağlanma tamamlanmadan servis öldürülebilir; lateinit'e körlemesine
+        // dokunmak süreci çökertir.
+        if (::settings.isInitialized) {
+            settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        }
+        handler.removeCallbacksAndMessages(null)
+        GestureFeedback.releaseTone()
         removeAll()
         super.onDestroy()
     }
@@ -102,6 +109,7 @@ class EdgeGestureService : AccessibilityService() {
     }
 
     private fun removeAll() {
+        handler.removeCallbacksAndMessages(null)
         edgeViews.forEach { view -> runCatching { windowManager?.removeView(view) } }
         edgeViews.clear()
     }
@@ -119,6 +127,22 @@ class EdgeGestureService : AccessibilityService() {
         private val longPressRunnable = Runnable {
             longPressFired = true
             perform(settings.longPressAction)
+        }
+
+        /**
+         * Jest navigasyonu açıkken sistemin "kenardan içeri çek = geri" hareketi
+         * bizim şeridimizle çakışıyor. Bu çağrı sisteme "bu dikdörtgende senin
+         * kenar hareketin çalışmasın" diyor; şeridin dışında sistem normal
+         * çalışmaya devam ediyor. Yani şerit üzerinde bizim jestimiz baskın.
+         *
+         * Android kenar başına en fazla 200dp'lik dışlama kabul ediyor; şerit
+         * daha uzunsa fazlası sistemde kalır (ayar ekranında uyarıyoruz).
+         */
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            super.onLayout(changed, left, top, right, bottom)
+            runCatching {
+                systemGestureExclusionRects = listOf(Rect(0, 0, width, height))
+            }
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {

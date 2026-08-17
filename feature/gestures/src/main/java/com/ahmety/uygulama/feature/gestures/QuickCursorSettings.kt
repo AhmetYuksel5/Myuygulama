@@ -25,10 +25,18 @@ class QuickCursorSettings(context: Context) {
         get() = prefs.getBoolean(KEY_RIGHT, true)
         set(value) = prefs.edit().putBoolean(KEY_RIGHT, value).apply()
 
-    /** Topun ekranın altından yukarı doğru konumu (dp). */
+    /** Topun ekranın altından yukarı doğru konumu (dp). 0 = en dipte. */
     var bottomOffsetDp: Int
         get() = prefs.getInt(KEY_OFFSET, 180)
-        set(value) = prefs.edit().putInt(KEY_OFFSET, value).apply()
+        set(value) = prefs.edit().putInt(KEY_OFFSET, value.coerceAtLeast(0)).apply()
+
+    /**
+     * Topun seçili kenardan içeri doğru konumu (dp). 0 = kenara tam yapışık.
+     * Böylece top yalnızca dikeyde değil yatayda da istediğin yere konabiliyor.
+     */
+    var sideOffsetDp: Int
+        get() = prefs.getInt(KEY_SIDE_OFFSET, 0)
+        set(value) = prefs.edit().putInt(KEY_SIDE_OFFSET, value.coerceAtLeast(0)).apply()
 
     var handleSizeDp: Int
         get() = prefs.getInt(KEY_SIZE, 56)
@@ -49,6 +57,7 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_ENABLED = "enabled"
         private const val KEY_RIGHT = "right"
         private const val KEY_OFFSET = "bottom_offset"
+        private const val KEY_SIDE_OFFSET = "side_offset"
         private const val KEY_SIZE = "handle_size"
         private const val KEY_OPACITY = "opacity"
         private const val KEY_SENSITIVITY = "sensitivity"

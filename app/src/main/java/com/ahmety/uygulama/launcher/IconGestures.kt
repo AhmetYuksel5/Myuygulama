@@ -21,12 +21,20 @@ import kotlinx.coroutines.withTimeoutOrNull
  * kaydırmayı çalmasın; yatayı tüketmeyip pager'ın sayfa geçişine izin veriyoruz.
  */
 fun Modifier.iconGestures(
+    /**
+     * Jest döngüsünü sıfırlayan anahtar. Simgenin kendisini (data class) ver:
+     * düzenleyicide bir eylem değişince coroutine yeniden başlar. `Unit`
+     * verilseydi eski eylem oturum boyunca çalışmaya devam ederdi.
+     */
+    key: Any,
+    /** Çift dokunma atanmamışsa tek dokunma beklemeden çalışsın. */
+    hasDoubleTap: Boolean,
     onTap: () -> Unit,
     onDoubleTap: () -> Unit,
     onSwipeUp: () -> Unit,
     onSwipeDown: () -> Unit,
     onLongPress: () -> Unit,
-): Modifier = pointerInput(Unit) {
+): Modifier = pointerInput(key) {
     val slop = viewConfiguration.touchSlop
     val swipeThreshold = 48.dp.toPx()
     val doubleTapTimeout = viewConfiguration.doubleTapTimeoutMillis
@@ -81,7 +89,12 @@ fun Modifier.iconGestures(
             return@awaitEachGesture
         }
 
-        // 2) Hızlı dokunma oldu. İkinci bir dokunma gelirse çift dokun.
+        // 2) Hızlı dokunma oldu. Çift dokunma atanmamışsa beklemeden çalış;
+        //    aksi hâlde her dokunuş çift-dokunma penceresi kadar gecikirdi.
+        if (!hasDoubleTap) {
+            onTap()
+            return@awaitEachGesture
+        }
         val second = withTimeoutOrNull(doubleTapTimeout) {
             awaitFirstDown(requireUnconsumed = false)
         }

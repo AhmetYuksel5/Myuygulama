@@ -71,6 +71,8 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
+            android:taskAffinity=".launcher"
+            android:excludeFromRecents="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Merkez.Launcher"
             android:windowSoftInputMode="adjustResize">

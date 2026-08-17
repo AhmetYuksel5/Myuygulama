@@ -1,5 +1,6 @@
 package com.ahmety.uygulama.launcher
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,5 +25,14 @@ class LauncherActivity : ComponentActivity() {
                 LauncherRoot()
             }
         }
+    }
+
+    /**
+     * Zaten ana ekrandayken ev tuşuna basmak, her başlatıcıda olduğu gibi
+     * ana sayfaya dönmeli (çekmecede/widget sayfasında kalmamalı).
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        LauncherHomeSignal.requests.tryEmit(Unit)
     }
 }

@@ -1,14 +1,18 @@
 package com.ahmety.uygulama.ui
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
@@ -29,7 +33,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.ahmety.uygulama.launcher.LauncherActivity
 import com.ahmety.uygulama.feature.library.NoteEditorRoute
 import com.ahmety.uygulama.feature.reader.ArticleRoute
 import com.ahmety.uygulama.feature.reader.SaveArticleDialog
@@ -61,9 +67,7 @@ private enum class TopLevelDestination(
     TASKS("tasks", "Görevler", Icons.Outlined.CheckCircle),
     LIBRARY("library", "Notlar", Icons.Outlined.Description),
     POCKET("pocket", "Pocket", Icons.Outlined.Bookmark),
-    VOCAB("vocab", "Kelime", Icons.Outlined.Translate),
-    SEARCH("search", "Ara", Icons.Outlined.Search),
-    SETTINGS("settings", "Ayarlar", Icons.Outlined.Settings),
+    MORE("more", "Daha", Icons.Outlined.MoreHoriz),
 }
 
 @Composable
@@ -119,7 +123,7 @@ fun MerkezApp() {
                             }
                         },
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
-                        label = { Text(destination.label) },
+                        label = { Text(destination.label, maxLines = 1) },
                     )
                 }
             }
@@ -150,22 +154,24 @@ fun MerkezApp() {
                     onAddArticle = { showSaveArticle = true },
                 )
             }
-            composable(TopLevelDestination.VOCAB.route) {
-                VocabRoute()
-            }
-            composable(TopLevelDestination.SEARCH.route) {
-                SearchRoute(
-                    onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") },
-                    onOpenArticle = { navController.navigate("$ARTICLE_ROUTE/$it") },
-                )
-            }
-            composable(TopLevelDestination.SETTINGS.route) {
-                SettingsScreen(
+            composable(TopLevelDestination.MORE.route) {
+                MoreScreen(
+                    onOpenVocab = { navController.navigate(VOCAB_ROUTE) },
+                    onOpenSearch = { navController.navigate(SEARCH_ROUTE) },
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenUpdates = { navController.navigate(UPDATE_ROUTE) },
+                )
+            }
+            composable(VOCAB_ROUTE) {
+                VocabRoute()
+            }
+            composable(SEARCH_ROUTE) {
+                SearchRoute(
+                    onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") },
+                    onOpenArticle = { navController.navigate("$ARTICLE_ROUTE/$it") },
                 )
             }
             composable(PERMISSIONS_ROUTE) {
@@ -204,6 +210,8 @@ fun MerkezApp() {
     }
 }
 
+private const val VOCAB_ROUTE = "vocab"
+private const val SEARCH_ROUTE = "search"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
@@ -213,20 +221,51 @@ private const val UPDATE_ROUTE = "update"
 private const val ARTICLE_ROUTE = "article"
 
 @Composable
-private fun SettingsScreen(
+private fun MoreScreen(
+    onOpenVocab: () -> Unit,
+    onOpenSearch: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
     onOpenUpdates: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(text = "Ayarlar", style = MaterialTheme.typography.headlineMedium)
+        Text(text = "Daha", style = MaterialTheme.typography.headlineMedium)
+        ListItem(
+            headlineContent = { Text("Kelime çalışması") },
+            supportingContent = { Text("400 kartlık İngilizce destesi") },
+            modifier = Modifier.clickable(onClick = onOpenVocab),
+        )
+        ListItem(
+            headlineContent = { Text("Ara") },
+            supportingContent = { Text("Notlar, makaleler, görevler — tek indeks") },
+            modifier = Modifier.clickable(onClick = onOpenSearch),
+        )
+        ListItem(
+            headlineContent = { Text("Ana ekran") },
+            supportingContent = {
+                Text("Kendi başlatıcımızı aç — varsayılan yapmadan deneyebilirsin")
+            },
+            modifier = Modifier.clickable {
+                // Varsayılan başlatıcı seçmeden de ana ekranı görebilmek için
+                // doğrudan açıyoruz; kararlı hâle gelene kadar bu yeterli.
+                runCatching {
+                    context.startActivity(
+                        Intent(context, LauncherActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            },
+        )
+        Text(text = "Ayarlar", style = MaterialTheme.typography.titleMedium)
         ListItem(
             headlineContent = { Text("İzinler") },
             supportingContent = { Text("Bildirim, takvim, alarm, dosya erişimi") },

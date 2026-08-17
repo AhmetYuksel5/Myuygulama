@@ -111,7 +111,9 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
             )
         }
         Text(
-            text = "İkisini birden açabilirsin.",
+            text = "İkisini birden açabilirsin. Telefonu hareketlerle kullanıyorsan, " +
+                "şeridin kapladığı alanda sistemin kendi \"kenardan çek = geri\" hareketi " +
+                "devre dışı bırakılır; şeridin dışında normal çalışmaya devam eder.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -126,6 +128,15 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
         Stepper("Kalınlık", widthDp, 2..16, suffix = "dp") { widthDp = it; settings.widthDp = it }
         Stepper("Uzunluk", heightDp, 60..500, step = 20, suffix = "dp") {
             heightDp = it; settings.heightDp = it
+        }
+        if (heightDp > 200) {
+            Text(
+                text = "Not: Android, kenar başına en fazla 200dp'lik alanda sistem geri " +
+                    "hareketini bize bırakıyor. Şerit daha uzunsa 200dp'yi aşan kısımda " +
+                    "telefonun kendi geri hareketi devreye girebilir.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
         Stepper("Dikey konum", offsetDp, -300..300, step = 20, suffix = "dp") {
             offsetDp = it; settings.verticalOffsetDp = it

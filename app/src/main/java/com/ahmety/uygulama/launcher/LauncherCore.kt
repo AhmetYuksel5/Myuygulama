@@ -4,6 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -176,7 +182,9 @@ data class Favorite(
 
     companion object {
         fun fromJson(o: JSONObject): Favorite = Favorite(
-            id = o.optString("id"),
+            // Bozuk kayıtta boş id, "id eşitse sil" mantığıyla tüm boş id'li
+            // simgeleri birden siler; boşsa yenisini üret.
+            id = o.optString("id").ifBlank { newFavoriteId() },
             type = runCatching { FavoriteType.valueOf(o.optString("type", "APP")) }
                 .getOrDefault(FavoriteType.APP),
             label = o.optString("label"),
@@ -257,27 +265,60 @@ fun loadLaunchableApps(context: Context): List<AppInfo> {
 
 /**
  * İlk açılışta ana ekran boş kalmasın diye yaygın uygulamalardan yüklü
- * olanları simge yapar. Kullanıcı sonra düzenler.
+ * olanları simge yapar. Kullanıcı sonra düzenler. Üretici farkları için
+ * her rol birden çok paket adıyla aranıyor (Samsung/Xiaomi kendi
+ * çevirici/kamera/rehber uygulamalarını kullanıyor).
  */
-fun seedFavorites(context: Context): List<Favorite> {
-    val installed = loadLaunchableApps(context).associateBy { it.packageName }
-    val candidates = listOf(
-        "com.whatsapp",
-        "com.google.android.dialer",
-        "com.android.contacts",
-        "com.google.android.apps.maps",
-        "com.android.chrome",
-        "com.google.android.gm",
-        "com.android.camera",
+fun seedFavorites(apps: List<AppInfo>): List<Favorite> {
+    val installed = apps.associateBy { it.packageName }
+    val roles = listOf(
+        listOf("com.whatsapp"),
+        listOf("com.google.android.dialer", "com.samsung.android.dialer", "com.android.dialer"),
+        listOf("com.google.android.contacts", "com.samsung.android.contacts", "com.android.contacts"),
+        listOf("com.google.android.apps.maps"),
+        listOf("com.android.chrome"),
+        listOf("com.google.android.gm"),
+        listOf(
+            "com.google.android.GoogleCamera",
+            "com.sec.android.app.camera",
+            "com.android.camera",
+        ),
     )
-    return candidates.mapNotNull { pkg ->
-        val app = installed[pkg] ?: return@mapNotNull null
+    return roles.mapNotNull { variants ->
+        val app = variants.firstNotNullOfOrNull { installed[it] } ?: return@mapNotNull null
         Favorite(
             id = newFavoriteId(),
             type = FavoriteType.APP,
             label = app.label,
-            packageName = pkg,
-            tap = LauncherAction.OpenApp(pkg),
+            packageName = app.packageName,
+            tap = LauncherAction.OpenApp(app.packageName),
         )
     }
+}
+
+/**
+ * Uygulama simgelerinin süreç ömrü boyunca yaşayan önbelleği. Simgeyi her
+ * hücrede yeniden çözmek çekmeceyi gözle görülür şekilde takıyordu; burada
+ * bir kez çözülüp saklanıyor, çözme işi de arka plana alınıyor.
+ */
+object AppIconCache {
+
+    private val cache = ConcurrentHashMap<String, ImageBitmap>()
+
+    fun cached(packageName: String): ImageBitmap? = cache[packageName]
+
+    suspend fun load(context: Context, packageName: String): ImageBitmap? {
+        cache[packageName]?.let { return it }
+        val decoded = withContext(Dispatchers.IO) {
+            runCatching {
+                context.packageManager.getApplicationIcon(packageName)
+                    .toBitmap(ICON_PX, ICON_PX)
+                    .asImageBitmap()
+            }.getOrNull()
+        }
+        if (decoded != null) cache[packageName] = decoded
+        return decoded
+    }
+
+    private const val ICON_PX = 132
 }

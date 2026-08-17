@@ -70,15 +70,23 @@ private fun argText(action: LauncherAction): String = when (action) {
 private fun argPkg(action: LauncherAction): String =
     (action as? LauncherAction.OpenApp)?.packageName ?: ""
 
-private fun buildAction(kind: ActionKind, text: String, pkg: String): LauncherAction = when (kind) {
-    ActionKind.NONE -> LauncherAction.None
-    ActionKind.APP -> if (pkg.isBlank()) LauncherAction.None else LauncherAction.OpenApp(pkg)
-    ActionKind.WHATSAPP -> LauncherAction.WhatsApp(text.trim())
-    ActionKind.CALL -> LauncherAction.Call(text.trim())
-    ActionKind.DIAL -> LauncherAction.Dial(text.trim())
-    ActionKind.SMS -> LauncherAction.Sms(text.trim())
-    ActionKind.NAV -> LauncherAction.Navigate(text.trim())
-    ActionKind.WEB -> LauncherAction.Web(text.trim())
+private fun buildAction(kind: ActionKind, text: String, pkg: String): LauncherAction {
+    // Boş argümanla komut kurulmasın: boş numarayla wa.me açılıyor,
+    // boş adrese navigasyon başlıyordu.
+    if (kind == ActionKind.APP) {
+        return if (pkg.isBlank()) LauncherAction.None else LauncherAction.OpenApp(pkg)
+    }
+    val value = text.trim()
+    if (kind != ActionKind.NONE && value.isBlank()) return LauncherAction.None
+    return when (kind) {
+        ActionKind.NONE, ActionKind.APP -> LauncherAction.None
+        ActionKind.WHATSAPP -> LauncherAction.WhatsApp(value)
+        ActionKind.CALL -> LauncherAction.Call(value)
+        ActionKind.DIAL -> LauncherAction.Dial(value)
+        ActionKind.SMS -> LauncherAction.Sms(value)
+        ActionKind.NAV -> LauncherAction.Navigate(value)
+        ActionKind.WEB -> LauncherAction.Web(value)
+    }
 }
 
 private val shortcutColors = listOf(
@@ -106,6 +114,10 @@ fun FavoriteEditorDialog(
     var doubleTap by remember { mutableStateOf(favorite.doubleTap) }
     var swipeUp by remember { mutableStateOf(favorite.swipeUp) }
     var swipeDown by remember { mutableStateOf(favorite.swipeDown) }
+    // Kişi kısayolu kurarken numarayı dört ayrı alana yazmak zorunda kalma.
+    var contactPhone by remember { mutableStateOf(argText(favorite.tap)) }
+    // Eylem alanlarını ön ayar uygulanınca sıfırdan kurmak için sayaç.
+    var presetStamp by remember { mutableIntStateOf(0) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -123,7 +135,7 @@ fun FavoriteEditorDialog(
                 )
             }) { Text("Kaydet") }
         },
-        dismissButton = { TextButton(onClick = onDelete) { Text("Sil") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("İptal") } },
         title = { Text(if (favorite.type == FavoriteType.APP) "Simgeyi düzenle" else "Kısayolu düzenle") },
         text = {
             Column(
@@ -139,6 +151,29 @@ fun FavoriteEditorDialog(
                 )
 
                 if (favorite.type == FavoriteType.SHORTCUT) {
+                    Text("Kişi hızlı kurulum", style = MaterialTheme.typography.labelLarge)
+                    OutlinedTextField(
+                        value = contactPhone,
+                        onValueChange = { contactPhone = it },
+                        label = { Text("Telefon (ülke koduyla, örn. +9055...)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val phone = contactPhone.trim()
+                            if (phone.isNotBlank()) {
+                                tap = LauncherAction.WhatsApp(phone)
+                                doubleTap = LauncherAction.Call(phone)
+                                presetStamp++
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Uygula: tek dokun WhatsApp, çift dokun ara")
+                    }
+
                     Text("Renk", style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         shortcutColors.forEach { c ->
@@ -159,10 +194,19 @@ fun FavoriteEditorDialog(
                     }
                 }
 
-                ActionEditor("Tek dokun", tap, appLabelOf, onPickApp) { tap = it }
-                ActionEditor("Çift dokun", doubleTap, appLabelOf, onPickApp) { doubleTap = it }
-                ActionEditor("Yukarı sürükle", swipeUp, appLabelOf, onPickApp) { swipeUp = it }
-                ActionEditor("Aşağı sürükle", swipeDown, appLabelOf, onPickApp) { swipeDown = it }
+                ActionEditor("Tek dokun", tap, presetStamp, appLabelOf, onPickApp) { tap = it }
+                ActionEditor("Çift dokun", doubleTap, presetStamp, appLabelOf, onPickApp) { doubleTap = it }
+                ActionEditor("Yukarı sürükle", swipeUp, presetStamp, appLabelOf, onPickApp) { swipeUp = it }
+                ActionEditor("Aşağı sürükle", swipeDown, presetStamp, appLabelOf, onPickApp) { swipeDown = it }
+
+                // Sil, Kaydet'in yanında değil en altta: yanlış dokunuşla
+                // tek tek girilmiş bir kısayolu kaybetmek çok kolaydı.
+                TextButton(
+                    onClick = onDelete,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Bu simgeyi sil", color = MaterialTheme.colorScheme.error)
+                }
             }
         },
     )
@@ -172,13 +216,15 @@ fun FavoriteEditorDialog(
 private fun ActionEditor(
     title: String,
     initial: LauncherAction,
+    /** Değişince alanlar [initial]'dan yeniden kurulur (kişi ön ayarı için). */
+    resetKey: Int,
     appLabelOf: (String) -> String,
     onPickApp: ((AppInfo) -> Unit) -> Unit,
     onChanged: (LauncherAction) -> Unit,
 ) {
-    var kind by remember { mutableStateOf(kindOf(initial)) }
-    var text by remember { mutableStateOf(argText(initial)) }
-    var pkg by remember { mutableStateOf(argPkg(initial)) }
+    var kind by remember(resetKey) { mutableStateOf(kindOf(initial)) }
+    var text by remember(resetKey) { mutableStateOf(argText(initial)) }
+    var pkg by remember(resetKey) { mutableStateOf(argPkg(initial)) }
     var menuOpen by remember { mutableStateOf(false) }
 
     fun emit() = onChanged(buildAction(kind, text, pkg))

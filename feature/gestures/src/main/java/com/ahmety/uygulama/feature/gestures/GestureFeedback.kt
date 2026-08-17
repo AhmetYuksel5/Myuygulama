@@ -4,8 +4,6 @@ import android.content.Context
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -38,20 +36,32 @@ object GestureFeedback {
 
     /**
      * Jest onaylandığında hafif, kısa bir "bip" sesi. Ayardan kapalıysa sessiz.
-     * Düşük ses seviyeli, tek atımlık bir ton; sistem ses seviyesinden bağımsız
-     * olması için kendi düşük seviyesini kullanır.
+     *
+     * Tek bir paylaşılan [ToneGenerator] kullanıyoruz: her jestte yenisini
+     * yaratıp bırakmak, `startTone` istisna attığında native kaynağı kalıcı
+     * sızdırıyordu. Ses akışı olarak müzik değil sistem akışı seçildi; aksi
+     * hâlde kulaklıkla müzik dinlerken her jestte müziğin sesi kısılıyordu.
      */
+    @Volatile
+    private var tone: ToneGenerator? = null
+
     fun beep(settings: GestureSettings) {
         if (!settings.soundEnabled) return
-        runCatching {
-            val tone = ToneGenerator(AudioManager.STREAM_MUSIC, BEEP_VOLUME)
-            tone.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
-            // Ton bitince kaynağı serbest bırak.
-            Handler(Looper.getMainLooper()).postDelayed(
-                { runCatching { tone.release() } },
-                BEEP_DURATION_MS + 120L,
-            )
-        }
+        val generator = tone ?: runCatching {
+            ToneGenerator(AudioManager.STREAM_SYSTEM, BEEP_VOLUME)
+        }.getOrNull()?.also { tone = it } ?: return
+
+        val ok = runCatching {
+            generator.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+        }.isSuccess
+        if (!ok) releaseTone()
+    }
+
+    /** Servis kapanırken native kaynağı bırak. */
+    fun releaseTone() {
+        val current = tone ?: return
+        tone = null
+        runCatching { current.release() }
     }
 
     /** Ayardan bağımsız kısa titreşim (Quick Cursor gibi kendi geri bildirimi olanlar için). */
@@ -70,6 +80,6 @@ object GestureFeedback {
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }?.takeIf { it.hasVibrator() }
 
-    private const val BEEP_VOLUME = 55 // 0–100; "ufak bir bip"
+    private const val BEEP_VOLUME = 25 // 0–100; "ufak bir bip"
     private const val BEEP_DURATION_MS = 90
 }

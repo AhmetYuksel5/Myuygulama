@@ -18,13 +18,13 @@ import android.view.accessibility.AccessibilityEvent
  * Quick Cursor muadili: tek elle ulaşılamayan yerlere basmak için sanal imleç.
  *
  * Kenardaki topa parmağını basınca, imleç topun biraz **üstünde** belirir
- * (böylece başparmağın altında kalmaz, "Tek elle emret" gibi). Parmağını
- * gezdirdikçe imleç **trackpad gibi görece** hareket eder (küçük parmak
- * hareketi, hassasiyet kadar büyük imleç hareketi). Parmağını kaldırınca
- * imlecin durduğu yere gerçek bir dokunma gönderilir (`dispatchGesture`).
+ * (böylece başparmağın altında kalmaz). Parmağını gezdirdikçe imleç
+ * **trackpad gibi görece** hareket eder (küçük parmak hareketi, hassasiyet
+ * kadar büyük imleç hareketi). Parmağını kaldırınca imlecin durduğu yere
+ * gerçek bir dokunma gönderilir (`dispatchGesture`).
  *
- * Topu taşımak için uzun basıp sürükle. Kullanılmadığında top 3 saniye sonra
- * sönükleşir (fade-out); dokununca yeniden belirir. Ayarlar canlı uygulanır.
+ * Topun yeri hem dikeyde hem yatayda serbestçe ayarlanabilir; uzun basıp
+ * sürükleyerek taşınır. Kullanılmadığında sönükleşir, dokununca geri gelir.
  */
 class QuickCursorService : AccessibilityService() {
 
@@ -39,8 +39,11 @@ class QuickCursorService : AccessibilityService() {
 
     private var screenW = 0
     private var screenH = 0
+    private var cursorSizePx = 0
 
     // Sürüş durumu
+    private var downX = 0f
+    private var downY = 0f
     private var lastX = 0f
     private var lastY = 0f
     private var cursorX = 0f
@@ -59,7 +62,15 @@ class QuickCursorService : AccessibilityService() {
     // Kullanılmayınca topu sönükleştiren zamanlayıcı.
     private val fadeOut = Runnable { fadeHandle(idle = true) }
 
-    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+    /**
+     * Topun konumunu biz yazıyoruz; kendi yazımımızı dinleyip katmanı yeniden
+     * kurarsak top gözle görülür şekilde silinip yeniden çiziliyor. O yüzden
+     * konum anahtarlarını yok sayıyoruz.
+     */
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "bottom_offset" || key == "side_offset") {
+            return@OnSharedPreferenceChangeListener
+        }
         handler.post { rebuild() }
     }
 
@@ -74,8 +85,12 @@ class QuickCursorService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
-        settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
-        handler.removeCallbacks(fadeOut)
+        // Bağlanma tamamlanmadan servis öldürülebilir; lateinit'e körlemesine
+        // dokunmak süreci çökertir.
+        if (::settings.isInitialized) {
+            settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        }
+        handler.removeCallbacksAndMessages(null)
         removeViews()
         super.onDestroy()
     }
@@ -91,6 +106,7 @@ class QuickCursorService : AccessibilityService() {
         screenH = metrics.heightPixels
         val density = metrics.density
         val sizePx = (settings.handleSizeDp * density).toInt()
+        cursorSizePx = (44 * density).toInt()
 
         val handleView = HandleView(this, settings.opacityPercent)
         handleView.setOnTouchListener { _, event -> onHandleTouch(event, density) }
@@ -104,15 +120,19 @@ class QuickCursorService : AccessibilityService() {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = (if (settings.onRight) Gravity.END else Gravity.START) or Gravity.BOTTOM
+            x = (settings.sideOffsetDp * density).toInt()
             y = (settings.bottomOffsetDp * density).toInt()
         }
 
         val cursorView = CursorView(this)
         val cParams = WindowManager.LayoutParams(
-            (44 * density).toInt(),
-            (44 * density).toInt(),
+            cursorSizePx,
+            cursorSizePx,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            // İmleç penceresi hiçbir dokunmayı emmemeli: enjekte ettiğimiz
+            // dokunma bu katmana takılırsa tıklama hiç gerçekleşmez.
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
@@ -129,7 +149,7 @@ class QuickCursorService : AccessibilityService() {
             handleParams = hParams
             cursorParams = cParams
         }
-        // Baştan da 3 sn sonra sönükleşsin; dokununca geri gelir.
+        // Baştan da bir süre sonra sönükleşsin; dokununca geri gelir.
         scheduleFade()
     }
 
@@ -137,6 +157,8 @@ class QuickCursorService : AccessibilityService() {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 wakeHandle()
+                downX = event.rawX
+                downY = event.rawY
                 lastX = event.rawX
                 lastY = event.rawY
                 moving = false
@@ -144,7 +166,6 @@ class QuickCursorService : AccessibilityService() {
                 longPressFired = false
                 handler.postDelayed(longPress, LONG_PRESS_MS)
                 // İmleci topun biraz ÜSTÜNDE başlat; başparmağın altında kalmasın.
-                // Buradan görece (trackpad) hareket edecek.
                 cursorX = event.rawX.coerceIn(0f, screenW.toFloat())
                 cursorY = (event.rawY - SPAWN_ABOVE_DP * density).coerceIn(0f, screenH.toFloat())
                 showCursor()
@@ -158,11 +179,18 @@ class QuickCursorService : AccessibilityService() {
                 lastY = event.rawY
 
                 if (draggingHandle) {
-                    moveHandle(dx, dy, density)
+                    moveHandle(dx, dy)
                     return true
                 }
 
-                if (!moving && kotlin.math.hypot(dx.toDouble(), dy.toDouble()) > TOUCH_SLOP) {
+                // Eşik, kare-başına değil BASTIĞIN NOKTAYA göre ölçülmeli:
+                // yavaş ve dikkatli hareket ettiğinde her karedeki delta küçük
+                // kalıyordu, imleç hiç kıpırdamıyor ve top taşımaya geçiyordu.
+                val movedFromDown = kotlin.math.hypot(
+                    (event.rawX - downX).toDouble(),
+                    (event.rawY - downY).toDouble(),
+                )
+                if (!moving && movedFromDown > SLOP_DP * density) {
                     moving = true
                     handler.removeCallbacks(longPress) // artık taşıma değil, imleç sürüşü
                     showCursor()
@@ -184,12 +212,8 @@ class QuickCursorService : AccessibilityService() {
                     scheduleFade()
                     return true
                 }
-                if (moving) {
-                    hideCursor()
-                    tapAt(cursorX, cursorY)
-                } else {
-                    hideCursor()
-                }
+                hideCursor()
+                if (moving) tapAt(cursorX, cursorY)
                 moving = false
                 scheduleFade()
                 return true
@@ -219,8 +243,10 @@ class QuickCursorService : AccessibilityService() {
     private fun updateCursor() {
         val params = cursorParams ?: return
         val view = cursor ?: return
-        params.x = (cursorX - view.width / 2f).toInt()
-        params.y = (cursorY - view.height / 2f).toInt()
+        // view.width ilk gösterimde 0 (GONE eklendiği için hiç ölçülmedi);
+        // bilinen boyutu kullanıyoruz ki imleç kayık doğmasın.
+        params.x = (cursorX - cursorSizePx / 2f).toInt()
+        params.y = (cursorY - cursorSizePx / 2f).toInt()
         runCatching { windowManager?.updateViewLayout(view, params) }
     }
 
@@ -230,7 +256,6 @@ class QuickCursorService : AccessibilityService() {
         fadeHandle(idle = false)
     }
 
-    /** 3 sn kullanılmazsa topu sönükleştir. */
     private fun scheduleFade() {
         handler.removeCallbacks(fadeOut)
         handler.postDelayed(fadeOut, FADE_DELAY_MS)
@@ -243,26 +268,31 @@ class QuickCursorService : AccessibilityService() {
         runCatching { view.animate().alpha(target).setDuration(duration).start() }
     }
 
-    private fun moveHandle(dx: Float, dy: Float, density: Float) {
+    /** Topu hem dikeyde hem yatayda taşır. */
+    private fun moveHandle(dx: Float, dy: Float) {
         val params = handleParams ?: return
         val view = handle ?: return
-        // Alt-hizalı olduğu için y arttıkça yukarı çıkar.
-        params.y = (params.y - dy).toInt().coerceIn(0, screenH - view.height)
+        // Kenara hizalı olduğu için x içeri doğru, y yukarı doğru artar.
+        val inward = if (settings.onRight) -dx else dx
+        params.x = (params.x + inward).toInt()
+            .coerceIn(0, (screenW - view.width).coerceAtLeast(0))
+        params.y = (params.y - dy).toInt()
+            .coerceIn(0, (screenH - view.height).coerceAtLeast(0))
         runCatching { windowManager?.updateViewLayout(view, params) }
     }
 
     private fun persistHandlePosition(density: Float) {
         val params = handleParams ?: return
         settings.bottomOffsetDp = (params.y / density).toInt()
+        settings.sideOffsetDp = (params.x / density).toInt()
     }
 
     /**
      * İmlecin durduğu noktaya gerçek bir dokunma gönderir.
      *
-     * Parmak daha yeni kalktığı için enjekte edilen dokunmayı **aynı karede**
-     * göndermek girdi sisteminde düşürülüyordu (tıklama olmuyor gibi görünmesinin
-     * sebebi buydu). Kısa bir gecikmeyle, parmak tamamen bırakıldıktan sonra
-     * gönderiyoruz.
+     * Parmak daha yeni kalktığı için enjekte edilen dokunmayı aynı karede
+     * göndermek girdi sisteminde düşürülüyordu; kısa bir gecikmeyle,
+     * parmak tamamen bırakıldıktan sonra gönderiyoruz.
      */
     private fun tapAt(x: Float, y: Float) {
         val tx = x.coerceIn(0f, (screenW - 1).toFloat())
@@ -295,13 +325,18 @@ class QuickCursorService : AccessibilityService() {
 
     companion object {
         private const val LONG_PRESS_MS = 350L
-        private const val TOUCH_SLOP = 8f
+        private const val SLOP_DP = 6f
         private const val TAP_DURATION_MS = 55L
         private const val TAP_DELAY_MS = 60L
         private const val SPAWN_ABOVE_DP = 130f
         private const val FADE_DELAY_MS = 3_000L
         private const val FADE_OUT_MS = 450L
         private const val FADE_IN_MS = 140L
-        private const val IDLE_ALPHA = 0.12f
+
+        /**
+         * Boya alfası zaten saydam olduğu için bu değer onunla çarpılıyor;
+         * 0.12'de top pratikte görünmez oluyordu.
+         */
+        private const val IDLE_ALPHA = 0.35f
     }
 }

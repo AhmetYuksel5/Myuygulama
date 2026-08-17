@@ -25,14 +25,41 @@ data class NotesUiState(
 @HiltViewModel
 class NotesViewModel @Inject constructor(
     private val repository: EntryRepository,
+    private val samples: NoteSampleSeeder,
 ) : ViewModel() {
+
+    init {
+        // İlk açılışta not defteri bomboş açılmasın: nasıl kullanıldığını
+        // gösteren iki örnek not (biri işaretlenebilir liste) bir kez eklenir.
+        viewModelScope.launch { samples.seedIfNeeded() }
+    }
 
     val uiState: StateFlow<NotesUiState> = combine(
         repository.observeByType(EntryType.NOTE),
         repository.observeByType(EntryType.ARTICLE),
     ) { notes, articles ->
-        NotesUiState(notes = notes, articles = articles, loaded = true)
+        // Sabitlenenler üstte; gerisi güncellenme sırasına göre geliyor.
+        val sorted = notes.sortedByDescending { NoteStyle.decode(it.source).pinned }
+        NotesUiState(notes = sorted, articles = articles, loaded = true)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NotesUiState())
+
+    fun setColor(entry: Entry, colorIndex: Int) {
+        val style = NoteStyle.decode(entry.source).copy(colorIndex = colorIndex)
+        viewModelScope.launch { repository.updateSource(entry.id, style.encode()) }
+    }
+
+    fun togglePinned(entry: Entry) {
+        val style = NoteStyle.decode(entry.source)
+        viewModelScope.launch {
+            repository.updateSource(entry.id, style.copy(pinned = !style.pinned).encode())
+        }
+    }
+
+    /** Karttan doğrudan liste maddesini işaretle/kaldır. */
+    fun toggleChecklist(entry: Entry, index: Int) {
+        val updatedBody = toggleChecklistItem(entry.body, index)
+        viewModelScope.launch { repository.updateEntry(entry.id, entry.title, updatedBody) }
+    }
 
     /** Yeni oluşturulan notun kimliği; ekran bunu görünce editöre geçer. */
     private val _createdNoteId = MutableStateFlow<Long?>(null)
@@ -66,6 +93,7 @@ data class NoteEditorUiState(
     val title: String = "",
     val body: String = "",
     val tags: List<String> = emptyList(),
+    val colorIndex: Int = 0,
     val loaded: Boolean = false,
 )
 
@@ -86,9 +114,35 @@ class NoteEditorViewModel @Inject constructor(
                 title = entry?.title.orEmpty(),
                 body = entry?.body.orEmpty(),
                 tags = entry?.tags?.map { it.name }.orEmpty(),
+                colorIndex = NoteStyle.decode(entry?.source).colorIndex,
                 loaded = true,
             )
         }
+    }
+
+    /** Kart rengi anında kaydediliyor; "kaydet" düğmesi yok. */
+    fun setColor(index: Int) {
+        val state = _uiState.value
+        _uiState.value = state.copy(colorIndex = index)
+        if (state.id == 0L) return
+        viewModelScope.launch {
+            val existing = repository.getById(state.id)
+            val style = NoteStyle.decode(existing?.source).copy(colorIndex = index)
+            repository.updateSource(state.id, style.encode())
+        }
+    }
+
+    /** Gövdenin sonuna boş bir liste maddesi ekler. */
+    fun addChecklistItem() {
+        val body = _uiState.value.body
+        val prefix = if (body.isBlank() || body.endsWith("\n")) "" else "\n"
+        _uiState.value = _uiState.value.copy(body = body + prefix + "[ ] ")
+    }
+
+    fun addImage(path: String) {
+        val body = _uiState.value.body
+        val prefix = if (body.isBlank() || body.endsWith("\n")) "" else "\n"
+        _uiState.value = _uiState.value.copy(body = body + prefix + encodeImageLine(path) + "\n")
     }
 
     fun onTitleChange(value: String) {

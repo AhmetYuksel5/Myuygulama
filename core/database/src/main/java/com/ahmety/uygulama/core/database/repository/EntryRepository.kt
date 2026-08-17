@@ -94,6 +94,18 @@ class EntryRepository @Inject constructor(
         record(updated, ChangeOperation.UPSERT)
     }
 
+    /**
+     * Kaydın serbest metin alanını günceller. Notlarda renk/sabitleme gibi
+     * görsel bilgiler burada duruyor; ayrı sütun açmadığımız için veri göçü
+     * gerekmiyor ve değişiklik günlüğü bunu kendiliğinden taşıyor.
+     */
+    suspend fun updateSource(id: Long, source: String?) {
+        val existing = entryDao.getById(id) ?: return
+        val updated = existing.copy(source = source, updatedAt = now.millis())
+        entryDao.update(updated)
+        record(updated, ChangeOperation.UPSERT)
+    }
+
     suspend fun setArchived(id: Long, archived: Boolean) {
         val existing = entryDao.getById(id) ?: return
         val updated = existing.copy(archived = archived, updatedAt = now.millis())

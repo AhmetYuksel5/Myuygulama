@@ -1,43 +1,76 @@
+@file:OptIn(ExperimentalFoundationApi::class)
+
 package com.ahmety.uygulama.feature.library
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalContext
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
+import kotlinx.coroutines.launch
 
+/**
+ * Keep benzeri not panosu: renkli kartlar, iki sütunlu serbest yükseklikli
+ * dizilim, karttan doğrudan işaretlenebilen liste maddeleri ve fotoğraflar.
+ */
 @Composable
 fun NotesRoute(
     onOpenNote: (Long) -> Unit,
@@ -57,37 +90,48 @@ fun NotesRoute(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 96.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 96.dp),
         ) {
-            item {
-                Text("Notlar", style = MaterialTheme.typography.headlineSmall)
-            }
+            Text(
+                text = "Notlar",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(start = 4.dp, bottom = 12.dp),
+            )
 
             if (state.loaded && state.notes.isEmpty()) {
-                item {
-                    Text(
-                        text = "Henüz not yok. Sağ alttaki düğmeyle ilk notunu yazabilirsin.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    text = "Henüz not yok. Sağ alttaki düğmeyle ilk notunu yazabilirsin.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(4.dp),
+                )
             }
 
-            items(state.notes, key = { it.id }) { entry ->
-                EntryCard(
-                    entry = entry,
-                    onClick = { onOpenNote(entry.id) },
-                    onArchive = { viewModel.archive(entry) },
-                    onDelete = { viewModel.delete(entry) },
-                )
+            // İki sütunlu duvar dizilimi: kartlar kendi yüksekliklerinde kalıyor.
+            // (Lazy bir ızgara yerine düz Column; kişisel not sayısı için fazlasıyla yeterli
+            // ve sürüm farkı olan deneysel API'lere bağımlılık getirmiyor.)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf(0, 1).forEach { column ->
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        state.notes.filterIndexed { index, _ -> index % 2 == column }
+                            .forEach { note ->
+                                NoteCard(
+                                    note = note,
+                                    onOpen = { onOpenNote(note.id) },
+                                    onTogglePin = { viewModel.togglePinned(note) },
+                                    onDelete = { viewModel.delete(note) },
+                                    onToggleItem = { index -> viewModel.toggleChecklist(note, index) },
+                                )
+                            }
+                    }
+                }
             }
         }
 
@@ -102,11 +146,140 @@ fun NotesRoute(
     }
 }
 
-/**
- * Pocket muadili: kaydedilen makaleler (oku-sonra). Arşivdeki notlardan ayrı
- * bir sekmede yaşıyor. URL yapıştırıp ya da başka bir uygulamadan paylaşıp
- * kaydedersin; sayfa okunabilir hâle getirilip çevrimdışı saklanır.
- */
+@Composable
+private fun NoteCard(
+    note: Entry,
+    onOpen: () -> Unit,
+    onTogglePin: () -> Unit,
+    onDelete: () -> Unit,
+    onToggleItem: (Int) -> Unit,
+) {
+    val style = remember(note.source) { NoteStyle.decode(note.source) }
+    val background = noteColor(style.colorIndex)
+    val textColor = noteTextColor(style.colorIndex)
+    var menuOpen by remember { mutableStateOf(false) }
+
+    val items = remember(note.body) { parseChecklist(note.body) }
+    val images = remember(note.body) { parseImagePaths(note.body) }
+    val text = remember(note.body) { plainBody(note.body) }
+
+    Surface(
+        color = background,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onOpen, onLongClick = { menuOpen = true }),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            images.firstOrNull()?.let { path ->
+                NoteImage(
+                    path = path,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                )
+            }
+
+            if (note.title.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = note.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (style.pinned) {
+                        Text(
+                            text = " 📌",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
+
+            if (text.isNotBlank()) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = textColor.copy(alpha = 0.85f),
+                    maxLines = 8,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (items.isNotEmpty()) Spacer(Modifier.height(6.dp))
+            }
+
+            // Liste maddeleri karttan doğrudan işaretlenebiliyor — Keep'te olduğu gibi.
+            items.take(8).forEachIndexed { index, item ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleItem(index) },
+                ) {
+                    Checkbox(
+                        checked = item.checked,
+                        onCheckedChange = { onToggleItem(index) },
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = item.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (item.checked) textColor.copy(alpha = 0.5f) else textColor,
+                        textDecoration = if (item.checked) TextDecoration.LineThrough else null,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (items.size > 8) {
+                Text(
+                    text = "+${items.size - 8} madde daha",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor.copy(alpha = 0.7f),
+                )
+            }
+
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (style.pinned) "Sabitlemeyi kaldır" else "Üste sabitle") },
+                    onClick = {
+                        menuOpen = false
+                        onTogglePin()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Sil") },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoteImage(path: String, modifier: Modifier = Modifier) {
+    val bitmap = rememberNoteImage(path)
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+                .height(120.dp)
+                .clip(RoundedCornerShape(10.dp)),
+        )
+    }
+}
+
+/** Pocket muadili: kaydedilen makaleler (oku-sonra). */
 @Composable
 fun PocketRoute(
     onOpenArticle: (Long) -> Unit,
@@ -119,12 +292,7 @@ fun PocketRoute(
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 96.dp,
-            ),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
@@ -134,8 +302,7 @@ fun PocketRoute(
             if (state.loaded && state.articles.isEmpty()) {
                 item {
                     Text(
-                        text = "Henüz makale yok. Sağ alttaki düğmeden URL yapıştırabilir " +
-                            "ya da herhangi bir uygulamadan bu uygulamaya paylaşabilirsin — " +
+                        text = "Henüz makale yok. Sağ alttaki düğmeden bir URL yapıştır — " +
                             "sayfa okunabilir hâle getirilip çevrimdışı saklanır.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -147,7 +314,6 @@ fun PocketRoute(
                 EntryCard(
                     entry = entry,
                     onClick = { onOpenArticle(entry.id) },
-                    onArchive = { viewModel.archive(entry) },
                     onDelete = { viewModel.delete(entry) },
                 )
             }
@@ -173,6 +339,18 @@ fun NoteEditorRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var tagInput by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                copyImageToNotes(context, uri)?.let(viewModel::addImage)
+            }
+        }
+    }
 
     LaunchedEffect(noteId) { viewModel.load(noteId) }
 
@@ -184,6 +362,7 @@ fun NoteEditorRoute(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(noteColor(state.colorIndex))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -194,6 +373,22 @@ fun NoteEditorRoute(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        // Eklenen fotoğrafların önizlemesi.
+        val images = parseImagePaths(state.body)
+        if (images.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                images.forEach { path ->
+                    NoteImage(path = path, modifier = Modifier.width(150.dp))
+                }
+            }
+        }
+
         OutlinedTextField(
             value = state.body,
             onValueChange = viewModel::onBodyChange,
@@ -202,6 +397,35 @@ fun NoteEditorRoute(
                 .fillMaxWidth()
                 .weight(1f),
         )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { viewModel.addChecklistItem() }) {
+                Text("Liste maddesi")
+            }
+            OutlinedButton(onClick = { pickImage.launch("image/*") }) {
+                Text("Fotoğraf")
+            }
+        }
+
+        Text("Renk", style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            (0 until NOTE_COLOR_COUNT).forEach { index ->
+                val selected = index == state.colorIndex
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(noteColor(index), CircleShape)
+                        .then(
+                            if (selected) {
+                                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .clickable { viewModel.setColor(index) },
+                )
+            }
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -294,7 +518,6 @@ fun SearchRoute(
 private fun EntryCard(
     entry: Entry,
     onClick: () -> Unit,
-    onArchive: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -338,30 +561,19 @@ private fun EntryCard(
                 )
             }
 
-            if (onArchive != null || onDelete != null) {
+            if (onDelete != null) {
                 Box {
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Outlined.MoreVert, contentDescription = "Seçenekler")
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        onArchive?.let { action ->
-                            DropdownMenuItem(
-                                text = { Text(if (entry.archived) "Arşivden çıkar" else "Arşivle") },
-                                onClick = {
-                                    menuOpen = false
-                                    action()
-                                },
-                            )
-                        }
-                        onDelete?.let { action ->
-                            DropdownMenuItem(
-                                text = { Text("Sil") },
-                                onClick = {
-                                    menuOpen = false
-                                    action()
-                                },
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = { Text("Sil") },
+                            onClick = {
+                                menuOpen = false
+                                onDelete()
+                            },
+                        )
                     }
                 }
             }

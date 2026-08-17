@@ -38,6 +38,7 @@ fun QuickCursorScreen(modifier: Modifier = Modifier) {
     var opacity by remember { mutableIntStateOf(settings.opacityPercent) }
     var sensitivityTimes10 by remember { mutableIntStateOf((settings.sensitivity * 10).toInt()) }
     var offset by remember { mutableIntStateOf(settings.bottomOffsetDp) }
+    var sideOffset by remember { mutableIntStateOf(settings.sideOffsetDp) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -87,7 +88,19 @@ fun QuickCursorScreen(modifier: Modifier = Modifier) {
         Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
         Stepper("Top boyutu", size, 36..96, step = 4, suffix = "dp") { size = it; settings.handleSizeDp = it }
         Stepper("Saydamlık", opacity, 20..100, step = 5, suffix = "%") { opacity = it; settings.opacityPercent = it }
-        Stepper("Alttan konum", offset, 40..600, step = 20, suffix = "dp") { offset = it; settings.bottomOffsetDp = it }
+        Stepper("Alttan konum", offset, 0..1200, step = 20, suffix = "dp") {
+            offset = it; settings.bottomOffsetDp = it
+        }
+        Stepper("Kenardan içeri", sideOffset, 0..400, step = 10, suffix = "dp") {
+            sideOffset = it; settings.sideOffsetDp = it
+        }
+        Text(
+            text = "Top artık hem dikeyde hem yatayda istediğin yere konabiliyor: " +
+                "0 = seçili kenara tam yapışık, en dipte. Topa uzun basıp sürükleyerek " +
+                "de taşıyabilirsin; bıraktığın yer kaydedilir.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Stepper("Hassasiyet", sensitivityTimes10, 10..40, step = 2, suffix = "×10") {
             sensitivityTimes10 = it
             settings.sensitivity = it / 10f
