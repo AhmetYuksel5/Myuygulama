@@ -46,8 +46,7 @@ sealed interface LauncherAction {
     data class WhatsApp(val phone: String) : LauncherAction {
         override fun encode() = "wa:$phone"
         override fun run(context: Context) {
-            val digits = phone.filter { it.isDigit() || it == '+' }.removePrefix("+")
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits"))
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${toInternational(phone)}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivityCatching(intent, "WhatsApp açılamadı")
         }
@@ -134,6 +133,22 @@ sealed interface LauncherAction {
                 else -> None
             }
         }
+    }
+}
+
+/**
+ * wa.me yalnızca ülke kodlu numarayı kabul ediyor; yerel yazılan `0555…`
+ * bozuk bir bağlantı üretiyordu. Başında + varsa olduğu gibi, `0` ile
+ * başlıyorsa Türkiye kodu ile değiştiriyoruz.
+ */
+private fun toInternational(phone: String): String {
+    val raw = phone.trim()
+    val digits = raw.filter { it.isDigit() }
+    return when {
+        raw.startsWith("+") -> digits
+        digits.startsWith("90") -> digits
+        digits.startsWith("0") -> "90" + digits.drop(1)
+        else -> digits
     }
 }
 

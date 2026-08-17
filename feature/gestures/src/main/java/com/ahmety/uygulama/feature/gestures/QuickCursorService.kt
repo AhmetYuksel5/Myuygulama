@@ -63,15 +63,17 @@ class QuickCursorService : AccessibilityService() {
     private val fadeOut = Runnable { fadeHandle(idle = true) }
 
     /**
-     * Topun konumunu biz yazıyoruz; kendi yazımımızı dinleyip katmanı yeniden
-     * kurarsak top gözle görülür şekilde silinip yeniden çiziliyor. O yüzden
-     * konum anahtarlarını yok sayıyoruz.
+     * Konum değişikliğinde katmanı baştan kurmuyoruz — top gözle görülür
+     * şekilde silinip yeniden çiziliyordu. Bunun yerine pencereyi yerinde
+     * taşıyoruz. Böylece hem topu sürükleyip bıraktığımızda titreme olmuyor,
+     * hem de ayar ekranından girilen değer anında uygulanıyor.
      */
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "bottom_offset" || key == "side_offset") {
-            return@OnSharedPreferenceChangeListener
+            handler.post { applyHandlePosition() }
+        } else {
+            handler.post { rebuild() }
         }
-        handler.post { rebuild() }
     }
 
     override fun onServiceConnected() {
@@ -120,8 +122,12 @@ class QuickCursorService : AccessibilityService() {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = (if (settings.onRight) Gravity.END else Gravity.START) or Gravity.BOTTOM
+            // Ayarda çok büyük bir değer kalmışsa top ekran dışında doğar ve
+            // kullanıcı onu bir daha bulamaz; ekrana kırpıyoruz.
             x = (settings.sideOffsetDp * density).toInt()
+                .coerceIn(0, (screenW - sizePx).coerceAtLeast(0))
             y = (settings.bottomOffsetDp * density).toInt()
+                .coerceIn(0, (screenH - sizePx).coerceAtLeast(0))
         }
 
         val cursorView = CursorView(this)
@@ -279,6 +285,20 @@ class QuickCursorService : AccessibilityService() {
         params.y = (params.y - dy).toInt()
             .coerceIn(0, (screenH - view.height).coerceAtLeast(0))
         runCatching { windowManager?.updateViewLayout(view, params) }
+    }
+
+    /** Ayarlardaki konumu, katmanı yeniden kurmadan pencereye uygular. */
+    private fun applyHandlePosition() {
+        val params = handleParams ?: return
+        val view = handle ?: return
+        val density = resources.displayMetrics.density
+        params.x = (settings.sideOffsetDp * density).toInt()
+            .coerceIn(0, (screenW - view.width).coerceAtLeast(0))
+        params.y = (settings.bottomOffsetDp * density).toInt()
+            .coerceIn(0, (screenH - view.height).coerceAtLeast(0))
+        runCatching { windowManager?.updateViewLayout(view, params) }
+        wakeHandle()
+        scheduleFade()
     }
 
     private fun persistHandlePosition(density: Float) {

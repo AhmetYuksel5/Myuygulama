@@ -40,6 +40,9 @@ class EntryRepository @Inject constructor(
     fun observeByType(type: EntryType): Flow<List<Entry>> =
         entryDao.observeByType(type).map { rows -> rows.map(EntryWithTags::toDomain) }
 
+    fun observeArchivedByType(type: EntryType): Flow<List<Entry>> =
+        entryDao.observeArchivedByType(type).map { rows -> rows.map(EntryWithTags::toDomain) }
+
     fun observeByTag(tagId: Long): Flow<List<Entry>> =
         entryDao.observeByTag(tagId).map { rows -> rows.map(EntryWithTags::toDomain) }
 

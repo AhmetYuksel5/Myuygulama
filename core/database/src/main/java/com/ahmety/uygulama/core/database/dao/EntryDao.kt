@@ -55,6 +55,20 @@ interface EntryDao {
     fun observeByType(type: EntryType): Flow<List<EntryWithTags>>
 
     /**
+     * Arşivlenmiş kayıtlar. Arşivleme, silmenin yumuşak hâli olduğu için
+     * arşivdekileri gösteren bir yol olmadan "sessiz silme"ye dönüşüyordu.
+     */
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM entry
+        WHERE type = :type AND archived = 1 AND deletedAt IS NULL
+        ORDER BY updatedAt DESC
+        """,
+    )
+    fun observeArchivedByType(type: EntryType): Flow<List<EntryWithTags>>
+
+    /**
      * Tüm modüllerin ortak arama girişi: not, makale, alıntı, kelime, görev — hepsi
      * aynı FTS indeksinden gelir.
      */

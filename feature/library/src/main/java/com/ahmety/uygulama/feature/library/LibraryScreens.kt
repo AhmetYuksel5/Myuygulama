@@ -2,6 +2,7 @@
 
 package com.ahmety.uygulama.feature.library
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -79,6 +80,7 @@ fun NotesRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val createdNoteId by viewModel.createdNoteId.collectAsStateWithLifecycle()
+    var showArchive by remember { mutableStateOf(false) }
 
     // Yeni not oluşturulunca doğrudan editöre geçiyoruz; boş bir satır
     // listeye düşüp kullanıcının ayrıca dokunmasını beklemek fazladan adım olurdu.
@@ -96,13 +98,41 @@ fun NotesRoute(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 96.dp),
         ) {
-            Text(
-                text = "Notlar",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(start = 4.dp, bottom = 12.dp),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, bottom = 12.dp),
+            ) {
+                Text(
+                    text = if (showArchive) "Arşiv" else "Notlar",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                // Arşiv, gösterilecek bir yer olmadan sessiz silmeye dönüşüyordu.
+                if (state.archivedNotes.isNotEmpty() || showArchive) {
+                    OutlinedButton(onClick = { showArchive = !showArchive }) {
+                        Text(
+                            if (showArchive) {
+                                "Notlara dön"
+                            } else {
+                                "Arşiv (${state.archivedNotes.size})"
+                            },
+                        )
+                    }
+                }
+            }
 
-            if (state.loaded && state.notes.isEmpty()) {
+            if (showArchive && state.archivedNotes.isEmpty()) {
+                Text(
+                    text = "Arşivde not yok.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(4.dp),
+                )
+            }
+
+            if (!showArchive && state.loaded && state.notes.isEmpty()) {
                 Text(
                     text = "Henüz not yok. Sağ alttaki düğmeyle ilk notunu yazabilirsin.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -114,18 +144,21 @@ fun NotesRoute(
             // İki sütunlu duvar dizilimi: kartlar kendi yüksekliklerinde kalıyor.
             // (Lazy bir ızgara yerine düz Column; kişisel not sayısı için fazlasıyla yeterli
             // ve sürüm farkı olan deneysel API'lere bağımlılık getirmiyor.)
+            val visible = if (showArchive) state.archivedNotes else state.notes
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf(0, 1).forEach { column ->
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        state.notes.filterIndexed { index, _ -> index % 2 == column }
+                        visible.filterIndexed { index, _ -> index % 2 == column }
                             .forEach { note ->
                                 NoteCard(
                                     note = note,
+                                    archived = showArchive,
                                     onOpen = { onOpenNote(note.id) },
                                     onTogglePin = { viewModel.togglePinned(note) },
+                                    onToggleArchive = { viewModel.archive(note) },
                                     onDelete = { viewModel.delete(note) },
                                     onToggleItem = { index -> viewModel.toggleChecklist(note, index) },
                                 )
@@ -149,8 +182,10 @@ fun NotesRoute(
 @Composable
 private fun NoteCard(
     note: Entry,
+    archived: Boolean,
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
+    onToggleArchive: () -> Unit,
     onDelete: () -> Unit,
     onToggleItem: (Int) -> Unit,
 ) {
@@ -245,11 +280,20 @@ private fun NoteCard(
             }
 
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                if (!archived) {
+                    DropdownMenuItem(
+                        text = { Text(if (style.pinned) "Sabitlemeyi kaldır" else "Üste sabitle") },
+                        onClick = {
+                            menuOpen = false
+                            onTogglePin()
+                        },
+                    )
+                }
                 DropdownMenuItem(
-                    text = { Text(if (style.pinned) "Sabitlemeyi kaldır" else "Üste sabitle") },
+                    text = { Text(if (archived) "Arşivden çıkar" else "Arşivle") },
                     onClick = {
                         menuOpen = false
-                        onTogglePin()
+                        onToggleArchive()
                     },
                 )
                 DropdownMenuItem(
@@ -347,7 +391,12 @@ fun NoteEditorRoute(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                copyImageToNotes(context, uri)?.let(viewModel::addImage)
+                val path = copyImageToNotes(context, uri)
+                if (path != null) {
+                    viewModel.addImage(path)
+                } else {
+                    Toast.makeText(context, "Fotoğraf eklenemedi", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

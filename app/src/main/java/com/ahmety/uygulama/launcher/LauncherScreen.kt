@@ -401,7 +401,9 @@ private fun ArcFavorites(
         val tStart = 0.06 * PI
         val tEnd = 0.50 * PI
         val span = tEnd - tStart
-        val gapPx = slotWidth + 6.dp.roundToPx()
+        // Aralık, kutunun uzun kenarına göre: yalnızca genişliğe bakınca
+        // etiketli simgelerin dokunma kutuları dikeyde biniyordu.
+        val gapPx = maxOf(slotWidth, slotH) + 6.dp.roundToPx()
         val ringGap = slotH + 12.dp.roundToPx()
         val outerRadius = min(w, h) * 0.70f
 
@@ -530,7 +532,11 @@ private fun DrawerPage(
                 .padding(horizontal = 16.dp),
         )
         Text(
-            text = "Uygulamaya uzun bas → ana ekrana ekle",
+            text = if (apps.isEmpty()) {
+                "Uygulamalar yükleniyor…"
+            } else {
+                "Uygulamaya uzun bas → ana ekrana ekle"
+            },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 20.dp, top = 6.dp),

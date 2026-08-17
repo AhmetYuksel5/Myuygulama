@@ -17,6 +17,8 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -239,22 +241,8 @@ private fun MoreScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(text = "Daha", style = MaterialTheme.typography.headlineMedium)
-        ListItem(
-            headlineContent = { Text("Kelime çalışması") },
-            supportingContent = { Text("400 kartlık İngilizce destesi") },
-            modifier = Modifier.clickable(onClick = onOpenVocab),
-        )
-        ListItem(
-            headlineContent = { Text("Ara") },
-            supportingContent = { Text("Notlar, makaleler, görevler — tek indeks") },
-            modifier = Modifier.clickable(onClick = onOpenSearch),
-        )
-        ListItem(
-            headlineContent = { Text("Ana ekran") },
-            supportingContent = {
-                Text("Kendi başlatıcımızı aç — varsayılan yapmadan deneyebilirsin")
-            },
-            modifier = Modifier.clickable {
+        Button(
+            onClick = {
                 // Varsayılan başlatıcı seçmeden de ana ekranı görebilmek için
                 // doğrudan açıyoruz; kararlı hâle gelene kadar bu yeterli.
                 runCatching {
@@ -264,6 +252,25 @@ private fun MoreScreen(
                     )
                 }
             },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Ana ekranı aç")
+        }
+        Text(
+            text = "Kendi başlatıcımız. Varsayılan yapmana gerek yok; buradan " +
+                "açıp deneyebilir, geri tuşuyla uygulamaya dönebilirsin.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ListItem(
+            headlineContent = { Text("Kelime çalışması") },
+            supportingContent = { Text("400 kartlık İngilizce destesi") },
+            modifier = Modifier.clickable(onClick = onOpenVocab),
+        )
+        ListItem(
+            headlineContent = { Text("Ara") },
+            supportingContent = { Text("Notlar, makaleler, görevler — tek indeks") },
+            modifier = Modifier.clickable(onClick = onOpenSearch),
         )
         Text(text = "Ayarlar", style = MaterialTheme.typography.titleMedium)
         ListItem(

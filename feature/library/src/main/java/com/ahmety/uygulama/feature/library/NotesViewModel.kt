@@ -18,6 +18,7 @@ import javax.inject.Inject
 data class NotesUiState(
     val notes: List<Entry> = emptyList(),
     val articles: List<Entry> = emptyList(),
+    val archivedNotes: List<Entry> = emptyList(),
     val loaded: Boolean = false,
 )
 
@@ -36,10 +37,16 @@ class NotesViewModel @Inject constructor(
     val uiState: StateFlow<NotesUiState> = combine(
         repository.observeByType(EntryType.NOTE),
         repository.observeByType(EntryType.ARTICLE),
-    ) { notes, articles ->
+        repository.observeArchivedByType(EntryType.NOTE),
+    ) { notes, articles, archived ->
         // Sabitlenenler üstte; gerisi güncellenme sırasına göre geliyor.
         val sorted = notes.sortedByDescending { NoteStyle.decode(it.source).pinned }
-        NotesUiState(notes = sorted, articles = articles, loaded = true)
+        NotesUiState(
+            notes = sorted,
+            articles = articles,
+            archivedNotes = archived,
+            loaded = true,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NotesUiState())
 
     fun setColor(entry: Entry, colorIndex: Int) {
@@ -54,10 +61,18 @@ class NotesViewModel @Inject constructor(
         }
     }
 
-    /** Karttan doğrudan liste maddesini işaretle/kaldır. */
+    /**
+     * Karttan doğrudan liste maddesini işaretle/kaldır.
+     *
+     * Gövdeyi ekrandaki (bayat olabilen) kopyadan değil, yazmadan hemen önce
+     * veritabanından okuyoruz: art arda iki maddeyi hızlıca işaretleyince
+     * ikinci yazma birincisini geri alıyordu.
+     */
     fun toggleChecklist(entry: Entry, index: Int) {
-        val updatedBody = toggleChecklistItem(entry.body, index)
-        viewModelScope.launch { repository.updateEntry(entry.id, entry.title, updatedBody) }
+        viewModelScope.launch {
+            val fresh = repository.getById(entry.id) ?: return@launch
+            repository.updateEntry(fresh.id, fresh.title, toggleChecklistItem(fresh.body, index))
+        }
     }
 
     /** Yeni oluşturulan notun kimliği; ekran bunu görünce editöre geçer. */
@@ -161,7 +176,9 @@ class NoteEditorViewModel @Inject constructor(
         val state = _uiState.value
         if (!state.loaded || state.id == 0L) return
         viewModelScope.launch {
-            if (state.title.isBlank() && state.body.isBlank()) {
+            // Renk seçmek de bir niyettir: yalnızca renk verilmiş bir notu
+            // "boş" sayıp silmek kullanıcının emeğini çöpe atıyordu.
+            if (state.title.isBlank() && state.body.isBlank() && state.colorIndex == 0) {
                 repository.deleteEntry(state.id)
             } else {
                 repository.updateEntry(state.id, state.title, state.body)

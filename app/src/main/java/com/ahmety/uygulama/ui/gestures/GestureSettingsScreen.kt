@@ -112,8 +112,10 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
         }
         Text(
             text = "İkisini birden açabilirsin. Telefonu hareketlerle kullanıyorsan, " +
-                "şeridin kapladığı alanda sistemin kendi \"kenardan çek = geri\" hareketi " +
-                "devre dışı bırakılır; şeridin dışında normal çalışmaya devam eder.",
+                "şeridin kapladığı alanda sistemin kendi \"kenardan çek = geri\" hareketinin " +
+                "devre dışı kalması için gereken istek gönderiliyor; şeridin dışında sistem " +
+                "normal çalışır. Bazı üretici arayüzlerinde bu istek yok sayılabilir — " +
+                "çakışma sürerse şeridi biraz kısaltmayı veya yerini kaydırmayı dene.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
