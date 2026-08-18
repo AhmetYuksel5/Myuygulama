@@ -38,7 +38,7 @@ fun UpdateDialog(
     val available = state.available
 
     AlertDialog(
-        onDismissRequest = { if (!downloading) onDismiss() },
+        onDismissRequest = onDismiss,
         title = { Text("Güncelleme") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -93,8 +93,19 @@ fun UpdateDialog(
         },
         confirmButton = {
             when {
+                // İzin yoksa yapılacak tek iş bu; "kapat" düğmesi yerini
+                // kaplamasın diye onay tarafına alındı.
+                !state.canInstall -> TextButton(
+                    onClick = {
+                        viewModel.openInstallPermissionSettings { intent ->
+                            runCatching { context.startActivity(intent) }
+                        }
+                    },
+                ) {
+                    Text("İzin ver")
+                }
+
                 available != null && !downloading -> TextButton(
-                    enabled = state.canInstall,
                     onClick = { viewModel.downloadAndInstall() },
                 ) {
                     Text("İndir ve kur")
@@ -107,19 +118,12 @@ fun UpdateDialog(
                 else -> Unit
             }
         },
+        // Kapatma her durumda açık: indirme takılırsa pencereden çıkışın
+        // hiçbir yolu kalmıyordu. İndirme görünüm modelinde sürdüğü için
+        // pencereyi kapatmak indirmeyi iptal etmiyor.
         dismissButton = {
-            if (!state.canInstall) {
-                TextButton(
-                    onClick = {
-                        viewModel.openInstallPermissionSettings { intent ->
-                            runCatching { context.startActivity(intent) }
-                        }
-                    },
-                ) {
-                    Text("İzin ver")
-                }
-            } else if (!downloading) {
-                TextButton(onClick = onDismiss) { Text("Kapat") }
+            TextButton(onClick = onDismiss) {
+                Text(if (downloading) "Arka planda sürsün" else "Kapat")
             }
         },
     )
