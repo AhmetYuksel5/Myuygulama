@@ -45,43 +45,57 @@ class VocabRepository @Inject constructor(
     @Volatile
     private var cached: List<VocabWord>? = null
 
-    /** Asset destesi + kitaptan aktarılan mavi kelimeler. */
-    suspend fun allWords(): List<VocabWord> = withContext(Dispatchers.IO) {
-        val base = cached ?: loadFromAsset().also { cached = it }
-        val fromBooks = bookWords()
-        // Aynı kelime hem destede hem kitapta olabilir; kitaptan geleni
-        // önceliyoruz çünkü kendi bağlam cümleni taşıyor.
-        val byWord = LinkedHashMap<String, VocabWord>()
-        fromBooks.forEach { byWord[it.word.lowercase()] = it }
-        base.forEach { byWord.putIfAbsent(it.word.lowercase(), it) }
-        byWord.values.toList()
+    /** Uygulamayla gelen sabit deste. */
+    suspend fun assetWords(): List<VocabWord> = withContext(Dispatchers.IO) {
+        cached ?: loadFromAsset().also { cached = it }
     }
 
-    /** Kitapta mavi işaretlenmiş kelimeler kelime çalışmasına düşer. */
-    private suspend fun bookWords(): List<VocabWord> =
-        entryRepository.listByType(EntryType.HIGHLIGHT)
-            .filter { HighlightRef.color(it.source) == HighlightColor.BLUE }
-            .filter { it.title.isNotBlank() }
-            .map { entry ->
-                VocabWord(
-                    word = entry.title.trim(),
-                    meaning = "",
-                    context = entry.body.trim(),
-                    fromBook = true,
-                )
+    /**
+     * Kitapta **mavi** işaretlenmiş kelimeler. Akış olarak veriyoruz: kitapta
+     * yeni bir kelime işaretleyince kelime destesinde uygulamayı yeniden
+     * başlatmadan belirmesi gerekiyor.
+     */
+    fun observeBookWords(): Flow<List<VocabWord>> =
+        entryRepository.observeByType(EntryType.HIGHLIGHT).map { entries ->
+            entries
+                .filter { HighlightRef.color(it.source) == HighlightColor.BLUE }
+                .filter { it.title.isNotBlank() }
+                .map { entry ->
+                    VocabWord(
+                        word = entry.title.trim(),
+                        meaning = "",
+                        context = entry.body.trim(),
+                        fromBook = true,
+                    )
+                }
+                .distinctBy { it.word.lowercase() }
+        }
+
+    /**
+     * Deste + kitaptan gelenler. Aynı kelime iki kaynakta da varsa kitaptan
+     * geleni önceliyoruz: kendi bağlam cümleni taşıyor.
+     */
+    fun mergeWords(asset: List<VocabWord>, fromBooks: List<VocabWord>): List<VocabWord> {
+        val byWord = LinkedHashMap<String, VocabWord>()
+        fromBooks.forEach { byWord[it.word.lowercase()] = it }
+        asset.forEach { existing ->
+            val key = existing.word.lowercase()
+            val book = byWord[key]
+            byWord[key] = if (book == null) {
+                existing
+            } else {
+                // Kitaptan gelen kelimenin anlamı yok; destede varsa
+                // anlamını/örneklerini kullan, bağlam cümlesini koru.
+                existing.copy(context = book.context, fromBook = true)
             }
-            .distinctBy { it.word.lowercase() }
+        }
+        return byWord.values.toList()
+    }
 
     fun observeProgress(): Flow<List<VocabProgressEntity>> = vocabDao.observeAll()
 
     fun observeCount(status: VocabStatus): Flow<Int> =
         vocabDao.observeCountByStatus(status.name)
-
-    /** Kitaptan aktarılan kelime sayısı — ekranda göstermek için. */
-    fun observeBookWordCount(): Flow<Int> =
-        entryRepository.observeByType(EntryType.HIGHLIGHT).map { entries ->
-            entries.count { HighlightRef.color(it.source) == HighlightColor.BLUE }
-        }
 
     suspend fun setStatus(word: String, status: VocabStatus) {
         val entity = VocabProgressEntity(

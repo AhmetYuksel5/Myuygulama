@@ -38,7 +38,7 @@ class VocabViewModel @Inject constructor(
     private val prefs = VocabPrefs(context)
 
     private val mode = MutableStateFlow(VocabMode.ALL)
-    private val allWords = MutableStateFlow<List<VocabWord>>(emptyList())
+    private val assetWords = MutableStateFlow<List<VocabWord>>(emptyList())
 
     private val _swipeThreshold = MutableStateFlow(prefs.swipeThreshold)
     val swipeThreshold: StateFlow<Int> = _swipeThreshold
@@ -51,15 +51,18 @@ class VocabViewModel @Inject constructor(
     private val shuffleSeed = System.nanoTime()
 
     init {
-        viewModelScope.launch { allWords.value = repository.allWords() }
+        viewModelScope.launch { assetWords.value = repository.assetWords() }
     }
 
     val uiState: StateFlow<VocabUiState> = combine(
-        allWords,
+        assetWords,
         repository.observeProgress(),
         mode,
-        repository.observeBookWordCount(),
-    ) { words, progress, currentMode, bookCount ->
+        // Kitapta yeni işaretlenen mavi kelime, uygulamayı yeniden başlatmadan
+        // burada belirmeli; bu yüzden akış olarak dinliyoruz.
+        repository.observeBookWords(),
+    ) { asset, progress, currentMode, bookWords ->
+        val words = repository.mergeWords(asset, bookWords)
         val statusByWord = progress.associate { it.word to it.status }
         val known = statusByWord.values.count { it == VocabStatus.KNOWN.name }
         val learning = statusByWord.values.count { it == VocabStatus.LEARNING.name }
@@ -87,8 +90,8 @@ class VocabViewModel @Inject constructor(
             knownCount = known,
             learningCount = learning,
             unsureCount = unsure,
-            bookCount = bookCount,
-            loaded = words.isNotEmpty(),
+            bookCount = bookWords.size,
+            loaded = asset.isNotEmpty() || bookWords.isNotEmpty(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VocabUiState())
 
