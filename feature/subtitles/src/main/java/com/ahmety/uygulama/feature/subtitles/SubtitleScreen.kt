@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -45,6 +43,7 @@ fun SubtitleRoute(
     viewModel: SubtitleViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var showSettings by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -52,9 +51,21 @@ fun SubtitleRoute(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Film hazırlığı",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { showSettings = true }) { Text("Ayar") }
+        }
+
         if (!state.configured) {
             Text(
-                text = "Önce Araçlar → Altyazı'dan OpenSubtitles anahtarını gir.",
+                text = "Önce sağ üstteki Ayar'dan OpenSubtitles anahtarını gir.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -108,11 +119,7 @@ fun SubtitleRoute(
 
         state.pair?.let { pair ->
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = pair.movie + if (pair.year > 0) " (${pair.year})" else "",
                         style = MaterialTheme.typography.titleMedium,
@@ -147,7 +154,9 @@ fun SubtitleRoute(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(state.words, key = { it.word }) { word ->
