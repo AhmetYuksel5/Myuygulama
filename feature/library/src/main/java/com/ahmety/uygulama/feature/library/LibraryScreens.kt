@@ -21,17 +21,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -41,6 +44,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -455,98 +459,146 @@ fun NoteEditorRoute(
         onDispose { viewModel.save() }
     }
 
-    Column(
+    // Tek bir kaydırılabilir liste: klavye açıldığında alanlar sıkışmıyor.
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(noteColor(state.colorIndex))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .imePadding(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        OutlinedTextField(
-            value = state.title,
-            onValueChange = viewModel::onTitleChange,
-            label = { Text("Başlık") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        item {
+            OutlinedTextField(
+                value = state.title,
+                onValueChange = viewModel::onTitleChange,
+                label = { Text("Başlık") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
-        // Eklenen fotoğrafların önizlemesi.
-        val images = parseImagePaths(state.body)
-        if (images.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                images.forEach { path ->
-                    NoteImage(path = path, modifier = Modifier.width(150.dp))
+        if (state.images.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.images.forEach { path ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            NoteImage(path = path, modifier = Modifier.width(150.dp))
+                            TextButton(onClick = { viewModel.removeImage(path) }) {
+                                Text("Kaldır", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        OutlinedTextField(
-            value = state.body,
-            onValueChange = viewModel::onBodyChange,
-            label = { Text("Not") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { viewModel.addChecklistItem() }) {
-                Text("Liste maddesi")
-            }
-            OutlinedButton(onClick = { pickImage.launch("image/*") }) {
-                Text("Fotoğraf")
-            }
-        }
-
-        Text("Renk", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (0 until NOTE_COLOR_COUNT).forEach { index ->
-                val selected = index == state.colorIndex
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(noteColor(index), CircleShape)
-                        .then(
-                            if (selected) {
-                                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .clickable { viewModel.setColor(index) },
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            state.tags.forEach { tag -> AssistChip(onClick = {}, label = { Text("#$tag") }) }
-        }
-
-        OutlinedTextField(
-            value = tagInput,
-            onValueChange = { tagInput = it },
-            label = { Text("Etiket ekle") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AssistChip(
-                onClick = {
-                    viewModel.addTag(tagInput)
-                    tagInput = ""
-                },
-                label = { Text("Etiketle") },
+        item {
+            OutlinedTextField(
+                value = state.plain,
+                onValueChange = viewModel::onPlainChange,
+                label = { Text("Not") },
+                minLines = 4,
+                modifier = Modifier.fillMaxWidth(),
             )
-            AssistChip(onClick = onBack, label = { Text("Bitti") })
+        }
+
+        // Liste maddeleri: ham "[ ] madde" metni yerine gerçek kutucuklar.
+        itemsIndexed(state.items) { index, item ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Checkbox(
+                    checked = item.checked,
+                    onCheckedChange = { viewModel.toggleItem(index) },
+                )
+                OutlinedTextField(
+                    value = item.text,
+                    onValueChange = { viewModel.onItemTextChange(index, it) },
+                    placeholder = { Text("Madde") },
+                    singleLine = true,
+                    textStyle = if (item.checked) {
+                        LocalTextStyle.current.copy(textDecoration = TextDecoration.LineThrough)
+                    } else {
+                        LocalTextStyle.current
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { viewModel.removeItem(index) }) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Maddeyi sil")
+                }
+            }
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { viewModel.addChecklistItem() }) {
+                    Text("Madde ekle")
+                }
+                OutlinedButton(onClick = { pickImage.launch("image/*") }) {
+                    Text("Fotoğraf")
+                }
+            }
+        }
+
+        item {
+            Text("Renk", style = MaterialTheme.typography.labelLarge)
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                (0 until NOTE_COLOR_COUNT).forEach { index ->
+                    val selected = index == state.colorIndex
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(noteColor(index), CircleShape)
+                            .then(
+                                if (selected) {
+                                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable { viewModel.setColor(index) },
+                    )
+                }
+            }
+        }
+
+        if (state.tags.isNotEmpty()) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.tags.forEach { tag -> AssistChip(onClick = {}, label = { Text("#$tag") }) }
+                }
+            }
+        }
+
+        item {
+            OutlinedTextField(
+                value = tagInput,
+                onValueChange = { tagInput = it },
+                label = { Text("Etiket ekle") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(
+                    onClick = {
+                        viewModel.addTag(tagInput)
+                        tagInput = ""
+                    },
+                    label = { Text("Etiketle") },
+                )
+                AssistChip(onClick = onBack, label = { Text("Bitti") })
+            }
         }
     }
 }

@@ -45,6 +45,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.AnnotatedString
@@ -258,8 +259,8 @@ fun BookReaderRoute(
                             textColor = theme.text,
                             fontSizeSp = fontSize,
                             onTap = { chromeVisible = !chromeVisible },
-                            onWordLongPressed = { word, sentence ->
-                                pending = PendingHighlight(word, sentence)
+                            onSelection = { text, sentence ->
+                                pending = PendingHighlight(text, sentence)
                             },
                         )
                     }
@@ -532,20 +533,41 @@ private fun HighlightableParagraph(
     textColor: Color,
     fontSizeSp: Int,
     onTap: () -> Unit,
-    onWordLongPressed: (word: String, sentence: String) -> Unit,
+    onSelection: (text: String, context: String) -> Unit,
 ) {
     var layout by remember(paragraph) { mutableStateOf<TextLayoutResult?>(null) }
+    // Seçim: uzun basınca kelimede başlar, parmak sürüklendikçe genişler.
+    var selection by remember(paragraph) { mutableStateOf<IntRange?>(null) }
+    var anchor by remember(paragraph) { mutableStateOf<Pair<Int, Int>?>(null) }
     val haptic = LocalHapticFeedback.current
+    val selectionTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
 
-    val painted: AnnotatedString = remember(paragraph, colors) {
+    val painted: AnnotatedString = remember(paragraph, colors, selection, selectionTint) {
         buildAnnotatedString {
             append(paragraph)
+
+            // Önce çok kelimeli işaretlemeler: metinde geçtiği her yeri boya.
+            colors.forEach { (text, color) ->
+                if (!text.contains(' ')) return@forEach
+                var index = paragraph.indexOf(text, ignoreCase = true)
+                while (index >= 0) {
+                    addStyle(SpanStyle(background = paintOf(color)), index, index + text.length)
+                    index = paragraph.indexOf(text, index + text.length, ignoreCase = true)
+                }
+            }
+
+            // Sonra tek kelimeler.
             forEachWord(paragraph) { rawStart, rawEnd ->
                 val bounds = trimBounds(paragraph, rawStart, rawEnd) ?: return@forEachWord
                 val word = paragraph.substring(bounds.first, bounds.second).lowercase()
                 colors[word]?.let { color ->
                     addStyle(SpanStyle(background = paintOf(color)), bounds.first, bounds.second)
                 }
+            }
+
+            // En üstte, sürüklenirken görünen seçim.
+            selection?.let { range ->
+                addStyle(SpanStyle(background = selectionTint), range.first, range.last + 1)
             }
         }
     }
@@ -560,18 +582,49 @@ private fun HighlightableParagraph(
         onTextLayout = { layout = it },
         modifier = Modifier
             .fillMaxWidth()
+            // Tek dokunuş okuma arayüzünü gizler/gösterir.
             .pointerInput(paragraph) {
-                detectTapGestures(
-                    // Tek dokunuş okuma arayüzünü gizler/gösterir; işaretleme
-                    // uzun basmayla, yoksa okurken sürekli renk seçici açılıyor.
-                    onTap = { onTap() },
-                    onLongPress = { position ->
-                        val result = layout ?: return@detectTapGestures
+                detectTapGestures { onTap() }
+            }
+            // Uzun bas + sürükle: birden çok kelime seçilebiliyor. Sarı ile
+            // altı çizilecek yerler genelde tek kelime değil.
+            .pointerInput(paragraph) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { position ->
+                        val result = layout ?: return@detectDragGesturesAfterLongPress
                         val offset = result.getOffsetForPosition(position)
-                        val bounds = wordBoundsAt(paragraph, offset) ?: return@detectTapGestures
-                        val word = paragraph.substring(bounds.first, bounds.second)
+                        val bounds = wordBoundsAt(paragraph, offset)
+                            ?: return@detectDragGesturesAfterLongPress
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onWordLongPressed(word, contextAround(paragraph, bounds.first, bounds.second))
+                        anchor = bounds
+                        selection = bounds.first until bounds.second
+                    },
+                    onDrag = { change, _ ->
+                        val result = layout ?: return@detectDragGesturesAfterLongPress
+                        val start = anchor ?: return@detectDragGesturesAfterLongPress
+                        val offset = result.getOffsetForPosition(change.position)
+                        val bounds = wordBoundsAt(paragraph, offset)
+                            ?: return@detectDragGesturesAfterLongPress
+                        selection = minOf(start.first, bounds.first) until
+                            maxOf(start.second, bounds.second)
+                    },
+                    onDragEnd = {
+                        val range = selection
+                        if (range != null && !range.isEmpty()) {
+                            val text = paragraph.substring(range.first, range.last + 1).trim()
+                            if (text.isNotEmpty()) {
+                                onSelection(
+                                    text,
+                                    contextAround(paragraph, range.first, range.last + 1),
+                                )
+                            }
+                        }
+                        selection = null
+                        anchor = null
+                    },
+                    onDragCancel = {
+                        selection = null
+                        anchor = null
                     },
                 )
             },
@@ -590,7 +643,18 @@ private fun ColorPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(request.word) },
+        title = {
+            Text(
+                text = request.word,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                style = if (request.word.length > 40) {
+                    MaterialTheme.typography.titleSmall
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Renkler kendini anlatıyor; ad yazmaya gerek yok.

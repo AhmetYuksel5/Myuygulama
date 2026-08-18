@@ -114,11 +114,30 @@ class NotesViewModel @Inject constructor(
 data class NoteEditorUiState(
     val id: Long = 0L,
     val title: String = "",
-    val body: String = "",
+    /** Liste ve fotoğraf satırları dışında kalan düz metin. */
+    val plain: String = "",
+    val items: List<ChecklistItem> = emptyList(),
+    val images: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
     val colorIndex: Int = 0,
     val loaded: Boolean = false,
-)
+) {
+    /**
+     * Kaydedilecek gövde. Düzenleyicide liste maddeleri gerçek kutucuk olarak
+     * duruyor; ham "[ ] madde" metnini kullanıcıya göstermiyoruz, yalnızca
+     * saklarken bu biçime çeviriyoruz.
+     */
+    fun composeBody(): String = buildList {
+        images.forEach { add(encodeImageLine(it)) }
+        if (plain.isNotBlank()) add(plain.trimEnd())
+        items.filter { it.text.isNotBlank() || it.checked }
+            .forEach { add(encodeChecklistItem(it)) }
+    }.joinToString("\n")
+
+    val isEmpty: Boolean
+        get() = title.isBlank() && plain.isBlank() && images.isEmpty() &&
+            items.none { it.text.isNotBlank() }
+}
 
 @HiltViewModel
 class NoteEditorViewModel @Inject constructor(
@@ -132,15 +151,62 @@ class NoteEditorViewModel @Inject constructor(
         if (_uiState.value.id == id && _uiState.value.loaded) return
         viewModelScope.launch {
             val entry = repository.getById(id)
+            val body = entry?.body.orEmpty()
             _uiState.value = NoteEditorUiState(
                 id = id,
                 title = entry?.title.orEmpty(),
-                body = entry?.body.orEmpty(),
+                plain = plainBody(body),
+                items = parseChecklist(body),
+                images = parseImagePaths(body),
                 tags = entry?.tags?.map { it.name }.orEmpty(),
                 colorIndex = NoteStyle.decode(entry?.source).colorIndex,
                 loaded = true,
             )
         }
+    }
+
+    fun onTitleChange(value: String) {
+        _uiState.value = _uiState.value.copy(title = value)
+    }
+
+    fun onPlainChange(value: String) {
+        _uiState.value = _uiState.value.copy(plain = value)
+    }
+
+    fun addChecklistItem() {
+        _uiState.value = _uiState.value.copy(
+            items = _uiState.value.items + ChecklistItem(text = "", checked = false),
+        )
+    }
+
+    fun onItemTextChange(index: Int, text: String) {
+        updateItem(index) { it.copy(text = text) }
+    }
+
+    fun toggleItem(index: Int) {
+        updateItem(index) { it.copy(checked = !it.checked) }
+    }
+
+    fun removeItem(index: Int) {
+        val items = _uiState.value.items.toMutableList()
+        if (index !in items.indices) return
+        items.removeAt(index)
+        _uiState.value = _uiState.value.copy(items = items)
+    }
+
+    private fun updateItem(index: Int, transform: (ChecklistItem) -> ChecklistItem) {
+        val items = _uiState.value.items.toMutableList()
+        if (index !in items.indices) return
+        items[index] = transform(items[index])
+        _uiState.value = _uiState.value.copy(items = items)
+    }
+
+    fun addImage(path: String) {
+        _uiState.value = _uiState.value.copy(images = _uiState.value.images + path)
+    }
+
+    fun removeImage(path: String) {
+        _uiState.value = _uiState.value.copy(images = _uiState.value.images - path)
     }
 
     /** Kart rengi anında kaydediliyor; "kaydet" düğmesi yok. */
@@ -155,42 +221,18 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
-    /** Gövdenin sonuna boş bir liste maddesi ekler. */
-    fun addChecklistItem() {
-        val body = _uiState.value.body
-        val prefix = if (body.isBlank() || body.endsWith("\n")) "" else "\n"
-        _uiState.value = _uiState.value.copy(body = body + prefix + "[ ] ")
-    }
-
-    fun addImage(path: String) {
-        val body = _uiState.value.body
-        val prefix = if (body.isBlank() || body.endsWith("\n")) "" else "\n"
-        _uiState.value = _uiState.value.copy(body = body + prefix + encodeImageLine(path) + "\n")
-    }
-
-    fun onTitleChange(value: String) {
-        _uiState.value = _uiState.value.copy(title = value)
-    }
-
-    fun onBodyChange(value: String) {
-        _uiState.value = _uiState.value.copy(body = value)
-    }
-
     /**
-     * Not defterinde "kaydet" düğmesi olmaması gerektiği için ekrandan
-     * çıkarken kaydediyoruz. Boş kalan not (başlık ve gövde boşsa) siliniyor —
-     * yanlışlıkla açılan boş notlar arşivi kirletmesin.
+     * Ekrandan çıkarken kaydediyoruz. Tamamen boş kalan not siliniyor —
+     * ama renk seçilmişse bu bir niyettir, silmiyoruz.
      */
     fun save() {
         val state = _uiState.value
         if (!state.loaded || state.id == 0L) return
         viewModelScope.launch {
-            // Renk seçmek de bir niyettir: yalnızca renk verilmiş bir notu
-            // "boş" sayıp silmek kullanıcının emeğini çöpe atıyordu.
-            if (state.title.isBlank() && state.body.isBlank() && state.colorIndex == 0) {
+            if (state.isEmpty && state.colorIndex == 0) {
                 repository.deleteEntry(state.id)
             } else {
-                repository.updateEntry(state.id, state.title, state.body)
+                repository.updateEntry(state.id, state.title, state.composeBody())
             }
         }
     }

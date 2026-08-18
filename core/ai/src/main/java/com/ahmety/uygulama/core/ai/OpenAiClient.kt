@@ -51,24 +51,27 @@ class OpenAiClient @Inject constructor(
      * anlam o bağlama göre seçilir — bir kelimenin birden çok anlamı olabiliyor.
      */
     suspend fun describeWord(word: String, context: String = ""): AiResult<WordInfo> {
+        // "word" tek kelime de olabilir, kitaptan seçilmiş bir öbek de.
         val key = settings.apiKey
         if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
 
         val instruction = buildString {
             append("You are a bilingual English-Turkish lexicographer. ")
-            append("For the English word given, return STRICT JSON with keys: ")
+            append("The input may be a single word OR a multi-word phrase taken ")
+            append("from a book; treat it as one unit. ")
+            append("Return STRICT JSON with keys: ")
             append("t (Turkish meanings, 1-3, comma separated), ")
             append("d (short English definition, max 12 words, no final period), ")
-            append("e (array of exactly 3 natural example sentences, 6-16 words each), ")
+            append("e (array of exactly 3 natural example sentences using it, 6-16 words each), ")
             append("r (array of 3-5 related words; mark opposites like \"scarce (zıt)\"), ")
             append("p (array of 3-4 common collocations, each formatted as ")
             append("\"english phrase — Turkish meaning\" using an em dash). ")
             append("No markdown, no extra keys, no commentary.")
         }
         val userText = if (context.isBlank()) {
-            "Word: $word"
+            "Input: $word"
         } else {
-            "Word: $word\nIt appeared in this sentence, so prefer the meaning that fits it:\n$context"
+            "Input: $word\nIt appeared in this sentence, so prefer the meaning that fits it:\n$context"
         }
 
         val payload = JSONObject().apply {

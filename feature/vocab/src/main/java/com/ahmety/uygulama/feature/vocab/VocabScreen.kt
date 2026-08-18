@@ -370,7 +370,15 @@ private fun WordCard(
 
                 Text(
                     text = word.word,
-                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 40.sp),
+                    // Kitaptan seçilen öbekler uzun olabiliyor; tek kelimelik
+                    // kartın puntosuyla ekrana sığmıyorlar.
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontSize = when {
+                            word.word.length > 44 -> 22.sp
+                            word.word.length > 22 -> 30.sp
+                            else -> 40.sp
+                        },
+                    ),
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                 )
