@@ -17,24 +17,58 @@ data class VocabWord(
     val related: List<String> = emptyList(),
     /** Kelimenin yaygın kullanıldığı öbekler ("abundant supply — bol arz"). */
     val phrases: List<String> = emptyList(),
-    /** Kitaptan aktarıldıysa kelimenin geçtiği cümle. */
+    /** Kitaptan/filmden aktarıldıysa kelimenin geçtiği cümle. */
     val context: String = "",
-    /** Kitapta mavi işaretlenip aktarılan kelime mi. */
-    val fromBook: Boolean = false,
-)
+    /** Kelimenin nereden geldiği. */
+    val source: VocabSource = VocabSource.DECK,
+    /** Geldiği kitabın ya da filmin adı; kaynağa göre süzmek için. */
+    val sourceName: String = "",
+) {
+    /** Sabit desteden değil, kendi okuduğun/izlediğin şeyden gelen kelime. */
+    val fromLibrary: Boolean get() = source != VocabSource.DECK
+}
 
+/** Kelimenin hangi kaynaktan geldiği. */
+enum class VocabSource(val label: String) {
+    /** Uygulamayla gelen sabit deste. */
+    DECK("Deste"),
+
+    /** Kitapta mavi işaretlenen kelime. */
+    BOOK("Kitaptan"),
+
+    /** Film altyazısından çıkarılan kelime. */
+    SUBTITLE("Filmden"),
+}
+
+/**
+ * Kelime hakkındaki karar.
+ *
+ * Kelime zaten bilinmediği için listeye giriyor; bu yüzden "biliyorum /
+ * bilmiyorum" ayrımı yok. Kararlar öğrenme sürecinin neresinde olduğunu
+ * söylüyor.
+ */
 enum class VocabStatus {
-    /** Henüz gösterilmedi / karar verilmedi. */
+    /** Henüz karar verilmedi. */
     NEW,
 
-    /** Sola sürüklendi: biliyorum. */
+    /** Yukarı: öğrendim, bir daha çıkmasın. */
     KNOWN,
 
-    /** Sağa sürüklendi: bilmiyorum, çalışılacak. */
+    /** Sol: çalıştım, tekrar karşıma çıksın. */
     LEARNING,
 
-    /** Aşağı sürüklendi: emin olamadım, şimdilik dursun. */
+    /** Aşağı: önemsiz, desteden çıksın — ama silinmesin. */
+    IGNORED,
+
+    /**
+     * Eski sürümlerde "emin değilim" vardı. Kayıtlı veriyi bozmamak için
+     * duruyor; okurken [LEARNING] gibi ele alınıyor, yeniden yazılmıyor.
+     */
     UNSURE,
+    ;
+
+    /** Kaydedilmiş eski değerleri bugünkü anlamlarına indirger. */
+    fun normalized(): VocabStatus = if (this == UNSURE) LEARNING else this
 }
 
 data class VocabCard(

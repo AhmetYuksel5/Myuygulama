@@ -11,11 +11,13 @@ import com.ahmety.uygulama.core.database.sync.Now
 import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
+import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -36,6 +38,7 @@ class VocabRepository @Inject constructor(
     private val vocabDao: VocabDao,
     private val entryRepository: EntryRepository,
     private val enrichment: WordEnrichmentStore,
+    private val hidden: HiddenWordStore,
     private val changeRecorder: ChangeRecorder,
     private val json: Json,
     private val now: Now,
@@ -48,7 +51,9 @@ class VocabRepository @Inject constructor(
 
     /** Uygulamayla gelen sabit deste. */
     suspend fun assetWords(): List<VocabWord> = withContext(Dispatchers.IO) {
-        cached ?: loadFromAsset().also { cached = it }
+        val all = cached ?: loadFromAsset().also { cached = it }
+        val skip = hidden.words()
+        if (skip.isEmpty()) all else all.filter { it.word.lowercase() !in skip }
     }
 
     /**
@@ -56,28 +61,77 @@ class VocabRepository @Inject constructor(
      * yeni bir kelime işaretleyince kelime destesinde uygulamayı yeniden
      * başlatmadan belirmesi gerekiyor.
      */
-    fun observeBookWords(): Flow<List<VocabWord>> =
-        entryRepository.observeByType(EntryType.HIGHLIGHT).map { entries ->
-            entries
-                .filter { HighlightRef.color(it.source) == HighlightColor.BLUE }
-                .filter { it.title.isNotBlank() }
-                .map { entry ->
-                    val word = entry.title.trim()
-                    // Daha önce yapay zekâyla doldurulduysa onu kullan.
-                    val filled = enrichment.get(word)
-                    VocabWord(
-                        word = word,
-                        meaning = filled?.meaning.orEmpty(),
-                        definition = filled?.definition.orEmpty(),
-                        examples = filled?.examples.orEmpty(),
-                        related = filled?.related.orEmpty(),
-                        phrases = filled?.phrases.orEmpty(),
-                        context = entry.body.trim(),
-                        fromBook = true,
-                    )
-                }
-                .distinctBy { it.word.lowercase() }
+    /**
+     * Kitapta/altyazıda **mavi** işaretlenmiş kelimeler. Akış olarak veriyoruz:
+     * yeni bir kelime işaretleyince uygulamayı yeniden başlatmadan destede
+     * belirmesi gerekiyor.
+     *
+     * Kaynağın adı (kitabın/filmin başlığı) da geliyor: kelime listesini
+     * "şu kitaptan" ya da "şu filmden" diye süzebilmek için.
+     */
+    fun observeBookWords(): Flow<List<VocabWord>> = combine(
+        entryRepository.observeByType(EntryType.HIGHLIGHT),
+        entryRepository.observeByType(EntryType.DOCUMENT),
+    ) { entries, documents ->
+        val titleById = documents.associate { it.id to it.title.trim() }
+        entries
+            .filter { HighlightRef.color(it.source) == HighlightColor.BLUE }
+            .filter { it.title.isNotBlank() }
+            .filter { it.title.trim().lowercase() !in hidden.words() }
+            .map { entry ->
+                val word = entry.title.trim()
+                // Daha önce yapay zekâyla doldurulduysa onu kullan.
+                val filled = enrichment.get(word)
+                val kind = HighlightRef.kind(entry.source)
+                VocabWord(
+                    word = word,
+                    meaning = filled?.meaning.orEmpty(),
+                    definition = filled?.definition.orEmpty(),
+                    examples = filled?.examples.orEmpty(),
+                    related = filled?.related.orEmpty(),
+                    phrases = filled?.phrases.orEmpty(),
+                    context = entry.body.trim(),
+                    source = when (kind) {
+                        HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
+                        else -> VocabSource.BOOK
+                    },
+                    sourceName = HighlightRef.sourceId(entry.source)
+                        ?.let { titleById[it] }
+                        .orEmpty(),
+                )
+            }
+            .distinctBy { it.word.lowercase() }
+    }
+
+    /**
+     * Kelimeyi listeden kaldırır.
+     *
+     * Kitaptan/filmden gelen kelime kendi işaretleme kaydından siliniyor.
+     * Sabit destedeki kelimenin kaydı asset'te; onu silemeyiz, gizlenenler
+     * listesine yazıyoruz.
+     */
+    suspend fun deleteWord(word: VocabWord) {
+        if (word.fromLibrary) {
+            entryRepository.listByType(EntryType.HIGHLIGHT)
+                .filter { it.title.trim().equals(word.word, ignoreCase = true) }
+                .forEach { entryRepository.deleteEntry(it.id) }
         }
+        hidden.hide(word.word)
+    }
+
+    /** Kullanıcının elle düzenlediği ya da çoğalttığı kelime bilgisi. */
+    fun saveEdit(word: VocabWord) {
+        enrichment.put(
+            com.ahmety.uygulama.core.ai.WordInfo(
+                word = word.word,
+                meaning = word.meaning,
+                definition = word.definition,
+                examples = word.examples,
+                related = word.related,
+                phrases = word.phrases,
+            ),
+        )
+    }
 
     /** Yapay zekâyla üretilen bilgiyi saklar. */
     fun saveEnrichment(info: com.ahmety.uygulama.core.ai.WordInfo) {
@@ -115,7 +169,11 @@ class VocabRepository @Inject constructor(
             } else {
                 // Kitaptan gelen kelimenin anlamı yok; destede varsa
                 // anlamını/örneklerini kullan, bağlam cümlesini koru.
-                existing.copy(context = book.context, fromBook = true)
+                existing.copy(
+                    context = book.context,
+                    source = book.source,
+                    sourceName = book.sourceName,
+                )
             }
         }
         return byWord.values.toList()

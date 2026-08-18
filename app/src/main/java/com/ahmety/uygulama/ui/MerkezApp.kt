@@ -45,6 +45,7 @@ import com.ahmety.uygulama.feature.library.NotesRoute
 import com.ahmety.uygulama.feature.library.PocketRoute
 import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
+import com.ahmety.uygulama.feature.vocab.LevelTestRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
@@ -201,6 +202,7 @@ fun MerkezApp() {
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenAi = { navController.navigate(AI_ROUTE) },
+                    onOpenLevelTest = { navController.navigate(LEVEL_ROUTE) },
                 )
             }
             composable(TopLevelDestination.VOCAB.route) {
@@ -236,6 +238,9 @@ fun MerkezApp() {
             composable(AI_ROUTE) {
                 AiSettingsScreen()
             }
+            composable(LEVEL_ROUTE) {
+                LevelTestRoute()
+            }
             composable(
                 route = "$NOTE_ROUTE/{noteId}",
                 arguments = listOf(navArgument("noteId") { type = NavType.LongType }),
@@ -263,6 +268,7 @@ private const val TASKS_ROUTE = "tasks"
 private const val BOOK_ROUTE = "book"
 private const val SEARCH_ROUTE = "search"
 private const val AI_ROUTE = "ai"
+private const val LEVEL_ROUTE = "seviye"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
@@ -282,6 +288,7 @@ private fun MoreScreen(
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
     onOpenAi: () -> Unit,
+    onOpenLevelTest: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -348,6 +355,11 @@ private fun MoreScreen(
             headlineContent = { Text("Yapay zekâ") },
             supportingContent = { Text("OpenAI anahtarı — kitaptan gelen kelimeleri doldurur") },
             modifier = Modifier.clickable(onClick = onOpenAi),
+        )
+        ListItem(
+            headlineContent = { Text("Seviye tespiti") },
+            supportingContent = { Text("En sık 10.000 kelime — biliyorum / bilmiyorum") },
+            modifier = Modifier.clickable(onClick = onOpenLevelTest),
         )
     }
 }

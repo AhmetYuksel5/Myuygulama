@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,17 +14,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabWord
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -74,6 +80,8 @@ fun VocabRoute(
     val aiReady = viewModel.aiConfigured
     val density = LocalDensity.current
     var showSettings by remember { mutableStateOf(false) }
+    var menuWord by remember { mutableStateOf<VocabWord?>(null) }
+    var editWord by remember { mutableStateOf<VocabWord?>(null) }
 
     Column(
         modifier = modifier
@@ -100,44 +108,54 @@ fun VocabRoute(
                 .horizontalScroll(rememberScrollState()),
         ) {
             ModeChip("Tümü", state.mode == VocabMode.ALL) { viewModel.setMode(VocabMode.ALL) }
-            ModeChip("Bilmediklerim (${state.learningCount})", state.mode == VocabMode.LEARNING) {
-                viewModel.setMode(VocabMode.LEARNING)
-            }
-            ModeChip("Emin değilim (${state.unsureCount})", state.mode == VocabMode.UNSURE) {
-                viewModel.setMode(VocabMode.UNSURE)
-            }
-            ModeChip("Kitaptan (${state.bookCount})", state.mode == VocabMode.BOOK) {
-                viewModel.setMode(VocabMode.BOOK)
-            }
+            ModeChip(
+                label = "Çalıştıklarım (${state.learningCount})",
+                selected = state.mode == VocabMode.LEARNING,
+            ) { viewModel.setMode(VocabMode.LEARNING) }
+            ModeChip(
+                label = "Öğrendiklerim (${state.knownCount})",
+                selected = state.mode == VocabMode.KNOWN,
+            ) { viewModel.setMode(VocabMode.KNOWN) }
+            ModeChip(
+                label = "Önemsiz (${state.unsureCount})",
+                selected = state.mode == VocabMode.IGNORED,
+            ) { viewModel.setMode(VocabMode.IGNORED) }
         }
 
-        if (showSettings) {
+        // Kaynak süzgeci yalnızca kitaptan/filmden gelen kelime varken.
+        if (state.bookCount > 0 || state.subtitleCount > 0) {
             Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(top = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
             ) {
-                Text(
-                    text = "Fırlatma eşiği",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(
-                    enabled = threshold > 20,
-                    onClick = { viewModel.setSwipeThreshold(threshold - 5) },
-                ) { Text("−") }
-                Text("$threshold dp", style = MaterialTheme.typography.bodyMedium)
-                TextButton(
-                    enabled = threshold < 160,
-                    onClick = { viewModel.setSwipeThreshold(threshold + 5) },
-                ) { Text("+") }
+                val filter = state.filter
+                ModeChip("Her kaynak", filter.source == null && filter.sourceName.isBlank()) {
+                    viewModel.setFilter(VocabFilter())
+                }
+                if (state.bookCount > 0) {
+                    ModeChip(
+                        label = "Kitaptan (${state.bookCount})",
+                        selected = filter.source == VocabSource.BOOK &&
+                            filter.sourceName.isBlank(),
+                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.BOOK)) }
+                }
+                if (state.subtitleCount > 0) {
+                    ModeChip(
+                        label = "Filmden (${state.subtitleCount})",
+                        selected = filter.source == VocabSource.SUBTITLE &&
+                            filter.sourceName.isBlank(),
+                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.SUBTITLE)) }
+                }
+                // Tek tek başlıklar: "şu kitaptan" ya da "şu filmden" çalışmak.
+                state.sources.forEach { (source, name) ->
+                    ModeChip(label = name, selected = filter.sourceName == name) {
+                        viewModel.setFilter(VocabFilter(source = source, sourceName = name))
+                    }
+                }
             }
-            Text(
-                text = "Küçük değer: az hareketle fırlar.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
 
         Box(
@@ -168,8 +186,9 @@ fun VocabRoute(
                         },
                         onKnown = { viewModel.markKnown(top) },
                         onLearning = { viewModel.markLearning(top) },
-                        onUnsure = { viewModel.markUnsure(top) },
+                        onIgnore = { viewModel.markIgnored(top) },
                         onSkip = { viewModel.skip(top) },
+                        onLongPress = { menuWord = top },
                     )
                 }
             }
@@ -187,14 +206,213 @@ fun VocabRoute(
                     .padding(top = 4.dp),
             )
         }
+    }
 
-        Text(
-            text = "← biliyorum   ↑ geç   ↓ emin değilim   bilmiyorum →",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 6.dp),
+    if (showSettings) {
+        VocabSettingsDialog(
+            threshold = threshold,
+            onThresholdChange = viewModel::setSwipeThreshold,
+            onDismiss = { showSettings = false },
         )
     }
+
+    menuWord?.let { word ->
+        WordMenuDialog(
+            word = word,
+            aiReady = aiReady,
+            onEdit = {
+                menuWord = null
+                editWord = word
+            },
+            onMoreExamples = {
+                menuWord = null
+                viewModel.addMoreExamples(word)
+            },
+            onDelete = {
+                menuWord = null
+                viewModel.delete(word)
+            },
+            onDismiss = { menuWord = null },
+        )
+    }
+
+    editWord?.let { word ->
+        WordEditDialog(
+            word = word,
+            onSave = {
+                editWord = null
+                viewModel.saveEdit(it)
+            },
+            onDismiss = { editWord = null },
+        )
+    }
+}
+
+/** Kelimeye uzun basınca çıkan menü. */
+@Composable
+private fun WordMenuDialog(
+    word: VocabWord,
+    aiReady: Boolean,
+    onEdit: () -> Unit,
+    onMoreExamples: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var confirmDelete by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(word.word) },
+        text = {
+            Column {
+                if (confirmDelete) {
+                    Text("Bu kelime listeden kaldırılacak. Emin misin?")
+                } else {
+                    MenuRow("Kelimeyi düzenle", onEdit)
+                    if (aiReady) {
+                        MenuRow("Örnek çoğalt", onMoreExamples)
+                    }
+                    MenuRow("Sil") { confirmDelete = true }
+                }
+            }
+        },
+        confirmButton = {
+            if (confirmDelete) {
+                TextButton(onClick = onDelete) { Text("Sil") }
+            } else {
+                TextButton(onClick = onDismiss) { Text("Kapat") }
+            }
+        },
+        dismissButton = {
+            if (confirmDelete) {
+                TextButton(onClick = { confirmDelete = false }) { Text("Vazgeç") }
+            }
+        },
+    )
+}
+
+@Composable
+private fun MenuRow(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+    )
+}
+
+/**
+ * Kelime bilgisini elle düzenleme.
+ *
+ * Örnekler ve öbekler satır satır yazılıyor; boş satırlar atılıyor. Yapay
+ * zekânın getirdiğini düzeltmek ya da kendi cümleni eklemek için.
+ */
+@Composable
+private fun WordEditDialog(
+    word: VocabWord,
+    onSave: (VocabWord) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var meaning by remember(word.word) { mutableStateOf(word.meaning) }
+    var definition by remember(word.word) { mutableStateOf(word.definition) }
+    var examples by remember(word.word) { mutableStateOf(word.examples.joinToString("\n")) }
+    var phrases by remember(word.word) { mutableStateOf(word.phrases.joinToString("\n")) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(word.word) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = meaning,
+                    onValueChange = { meaning = it },
+                    label = { Text("Türkçe karşılık") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = definition,
+                    onValueChange = { definition = it },
+                    label = { Text("İngilizce tanım") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = examples,
+                    onValueChange = { examples = it },
+                    label = { Text("Örnekler (her satır bir örnek)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = phrases,
+                    onValueChange = { phrases = it },
+                    label = { Text("Öbekler (her satır bir öbek)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(
+                        word.copy(
+                            meaning = meaning.trim(),
+                            definition = definition.trim(),
+                            examples = examples.lines().map { it.trim() }.filter { it.isNotBlank() },
+                            phrases = phrases.lines().map { it.trim() }.filter { it.isNotBlank() },
+                        ),
+                    )
+                },
+            ) { Text("Kaydet") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } },
+    )
+}
+
+/** Kelime ekranının ayarları. Yeni ayar eklenirse buraya giriyor. */
+@Composable
+private fun VocabSettingsDialog(
+    threshold: Int,
+    onThresholdChange: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Kelime ayarları") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Fırlatma eşiği",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        enabled = threshold > 20,
+                        onClick = { onThresholdChange(threshold - 5) },
+                    ) { Text("-") }
+                    Text("$threshold dp", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(
+                        enabled = threshold < 160,
+                        onClick = { onThresholdChange(threshold + 5) },
+                    ) { Text("+") }
+                }
+                Text(
+                    text = "Küçük değer: az hareketle fırlar.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+    )
 }
 
 @Composable
@@ -206,12 +424,10 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun EmptyDeck(mode: VocabMode) {
     Text(
         text = when (mode) {
-            VocabMode.LEARNING -> "Çalışılacak kelime yok. \"Tümü\"nde bilmediklerini " +
-                "işaretledikçe burası dolar."
-            VocabMode.UNSURE -> "Emin olamadığın kelime yok."
-            VocabMode.BOOK -> "Kitaptan gelen kelime yok. Kitapta bir kelimeyi mavi " +
-                "işaretlersen burada belirir."
-            VocabMode.ALL -> "Tebrikler, destedeki tüm kelimeleri eledin."
+            VocabMode.LEARNING -> "Çalıştığın kelime yok."
+            VocabMode.IGNORED -> "Önemsize atılmış kelime yok."
+            VocabMode.KNOWN -> "Henüz öğrendiğin kelime yok."
+            VocabMode.ALL -> "Bu kaynakta çalışılacak kelime kalmadı."
         },
         style = MaterialTheme.typography.bodyLarge,
         textAlign = TextAlign.Center,
@@ -221,8 +437,8 @@ private fun EmptyDeck(mode: VocabMode) {
 }
 
 /**
- * Sürüklenebilir kart. Sola/sağa fırlatınca biliyorum/bilmiyorum, aşağı
- * fırlatınca "emin olamadım" olur. Eşik ayardan geliyor.
+ * Sürüklenebilir kart. Yukarı = öğrendim, sol = çalıştım, sağ = şimdilik geç,
+ * aşağı = önemsiz. Eşik ayardan geliyor. Uzun basınca kelime menüsü açılıyor.
  */
 @Composable
 private fun SwipeableCard(
@@ -233,8 +449,9 @@ private fun SwipeableCard(
     onEnrich: (() -> Unit)?,
     onKnown: () -> Unit,
     onLearning: () -> Unit,
-    onUnsure: () -> Unit,
+    onIgnore: () -> Unit,
     onSkip: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     var offsetX by remember(key) { mutableFloatStateOf(0f) }
     var offsetY by remember(key) { mutableFloatStateOf(0f) }
@@ -285,22 +502,28 @@ private fun SwipeableCard(
                 rotationZ = animatedX / 40f
             }
             .pointerInput(key) {
+                detectTapGestures(onLongPress = { onLongPress() })
+            }
+            .pointerInput(key) {
                 detectDragGestures(
                     onDragEnd = {
                         val horizontal = abs(offsetX) > abs(offsetY)
                         when {
+                            // Sol: çalıştım, tekrar çalışacağım.
                             horizontal && offsetX < -threshold -> {
-                                flyToX = -1600f; decision = onKnown; dismissed = true
+                                flyToX = -1600f; decision = onLearning; dismissed = true
                             }
+                            // Sağ: şimdilik geç; karar kaydedilmiyor.
                             horizontal && offsetX > threshold -> {
-                                flyToX = 1600f; decision = onLearning; dismissed = true
+                                flyToX = 1600f; decision = onSkip; dismissed = true
                             }
+                            // Aşağı: önemsiz kelimeler arasına.
                             !horizontal && offsetY > threshold -> {
-                                flyToY = 1800f; decision = onUnsure; dismissed = true
+                                flyToY = 1800f; decision = onIgnore; dismissed = true
                             }
-                            // Yukarı: yalnızca geç, karar kaydedilmiyor.
+                            // Yukarı: öğrendim, bir daha çıkmasın.
                             !horizontal && offsetY < -threshold -> {
-                                flyToY = -1800f; decision = onSkip; dismissed = true
+                                flyToY = -1800f; decision = onKnown; dismissed = true
                             }
                             else -> {
                                 offsetX = 0f
@@ -371,8 +594,8 @@ private fun WordCard(
                 verticalArrangement = Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Kapalıyken kelime kartın ortasına yakın dursun.
-                Spacer(Modifier.height(if (revealed) 0.dp else 96.dp))
+                // Kapalıyken kelime kartın tam ortasında dursun.
+                if (!revealed) Spacer(Modifier.weight(1f))
 
                 Text(
                     text = word.word,
@@ -390,12 +613,6 @@ private fun WordCard(
                 )
 
                 if (!revealed) {
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        text = "dokun",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     // Kitaptan gelen kelimede bağlam cümlesi kapalıyken de
                     // görünsün: kelimeyi zaten o cümlede görmüştün.
                     if (word.context.isNotBlank()) {

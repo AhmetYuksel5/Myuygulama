@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.AiSettings
 import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +19,31 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class VocabMode { ALL, LEARNING, UNSURE, BOOK }
+/**
+ * Destenin hangi kelimeleri göstereceği.
+ *
+ * Kaynak süzgeci ayrı: [VocabFilter.sourceName] belirli bir kitabı ya da
+ * filmi seçmeye yarıyor, kip ise öğrenme durumunu süzüyor.
+ */
+enum class VocabMode(val label: String) {
+    /** Öğrenilmemiş her şey. */
+    ALL("Tümü"),
+
+    /** Çalışılmakta olanlar. */
+    LEARNING("Çalıştıklarım"),
+
+    /** Aşağı atılan, şimdilik gerekmeyenler. */
+    IGNORED("Önemsiz"),
+
+    /** Öğrenildi denilenler; gözden geçirmek için. */
+    KNOWN("Öğrendiklerim"),
+}
+
+/** Kaynak süzgeci: tümü, yalnız kitaplar, yalnız filmler ya da tek bir başlık. */
+data class VocabFilter(
+    val source: VocabSource? = null,
+    val sourceName: String = "",
+)
 
 data class VocabUiState(
     val deck: List<VocabWord> = emptyList(),
@@ -27,6 +52,10 @@ data class VocabUiState(
     val learningCount: Int = 0,
     val unsureCount: Int = 0,
     val bookCount: Int = 0,
+    val subtitleCount: Int = 0,
+    /** Süzgeç listesi için: elindeki kitap ve film adları. */
+    val sources: List<Pair<VocabSource, String>> = emptyList(),
+    val filter: VocabFilter = VocabFilter(),
     val loaded: Boolean = false,
     /**
      * Verilen karar sayısı. Karttaki animasyon durumunun anahtarına giriyor:
@@ -94,6 +123,7 @@ class VocabViewModel @Inject constructor(
         /** Her kararda artıyor; aynı değerle yeniden yayın yapılmasını da önlüyor. */
         val turn: Int = 0,
         val skipped: Set<String> = emptySet(),
+        val filter: VocabFilter = VocabFilter(),
     )
 
     private val session = MutableStateFlow(VocabSession())
@@ -129,79 +159,131 @@ class VocabViewModel @Inject constructor(
         val words = repository.mergeWords(asset, repository.applyEnrichment(bookWords))
         val statusByWord = progress.associate { it.word to it.status }
         val known = statusByWord.values.count { it == VocabStatus.KNOWN.name }
-        val learning = statusByWord.values.count { it == VocabStatus.LEARNING.name }
-        val unsure = statusByWord.values.count { it == VocabStatus.UNSURE.name }
+        val learning = statusByWord.values.count {
+            it == VocabStatus.LEARNING.name || it == VocabStatus.UNSURE.name
+        }
+        val ignored = statusByWord.values.count { it == VocabStatus.IGNORED.name }
 
-        val deck = when (currentMode) {
-            // Karar verilmemişler ve "emin olamadım" dedikleri birlikte:
-            // emin olamadığın kelime elenmiş sayılmamalı.
-            VocabMode.ALL -> words.filter {
-                val status = statusByWord[it.word]
-                status == null || status == VocabStatus.UNSURE.name
-            }
-            VocabMode.LEARNING -> words.filter {
-                statusByWord[it.word] == VocabStatus.LEARNING.name
-            }
-            VocabMode.UNSURE -> words.filter {
-                statusByWord[it.word] == VocabStatus.UNSURE.name
-            }
-            // Karar verilen kelime destede kalırsa üstteki kart değişmiyor
-            // ve deste kilitleniyor; karar verilmemişleri (ve "emin değilim")
-            // gösteriyoruz.
-            VocabMode.BOOK -> words.filter {
-                val status = statusByWord[it.word]
-                it.fromBook && (status == null || status == VocabStatus.UNSURE.name)
+        // Kaynak süzgeci önce: "şu kitaptan" ya da "şu filmden" çalışmak
+        // istediğinde deste ona iniyor.
+        val filtered = words.filter { word ->
+            val filter = sessionState.filter
+            when {
+                filter.sourceName.isNotBlank() -> word.sourceName == filter.sourceName
+                filter.source != null -> word.source == filter.source
+                else -> true
             }
         }
 
-        // Bu oturumda karar verdiklerin en sona gidiyor; ondan önce "emin
-        // değilim" dedikleri geliyor. Hiçbiri desteden düşmüyor: karar
-        // kalıcı değilse deste bitmeden yine karşına çıkıyorlar.
-        val ordered = deck.shuffledStably(shuffleSeed)
-            .sortedBy { word ->
-                when {
-                    word.word in sessionState.skipped -> 2
-                    statusByWord[word.word] == VocabStatus.UNSURE.name -> 1
-                    else -> 0
-                }
+        val deck = when (currentMode) {
+            // Karar verilmemişler ve çalışılmakta olanlar birlikte: kelime
+            // zaten bilinmediği için listede, "öğrendim" diyene kadar çıkıyor.
+            VocabMode.ALL -> filtered.filter {
+                val status = statusOf(statusByWord, it.word)
+                status == null || status == VocabStatus.LEARNING
             }
+            VocabMode.LEARNING -> filtered.filter {
+                statusOf(statusByWord, it.word) == VocabStatus.LEARNING
+            }
+            VocabMode.IGNORED -> filtered.filter {
+                statusOf(statusByWord, it.word) == VocabStatus.IGNORED
+            }
+            VocabMode.KNOWN -> filtered.filter {
+                statusOf(statusByWord, it.word) == VocabStatus.KNOWN
+            }
+        }
+
+        // Bu oturumda karar verdiklerin en sona gidiyor. Hiçbiri desteden
+        // düşmüyor: karar kalıcı değilse deste bitmeden yine karşına çıkıyor.
+        val ordered = deck.shuffledStably(shuffleSeed)
+            .sortedBy { word -> if (word.word in sessionState.skipped) 1 else 0 }
 
         VocabUiState(
             deck = ordered,
             mode = currentMode,
             knownCount = known,
             learningCount = learning,
-            unsureCount = unsure,
-            bookCount = bookWords.size,
+            unsureCount = ignored,
+            bookCount = bookWords.count { it.source == VocabSource.BOOK },
+            subtitleCount = bookWords.count { it.source == VocabSource.SUBTITLE },
+            sources = bookWords
+                .filter { it.sourceName.isNotBlank() }
+                .map { it.source to it.sourceName }
+                .distinct()
+                .sortedBy { it.second.lowercase() },
+            filter = sessionState.filter,
             loaded = asset.isNotEmpty() || bookWords.isNotEmpty(),
             turn = sessionState.turn,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VocabUiState())
 
-    /** Sola sürükleme: biliyorum. */
+    /** Yukarı: öğrendim, bir daha gösterme. */
     fun markKnown(word: VocabWord) = setStatus(word, VocabStatus.KNOWN)
 
-    /** Sağa sürükleme: bilmiyorum, çalışılacak. */
+    /** Sol: çalıştım, tekrar çalışacağım — sıradaki gelsin. */
     fun markLearning(word: VocabWord) = setStatus(word, VocabStatus.LEARNING)
 
-    /** Aşağı sürükleme: emin olamadım, şimdilik dursun. */
-    fun markUnsure(word: VocabWord) = setStatus(word, VocabStatus.UNSURE)
+    /** Aşağı: önemsiz kelimeler arasına at; silme. */
+    fun markIgnored(word: VocabWord) = setStatus(word, VocabStatus.IGNORED)
 
     /**
-     * Yukarı sürükleme: yalnızca geç. Hiçbir karar kaydedilmiyor; kelime
-     * destenin sonuna gidiyor ve bu oturumda yeniden karşına çıkıyor.
+     * Sağ: şimdilik geç. Hiçbir karar kaydedilmiyor; kelime destenin sonuna
+     * gidiyor ve bu oturumda yeniden karşına çıkıyor.
      */
     fun skip(word: VocabWord) = advance(word)
+
+    /** Listeden tamamen kaldır. */
+    fun delete(word: VocabWord) {
+        advance(word)
+        viewModelScope.launch { repository.deleteWord(word) }
+    }
+
+    /** Elle düzenlenen kelime bilgisini kaydeder. */
+    fun saveEdit(word: VocabWord) {
+        repository.saveEdit(word)
+        session.value = session.value.copy(refresh = session.value.refresh + 1)
+    }
+
+    /**
+     * Var olan bilgiye dokunmadan yapay zekâdan yeni örnek ve öbek ister.
+     * "Tam anlayamadım" dediğin kelimede aynı anlamı başka cümlelerde
+     * görmek işe yarıyor.
+     */
+    fun addMoreExamples(word: VocabWord) {
+        if (_enriching.value != null) return
+        _enriching.value = word.word
+        viewModelScope.launch {
+            when (val result = openAi.describeWord(word.word, word.context)) {
+                is AiResult.Ok -> {
+                    val fresh = result.value
+                    repository.saveEdit(
+                        word.copy(
+                            meaning = word.meaning.ifBlank { fresh.meaning },
+                            definition = word.definition.ifBlank { fresh.definition },
+                            examples = (word.examples + fresh.examples).distinct(),
+                            related = (word.related + fresh.related).distinct(),
+                            phrases = (word.phrases + fresh.phrases).distinct(),
+                        ),
+                    )
+                    _aiMessage.value = null
+                    session.value = session.value.copy(refresh = session.value.refresh + 1)
+                }
+
+                is AiResult.Failed -> _aiMessage.value = result.reason
+            }
+            _enriching.value = null
+        }
+    }
+
+    fun setFilter(filter: VocabFilter) {
+        session.value = session.value.copy(filter = filter, turn = session.value.turn + 1)
+    }
 
     /**
      * Karar verilen kelimeyi destenin sonuna atar ve karar sayacını artırır.
      *
-     * İkisi de şart. Durum yazması desteyi her zaman değiştirmiyor:
-     * "Bilmediklerim" kipinde zaten bilmediğin bir kelimeye yine sağa
-     * kaydırınca, "Emin değilim" kipinde aşağı kaydırınca ya da deste tek
-     * kartlıysa üstteki kart aynı kalıyordu. Kartın animasyon durumu bu
-     * anahtara bağlı olduğu için kart ekran dışında donup kalıyor, deste
-     * kilitleniyordu.
+     * İkisi de şart. Durum yazması desteyi her zaman değiştirmiyor; kart
+     * anahtarı değişmeyince kart ekran dışında donup kalıyordu.
      */
     private fun advance(word: VocabWord) {
         session.value = session.value.copy(
@@ -214,6 +296,12 @@ class VocabViewModel @Inject constructor(
         advance(word)
         viewModelScope.launch { repository.setStatus(word.word, status) }
     }
+
+    /** Eski "emin değilim" kayıtlarını bugünkü anlamına indirger. */
+    private fun statusOf(statusByWord: Map<String, String>, word: String): VocabStatus? =
+        statusByWord[word]
+            ?.let { runCatching { VocabStatus.valueOf(it) }.getOrNull() }
+            ?.normalized()
 
     fun setMode(newMode: VocabMode) {
         mode.value = newMode
