@@ -10,6 +10,7 @@ import com.ahmety.uygulama.core.model.HighlightRef
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -40,7 +41,12 @@ class BookRepository @Inject constructor(
     private val booksDir: File
         get() = File(context.filesDir, "kitaplar").apply { mkdirs() }
 
+    /**
+     * Kitaplık. Filmler de aynı kayıt türünü kullanıyor (kelimeleri
+     * kaynağına göre süzebilmek için) ama kitaplıkta görünmemeliler.
+     */
     fun observeBooks(): Flow<List<Entry>> = entryRepository.observeByType(EntryType.DOCUMENT)
+        .map { entries -> entries.filterNot { it.source == HighlightRef.SUBTITLE_SOURCE_MARKER } }
 
     fun observeHighlights(): Flow<List<Entry>> = entryRepository.observeByType(EntryType.HIGHLIGHT)
 

@@ -29,6 +29,13 @@ object HighlightRef {
     /** Film altyazısından çıkarılan kelime. */
     const val KIND_SUBTITLE = "subtitle"
 
+    /**
+     * Filmler de kitaplarla aynı kayıt türünü kullanıyor (kelimeyi kaynağına
+     * göre süzebilmek için); kitaplıkta görünmesinler diye kaydın serbest
+     * metin alanına bu işaret konuyor.
+     */
+    const val SUBTITLE_SOURCE_MARKER = "film"
+
     fun encode(kind: String, sourceId: Long, color: HighlightColor): String =
         "$kind:$sourceId;color=${color.name}"
 

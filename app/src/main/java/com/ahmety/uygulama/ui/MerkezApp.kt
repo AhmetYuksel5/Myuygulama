@@ -45,6 +45,8 @@ import com.ahmety.uygulama.feature.library.NotesRoute
 import com.ahmety.uygulama.feature.library.PocketRoute
 import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
+import com.ahmety.uygulama.feature.subtitles.SubtitleRoute
+import com.ahmety.uygulama.feature.subtitles.SubtitleSettingsScreen
 import com.ahmety.uygulama.feature.vocab.LevelTestRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
@@ -203,6 +205,8 @@ fun MerkezApp() {
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenAi = { navController.navigate(AI_ROUTE) },
                     onOpenLevelTest = { navController.navigate(LEVEL_ROUTE) },
+                    onOpenSubtitles = { navController.navigate(SUBTITLE_ROUTE) },
+                    onOpenSubtitleSettings = { navController.navigate(SUBTITLE_SETTINGS_ROUTE) },
                 )
             }
             composable(TopLevelDestination.VOCAB.route) {
@@ -241,6 +245,12 @@ fun MerkezApp() {
             composable(LEVEL_ROUTE) {
                 LevelTestRoute()
             }
+            composable(SUBTITLE_ROUTE) {
+                SubtitleRoute()
+            }
+            composable(SUBTITLE_SETTINGS_ROUTE) {
+                SubtitleSettingsScreen()
+            }
             composable(
                 route = "$NOTE_ROUTE/{noteId}",
                 arguments = listOf(navArgument("noteId") { type = NavType.LongType }),
@@ -269,6 +279,8 @@ private const val BOOK_ROUTE = "book"
 private const val SEARCH_ROUTE = "search"
 private const val AI_ROUTE = "ai"
 private const val LEVEL_ROUTE = "seviye"
+private const val SUBTITLE_ROUTE = "altyazi"
+private const val SUBTITLE_SETTINGS_ROUTE = "altyazi_ayar"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
@@ -289,6 +301,8 @@ private fun MoreScreen(
     onOpenCursor: () -> Unit,
     onOpenAi: () -> Unit,
     onOpenLevelTest: () -> Unit,
+    onOpenSubtitles: () -> Unit,
+    onOpenSubtitleSettings: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -360,6 +374,16 @@ private fun MoreScreen(
             headlineContent = { Text("Seviye tespiti") },
             supportingContent = { Text("En sık 10.000 kelime — biliyorum / bilmiyorum") },
             modifier = Modifier.clickable(onClick = onOpenLevelTest),
+        )
+        ListItem(
+            headlineContent = { Text("Film hazırlığı") },
+            supportingContent = { Text("Altyazıyı indir, bilmediğin kelimeleri çıkar") },
+            modifier = Modifier.clickable(onClick = onOpenSubtitles),
+        )
+        ListItem(
+            headlineContent = { Text("Altyazı ayarları") },
+            supportingContent = { Text("OpenSubtitles anahtarı") },
+            modifier = Modifier.clickable(onClick = onOpenSubtitleSettings),
         )
     }
 }
