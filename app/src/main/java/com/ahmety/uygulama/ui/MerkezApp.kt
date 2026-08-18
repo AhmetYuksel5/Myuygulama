@@ -110,8 +110,13 @@ fun MerkezApp() {
         )
     }
 
+    // Okuma ekranında alt sekme çubuğu metni sıkıştırıyor ve sağ alt köşedeki
+    // "ileri" dokunma bölgesini kapatıyor; o rotada gizliyoruz.
+    val immersive = currentDestination?.route?.startsWith("$BOOK_ROUTE/") == true
+
     Scaffold(
         bottomBar = {
+            if (immersive) return@Scaffold
             NavigationBar {
                 TopLevelDestination.entries.forEach { destination ->
                     val selected = currentDestination?.hierarchy?.any {

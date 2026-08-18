@@ -68,9 +68,13 @@ class BookShelfViewModel @Inject constructor(
 data class ReaderUiState(
     val book: EpubBook? = null,
     val chapterIndex: Int = 0,
-    /** Kelime (küçük harf) -> renk. Paragrafları boyamak için. */
+    /** Kelime/öbek (küçük harf) -> renk. Paragrafları boyamak için. */
     val highlightColors: Map<String, HighlightColor> = emptyMap(),
     val loading: Boolean = true,
+    /** Kitabın başından bu bölüme kadarki karakter sayısı. */
+    val charsBefore: Int = 0,
+    val totalChars: Int = 1,
+    val chapterChars: Int = 1,
 )
 
 @HiltViewModel
@@ -83,22 +87,66 @@ class BookReaderViewModel @Inject constructor(
 
     private var bookId: Long = 0L
 
+    /** Bölüm başlangıçlarının karakter toplamı; ilerleme yüzdesi için. */
+    private var chapterOffsets: List<Int> = emptyList()
+
+    /**
+     * Kitap ilk açıldığında kaldığın paragrafa dönmek için bir kez okunur.
+     * Bölüm değiştirdiğinde ise metnin başından başlanmalı; bu yüzden
+     * "tüketilen" bir değer.
+     */
+    private var pendingParagraph: Int? = null
+
     fun load(id: Long) {
         if (bookId == id && _state.value.book != null) return
         bookId = id
         viewModelScope.launch {
             val book = repository.loadBook(id)
-            // Kaldığın bölümden devam et.
+            val chapters = book?.chapters.orEmpty()
+            val lengths = chapters.map { chapter ->
+                chapter.paragraphs.sumOf { it.length + 1 }.coerceAtLeast(1)
+            }
+            chapterOffsets = lengths.runningFold(0) { acc, length -> acc + length }
+
             val chapter = repository.lastChapter(id)
-                .coerceIn(0, (book?.chapters?.lastIndex ?: 0).coerceAtLeast(0))
-            _state.value = ReaderUiState(book = book, chapterIndex = chapter, loading = false)
+                .coerceIn(0, (chapters.lastIndex).coerceAtLeast(0))
+            pendingParagraph = repository.lastParagraph(id)
+
+            _state.value = ReaderUiState(
+                book = book,
+                chapterIndex = chapter,
+                loading = false,
+                charsBefore = chapterOffsets.getOrElse(chapter) { 0 },
+                totalChars = chapterOffsets.lastOrNull()?.coerceAtLeast(1) ?: 1,
+                chapterChars = lengths.getOrElse(chapter) { 1 },
+            )
             refreshHighlights()
         }
     }
 
+    /** Kaldığın paragraf; yalnızca ilk açılışta bir kez döner. */
+    fun consumePendingParagraph(): Int? {
+        val value = pendingParagraph
+        pendingParagraph = null
+        return value
+    }
+
     fun selectChapter(index: Int) {
-        _state.value = _state.value.copy(chapterIndex = index)
-        repository.saveLastChapter(bookId, index)
+        val chapters = _state.value.book?.chapters.orEmpty()
+        val safe = index.coerceIn(0, chapters.lastIndex.coerceAtLeast(0))
+        _state.value = _state.value.copy(
+            chapterIndex = safe,
+            charsBefore = chapterOffsets.getOrElse(safe) { 0 },
+            chapterChars = (chapterOffsets.getOrElse(safe + 1) { 0 } -
+                chapterOffsets.getOrElse(safe) { 0 }).coerceAtLeast(1),
+        )
+        repository.saveLastChapter(bookId, safe)
+        repository.saveLastParagraph(bookId, 0)
+    }
+
+    /** Okurken kaldığın paragrafı kaydeder. */
+    fun savePosition(paragraphIndex: Int) {
+        repository.saveLastParagraph(bookId, paragraphIndex)
     }
 
     fun highlight(word: String, contextSentence: String, color: HighlightColor) {

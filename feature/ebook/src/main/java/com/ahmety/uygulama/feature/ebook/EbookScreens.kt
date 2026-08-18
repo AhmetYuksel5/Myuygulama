@@ -4,7 +4,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +20,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.border
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -36,7 +40,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -45,9 +51,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -60,6 +63,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.HighlightColor
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 /** Renklerin ekrandaki karşılığı. */
 @Composable
@@ -191,9 +197,13 @@ private fun BookCard(book: Entry, onOpen: () -> Unit, onDelete: () -> Unit) {
 /**
  * Okuma ekranı.
  *
- * Metne bir dokunuş arayüzü gizler (sadece kitap kalır), ikinci dokunuş altta
- * ilerleme çubuğunu ve "İndeks" düğmesini getirir. Kelimeyi işaretlemek için
- * **uzun bas** — okurken yanlışlıkla renk seçiciyi açmamak için.
+ * Sayfa ilerletme **dokunma bölgeleriyle**: sol çeyrek geri, sağ çeyrek ileri,
+ * orta bölge arayüzü gizler/gösterir. Önceki tasarımda tek dokunuş arayüzü
+ * tümüyle gizliyordu ve sayfa çevirmenin tek yolu olan şerit de onunla
+ * kaybolduğu için ilerlemek imkânsız hâle geliyordu.
+ *
+ * Bölümün sonuna gelince ileri dokunuşu sonraki bölüme geçiyor; ayrıca
+ * metnin sonunda açık bir "sonraki bölüm" kartı var.
  */
 @Composable
 fun BookReaderRoute(
@@ -234,12 +244,74 @@ fun BookReaderRoute(
             val book = state.book!!
             val chapter = book.chapters.getOrNull(state.chapterIndex)
             val listState = rememberLazyListState()
-            LaunchedEffect(state.chapterIndex) { listState.scrollToItem(0) }
+            val scope = rememberCoroutineScope()
+
+            // Geriye doğru bölüm değiştirince önceki bölümün başına değil
+            // sonuna düşmeli: sayfa çevirir gibi okunuyor.
+            var landAtEnd by remember { mutableStateOf(false) }
+
+            // Kitap ilk açıldığında kaldığın paragrafa dön; ileri doğru bölüm
+            // değiştirdiğinde metnin başından başla.
+            LaunchedEffect(state.chapterIndex, book) {
+                val last = (chapter?.paragraphs?.lastIndex ?: 0).coerceAtLeast(0)
+                val target = when {
+                    landAtEnd -> last
+                    else -> viewModel.consumePendingParagraph() ?: 0
+                }
+                landAtEnd = false
+                runCatching { listState.scrollToItem(target.coerceIn(0, last)) }
+            }
+
+            // Nerede kaldığını sürekli değil, durulunca kaydediyoruz.
+            LaunchedEffect(listState, state.chapterIndex) {
+                snapshotFlow { listState.firstVisibleItemIndex }
+                    .collectLatest { index ->
+                        delay(400)
+                        viewModel.savePosition(index)
+                    }
+            }
+
+            fun turnPage(forward: Boolean) {
+                scope.launch {
+                    val viewport = listState.layoutInfo.viewportSize.height.toFloat()
+                    val step = (viewport * 0.88f).coerceAtLeast(200f)
+                    if (forward) {
+                        if (listState.canScrollForward) {
+                            listState.animateScrollBy(step)
+                        } else if (state.chapterIndex < book.chapters.lastIndex) {
+                            viewModel.selectChapter(state.chapterIndex + 1)
+                        }
+                    } else {
+                        if (listState.canScrollBackward) {
+                            listState.animateScrollBy(-step)
+                        } else if (state.chapterIndex > 0) {
+                            landAtEnd = true
+                            viewModel.selectChapter(state.chapterIndex - 1)
+                        }
+                    }
+                }
+            }
+
+            /** Dokunulan yerin yatay oranına göre: geri / arayüz / ileri. */
+            fun handleZoneTap(fraction: Float) {
+                when {
+                    fraction < 0.25f -> turnPage(forward = false)
+                    fraction > 0.75f -> turnPage(forward = true)
+                    else -> chromeVisible = !chromeVisible
+                }
+            }
 
             Box(
                 modifier = modifier
                     .fillMaxSize()
-                    .background(theme.background),
+                    .background(theme.background)
+                    // Paragraf aralarına ve boşluklara denk gelen dokunuşlar da
+                    // aynı bölgelere göre çalışsın.
+                    .pointerInput(state.chapterIndex) {
+                        detectTapGestures { position ->
+                            handleZoneTap(position.x / size.width.toFloat())
+                        }
+                    },
             ) {
                 LazyColumn(
                     state = listState,
@@ -248,7 +320,7 @@ fun BookReaderRoute(
                         start = 20.dp,
                         end = 20.dp,
                         top = 28.dp,
-                        bottom = 96.dp,
+                        bottom = 120.dp,
                     ),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
@@ -258,10 +330,23 @@ fun BookReaderRoute(
                             colors = state.highlightColors,
                             textColor = theme.text,
                             fontSizeSp = fontSize,
-                            onTap = { chromeVisible = !chromeVisible },
+                            onZoneTap = { fraction -> handleZoneTap(fraction) },
                             onSelection = { text, sentence ->
                                 pending = PendingHighlight(text, sentence)
                             },
+                        )
+                    }
+
+                    // Bölüm sonunda ölü nokta bırakmıyoruz.
+                    item {
+                        ChapterEndCard(
+                            theme = theme,
+                            hasNext = state.chapterIndex < book.chapters.lastIndex,
+                            nextTitle = book.chapters
+                                .getOrNull(state.chapterIndex + 1)
+                                ?.title
+                                .orEmpty(),
+                            onNext = { viewModel.selectChapter(state.chapterIndex + 1) },
                         )
                     }
                 }
@@ -270,10 +355,10 @@ fun BookReaderRoute(
                     ReaderBottomBar(
                         chapterIndex = state.chapterIndex,
                         chapterCount = book.chapters.size,
+                        percent = readingPercent(state, listState),
                         theme = theme,
                         onOpenIndex = { showIndex = true },
                         onOpenDisplay = { showDisplay = true },
-                        onSeekChapter = { viewModel.selectChapter(it) },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
@@ -324,19 +409,54 @@ fun BookReaderRoute(
     }
 }
 
-/**
- * Altta ince bir şerit: sayfa çevirir gibi yatay çekerek bölüm değiştirilir.
- * Sürgülü çubuk yerine bu — okurken yanlışlıkla konumu kaybetmiyorsun ve
- * hareket kitabın kendi hareketine benziyor.
- */
+/** Kitabın tamamına göre ilerleme; bölüm sayısı değil karakter sayısı esas. */
+@Composable
+private fun readingPercent(state: ReaderUiState, listState: LazyListState): Int {
+    val visible = listState.layoutInfo.totalItemsCount.coerceAtLeast(1)
+    val within = (listState.firstVisibleItemIndex.toFloat() / visible).coerceIn(0f, 1f)
+    val chars = state.charsBefore + state.chapterChars * within
+    return ((chars / state.totalChars.toFloat()) * 100f).toInt().coerceIn(0, 100)
+}
+
+@Composable
+private fun ChapterEndCard(
+    theme: ReaderTheme,
+    hasNext: Boolean,
+    nextTitle: String,
+    onNext: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = if (hasNext) "Bölüm bitti" else "Kitap bitti",
+            style = MaterialTheme.typography.titleMedium,
+            color = theme.text.copy(alpha = 0.7f),
+        )
+        if (hasNext) {
+            Button(onClick = onNext, modifier = Modifier.padding(top = 10.dp)) {
+                Text(
+                    text = "Sonraki: ${nextTitle.ifBlank { "bölüm" }}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** Altta: nerede kaldığın + indeks + görünüm. */
 @Composable
 private fun ReaderBottomBar(
     chapterIndex: Int,
     chapterCount: Int,
+    percent: Int,
     theme: ReaderTheme,
     onOpenIndex: () -> Unit,
     onOpenDisplay: () -> Unit,
-    onSeekChapter: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -345,99 +465,23 @@ private fun ReaderBottomBar(
         tonalElevation = 0.dp,
         shadowElevation = 8.dp,
     ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp),
-            ) {
-                TextButton(onClick = onOpenIndex) {
-                    Text("İndeks", color = theme.text)
-                }
-                Text(
-                    text = "${chapterIndex + 1} / $chapterCount",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = theme.text.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onOpenDisplay) {
-                    Text("Görünüm", color = theme.text)
-                }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            TextButton(onClick = onOpenIndex) {
+                Text("İndeks", color = theme.text)
             }
-
-            PageTurnStrip(
-                chapterIndex = chapterIndex,
-                chapterCount = chapterCount,
-                theme = theme,
-                onTurn = onSeekChapter,
+            Text(
+                text = "Bölüm ${chapterIndex + 1}/$chapterCount · %$percent",
+                style = MaterialTheme.typography.labelMedium,
+                color = theme.text.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
             )
-        }
-    }
-}
-
-/** Sayfa çevirme şeridi: sola çek = sonraki bölüm, sağa çek = önceki. */
-@Composable
-private fun PageTurnStrip(
-    chapterIndex: Int,
-    chapterCount: Int,
-    theme: ReaderTheme,
-    onTurn: (Int) -> Unit,
-) {
-    var drag by remember(chapterIndex) { mutableStateOf(0f) }
-    val haptic = LocalHapticFeedback.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(30.dp)
-            .pointerInput(chapterIndex, chapterCount) {
-                val threshold = 60.dp.toPx()
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        when {
-                            drag < -threshold && chapterIndex < chapterCount - 1 -> {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onTurn(chapterIndex + 1)
-                            }
-                            drag > threshold && chapterIndex > 0 -> {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onTurn(chapterIndex - 1)
-                            }
-                        }
-                        drag = 0f
-                    },
-                    onHorizontalDrag = { change, amount ->
-                        change.consume()
-                        drag += amount
-                    },
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        // İnce bir sayfa kenarı; parmakla sürüklendiğinde birlikte kayıyor.
-        val progress = if (chapterCount <= 1) {
-            0f
-        } else {
-            chapterIndex.toFloat() / (chapterCount - 1)
-        }
-        Canvas(modifier = Modifier.fillMaxWidth().height(30.dp)) {
-            val lineY = size.height / 2f
-            val inset = 16.dp.toPx()
-            val width = size.width - inset * 2
-            drawLine(
-                color = theme.text.copy(alpha = 0.18f),
-                start = Offset(inset, lineY),
-                end = Offset(inset + width, lineY),
-                strokeWidth = 2f,
-            )
-            // Nerede kaldığını gösteren kısa işaret, sürüklerken parmakla kayar.
-            val marker = inset + width * progress + drag.coerceIn(-width / 2f, width / 2f)
-            drawLine(
-                color = theme.text.copy(alpha = 0.75f),
-                start = Offset((marker - 18.dp.toPx()).coerceAtLeast(inset), lineY),
-                end = Offset((marker + 18.dp.toPx()).coerceAtMost(inset + width), lineY),
-                strokeWidth = 6f,
-            )
+            TextButton(onClick = onOpenDisplay) {
+                Text("Görünüm", color = theme.text)
+            }
         }
     }
 }
@@ -532,7 +576,7 @@ private fun HighlightableParagraph(
     colors: Map<String, HighlightColor>,
     textColor: Color,
     fontSizeSp: Int,
-    onTap: () -> Unit,
+    onZoneTap: (Float) -> Unit,
     onSelection: (text: String, context: String) -> Unit,
 ) {
     var layout by remember(paragraph) { mutableStateOf<TextLayoutResult?>(null) }
@@ -582,9 +626,14 @@ private fun HighlightableParagraph(
         onTextLayout = { layout = it },
         modifier = Modifier
             .fillMaxWidth()
-            // Tek dokunuş okuma arayüzünü gizler/gösterir.
+            // Dokunma bölgesi: solda geri, sağda ileri, ortada arayüz.
+            // onLongPress boş bırakılıyor ki uzun basıp seçim yaparken
+            // parmak kalkınca ayrıca "dokunuş" sayılmasın.
             .pointerInput(paragraph) {
-                detectTapGestures { onTap() }
+                detectTapGestures(
+                    onLongPress = {},
+                    onTap = { position -> onZoneTap(position.x / size.width.toFloat()) },
+                )
             }
             // Uzun bas + sürükle: birden çok kelime seçilebiliyor. Sarı ile
             // altı çizilecek yerler genelde tek kelime değil.

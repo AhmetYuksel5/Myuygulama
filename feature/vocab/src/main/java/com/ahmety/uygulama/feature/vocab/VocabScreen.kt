@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,6 +40,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -382,9 +386,9 @@ private fun WordCard(
                     // kartın puntosuyla ekrana sığmıyorlar.
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontSize = when {
-                            word.word.length > 44 -> 22.sp
-                            word.word.length > 22 -> 30.sp
-                            else -> 40.sp
+                            word.word.length > 44 -> if (revealed) 18.sp else 22.sp
+                            word.word.length > 22 -> if (revealed) 24.sp else 30.sp
+                            else -> if (revealed) 30.sp else 40.sp
                         },
                     ),
                     fontWeight = FontWeight.Bold,
@@ -402,10 +406,8 @@ private fun WordCard(
                     // görünsün: kelimeyi zaten o cümlede görmüştün.
                     if (word.context.isNotBlank()) {
                         Spacer(Modifier.height(18.dp))
-                        Text(
+                        BookQuote(
                             text = word.context,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -433,45 +435,48 @@ private fun WordCard(
 
                     if (word.context.isNotBlank()) {
                         Spacer(Modifier.height(14.dp))
-                        Text(
+                        BookQuote(
                             text = word.context,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
 
                     if (word.examples.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
-                        word.examples.forEach { example ->
-                            Text(
+                        word.examples.forEachIndexed { index, example ->
+                            NumberedLine(
+                                number = index + 1,
                                 text = example,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(bottom = 8.dp),
                             )
                         }
                     }
 
                     if (word.related.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = word.related.joinToString(" · "),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
+                        Spacer(Modifier.height(12.dp))
+                        RelatedChips(word.related)
                     }
 
                     if (word.phrases.isNotEmpty()) {
                         Spacer(Modifier.height(14.dp))
                         word.phrases.forEach { phrase ->
-                            Text(
-                                text = phrase,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 4.dp),
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 4.dp),
+                            ) {
+                                Text(
+                                    text = "•",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.width(18.dp),
+                                )
+                                Text(
+                                    text = phrase,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Start,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
 
@@ -508,3 +513,66 @@ private fun WordCard(
         }
     }
 }
+
+/** Kitaptan alınan cümle: alıntı olduğu belli olsun diye tırnak içinde ve italik. */
+@Composable
+private fun BookQuote(text: String, color: Color) {
+    Text(
+        text = "\u201C${text.trim().trim('\u201C', '\u201D', '"')}\u201D",
+        style = MaterialTheme.typography.bodyMedium,
+        fontStyle = FontStyle.Italic,
+        textAlign = TextAlign.Center,
+        color = color,
+    )
+}
+
+/** Sola yaslı, "1. 2. 3." diye numaralanmış örnek cümle. */
+@Composable
+private fun NumberedLine(number: Int, text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+    ) {
+        Text(
+            text = "$number.",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(22.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Start,
+        )
+    }
+}
+
+/** Eş/yakın anlamlı kelimeler mavi rozet içinde. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RelatedChips(words: List<String>) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        words.forEach { related ->
+            Box(
+                modifier = Modifier
+                    .background(CHIP_BLUE, RoundedCornerShape(50))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = related,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+/** Açık ve koyu temada da beyaz yazıyı taşıyan bir mavi. */
+private val CHIP_BLUE = Color(0xFF1565C0)

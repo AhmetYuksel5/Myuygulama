@@ -64,7 +64,7 @@ class OpenAiClient @Inject constructor(
             append("d (short English definition, max 12 words, no final period), ")
             append("e (array of exactly 3 natural example sentences using it, 6-16 words each), ")
             append("r (array of 3-5 related words; mark opposites like \"scarce (zıt)\"), ")
-            append("p (array of 3-4 common collocations, each formatted as ")
+            append("p (array of exactly 5 common collocations, each formatted as ")
             append("\"english phrase — Turkish meaning\" using an em dash). ")
             append("No markdown, no extra keys, no commentary.")
         }

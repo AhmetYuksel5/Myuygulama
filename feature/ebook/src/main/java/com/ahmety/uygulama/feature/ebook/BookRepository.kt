@@ -149,6 +149,13 @@ class BookRepository @Inject constructor(
         readerPrefs.edit().putInt("chapter_$bookId", index).apply()
     }
 
+    /** Bölüm içinde kaldığın paragraf — bölüm başına atmamak için. */
+    fun lastParagraph(bookId: Long): Int = readerPrefs.getInt("paragraph_$bookId", 0)
+
+    fun saveLastParagraph(bookId: Long, index: Int) {
+        readerPrefs.edit().putInt("paragraph_$bookId", index).apply()
+    }
+
     suspend fun deleteBook(entry: Entry) {
         withContext(Dispatchers.IO) {
             entry.source?.let { path ->
