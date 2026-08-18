@@ -13,7 +13,9 @@ class VocabPrefs(context: Context) {
      * hissettirirdi. Küçük değer = az hareketle fırlar.
      */
     var swipeThreshold: Int
-        get() = prefs.getInt(KEY_THRESHOLD, 40)
+        // Okurken de kırpıyoruz: birim dp'ye çevrildi, eski/bozuk bir
+        // değer kalmışsa eşik kullanılamayacak kadar yüksek başlamasın.
+        get() = prefs.getInt(KEY_THRESHOLD, 40).coerceIn(20, 160)
         set(value) = prefs.edit().putInt(KEY_THRESHOLD, value.coerceIn(20, 160)).apply()
 
     private companion object {
