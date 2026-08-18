@@ -4,6 +4,7 @@ import android.content.Context
 import com.ahmety.uygulama.core.ai.WordInfo
 import com.ahmety.uygulama.core.model.VocabWord
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -23,8 +24,22 @@ class WordEnrichmentStore @Inject constructor(
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    /**
+     * Bellek önbelleği: deste her hesaplandığında kelime başına bir dosya
+     * okuması yapılıyordu ve bu iş ana iş parçacığında dönüyor.
+     */
+    private val cache = ConcurrentHashMap<String, VocabWord>()
+    private val missing = ConcurrentHashMap.newKeySet<String>()
+
     fun get(word: String): VocabWord? {
-        val raw = prefs.getString(word.lowercase(), null) ?: return null
+        val key = word.lowercase()
+        cache[key]?.let { return it }
+        if (key in missing) return null
+        val raw = prefs.getString(key, null)
+        if (raw == null) {
+            missing.add(key)
+            return null
+        }
         return runCatching {
             val json = JSONObject(raw)
             VocabWord(
@@ -35,7 +50,7 @@ class WordEnrichmentStore @Inject constructor(
                 related = json.optJSONArray("r").toList(),
                 phrases = json.optJSONArray("p").toList(),
             )
-        }.getOrNull()
+        }.getOrNull()?.also { cache[key] = it }
     }
 
     fun put(info: WordInfo) {
@@ -46,7 +61,17 @@ class WordEnrichmentStore @Inject constructor(
             put("r", JSONArray().apply { info.related.forEach { put(it) } })
             put("p", JSONArray().apply { info.phrases.forEach { put(it) } })
         }
-        prefs.edit().putString(info.word.lowercase(), json.toString()).apply()
+        val key = info.word.lowercase()
+        prefs.edit().putString(key, json.toString()).apply()
+        missing.remove(key)
+        cache[key] = VocabWord(
+            word = info.word,
+            meaning = info.meaning,
+            definition = info.definition,
+            examples = info.examples,
+            related = info.related,
+            phrases = info.phrases,
+        )
     }
 
     fun has(word: String): Boolean = prefs.contains(word.lowercase())

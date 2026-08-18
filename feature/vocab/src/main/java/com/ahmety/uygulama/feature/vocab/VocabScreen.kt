@@ -65,7 +65,9 @@ fun VocabRoute(
     val threshold by viewModel.swipeThreshold.collectAsStateWithLifecycle()
     val enrichingWord by viewModel.enriching.collectAsStateWithLifecycle()
     val aiMessage by viewModel.aiMessage.collectAsStateWithLifecycle()
-    val aiReady = remember { viewModel.aiConfigured }
+    // remember ile sarmıyoruz: anahtar Ayarlar'dan yeni girildiyse bu ekrana
+    // dönüldüğünde düğmenin hemen görünmesi gerekiyor.
+    val aiReady = viewModel.aiConfigured
     val density = LocalDensity.current
     var showSettings by remember { mutableStateOf(false) }
 
