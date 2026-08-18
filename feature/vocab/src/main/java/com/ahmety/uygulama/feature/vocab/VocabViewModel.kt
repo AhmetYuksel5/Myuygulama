@@ -65,7 +65,7 @@ class VocabViewModel @Inject constructor(
                     // Deste yeniden hesaplansın: zenginleştirme veritabanında
                     // değil kendi deposunda durduğu için akış kendiliğinden
                     // tetiklenmiyor.
-                    bookRefresh.value = bookRefresh.value + 1
+                    session.value = session.value.copy(refresh = session.value.refresh + 1)
                 }
                 is AiResult.Failed -> _aiMessage.value = result.reason
             }
@@ -77,8 +77,17 @@ class VocabViewModel @Inject constructor(
         _aiMessage.value = null
     }
 
-    /** Yapay zekâ yazımından sonra desteyi yeniden hesaplatmak için sayaç. */
-    private val bookRefresh = MutableStateFlow(0)
+    /**
+     * Oturumluk durum. `refresh` yapay zekâ yazımından sonra desteyi yeniden
+     * hesaplatıyor; `skipped` ise "geç" denen kelimeleri tutuyor — bunlar
+     * kalıcı bir karar değil, yalnızca destenin sonuna atılıyor.
+     */
+    private data class VocabSession(
+        val refresh: Int = 0,
+        val skipped: Set<String> = emptySet(),
+    )
+
+    private val session = MutableStateFlow(VocabSession())
 
     private val prefs = VocabPrefs(context)
 
@@ -106,8 +115,8 @@ class VocabViewModel @Inject constructor(
         // Kitapta yeni işaretlenen mavi kelime, uygulamayı yeniden başlatmadan
         // burada belirmeli; bu yüzden akış olarak dinliyoruz.
         repository.observeBookWords(),
-        bookRefresh,
-    ) { asset, progress, currentMode, bookWords, _ ->
+        session,
+    ) { asset, progress, currentMode, bookWords, sessionState ->
         val words = repository.mergeWords(asset, repository.applyEnrichment(bookWords))
         val statusByWord = progress.associate { it.word to it.status }
         val known = statusByWord.values.count { it == VocabStatus.KNOWN.name }
@@ -136,10 +145,16 @@ class VocabViewModel @Inject constructor(
             }
         }
 
-        // "Şimdilik dursun" dediklerin sona gitsin: aynı kart hemen tekrar
-        // karşına çıkmasın ama deste bitmeden bir kez daha sorulsun.
+        // Sona atılanlar: önce "emin değilim", en sonda "geç" dedikleri.
+        // İkisi de kalıcı karar değil; deste bitmeden yine karşına çıkıyorlar.
         val ordered = deck.shuffledStably(shuffleSeed)
-            .sortedBy { if (statusByWord[it.word] == VocabStatus.UNSURE.name) 1 else 0 }
+            .sortedBy { word ->
+                when {
+                    word.word in sessionState.skipped -> 2
+                    statusByWord[word.word] == VocabStatus.UNSURE.name -> 1
+                    else -> 0
+                }
+            }
 
         VocabUiState(
             deck = ordered,
@@ -160,6 +175,14 @@ class VocabViewModel @Inject constructor(
 
     /** Aşağı sürükleme: emin olamadım, şimdilik dursun. */
     fun markUnsure(word: VocabWord) = setStatus(word, VocabStatus.UNSURE)
+
+    /**
+     * Yukarı sürükleme: yalnızca geç. Hiçbir karar kaydedilmiyor; kelime
+     * destenin sonuna gidiyor ve bu oturumda yeniden karşına çıkıyor.
+     */
+    fun skip(word: VocabWord) {
+        session.value = session.value.copy(skipped = session.value.skipped + word.word)
+    }
 
     private fun setStatus(word: VocabWord, status: VocabStatus) {
         viewModelScope.launch { repository.setStatus(word.word, status) }

@@ -171,6 +171,7 @@ fun VocabRoute(
                         onKnown = { viewModel.markKnown(top) },
                         onLearning = { viewModel.markLearning(top) },
                         onUnsure = { viewModel.markUnsure(top) },
+                        onSkip = { viewModel.skip(top) },
                     )
                 }
             }
@@ -190,7 +191,7 @@ fun VocabRoute(
         }
 
         Text(
-            text = "← biliyorum     ↓ emin değilim     bilmiyorum →",
+            text = "← biliyorum   ↑ geç   ↓ emin değilim   bilmiyorum →",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 6.dp),
@@ -235,6 +236,7 @@ private fun SwipeableCard(
     onKnown: () -> Unit,
     onLearning: () -> Unit,
     onUnsure: () -> Unit,
+    onSkip: () -> Unit,
 ) {
     var offsetX by remember(key) { mutableFloatStateOf(0f) }
     var offsetY by remember(key) { mutableFloatStateOf(0f) }
@@ -269,6 +271,8 @@ private fun SwipeableCard(
     val tint = when {
         offsetY > 0f && abs(offsetY) > abs(offsetX) && verticalProgress > 0.1f ->
             Color(0xFF616161).copy(alpha = verticalProgress * 0.28f)
+        offsetY < 0f && abs(offsetY) > abs(offsetX) && verticalProgress < -0.1f ->
+            Color(0xFF1565C0).copy(alpha = abs(verticalProgress) * 0.20f)
         horizontalProgress < -0.1f -> Color(0xFF2E7D32).copy(alpha = abs(horizontalProgress) * 0.28f)
         horizontalProgress > 0.1f -> Color(0xFFE65100).copy(alpha = horizontalProgress * 0.28f)
         else -> Color.Transparent
@@ -295,6 +299,10 @@ private fun SwipeableCard(
                             }
                             !horizontal && offsetY > threshold -> {
                                 flyToY = 1800f; decision = onUnsure; dismissed = true
+                            }
+                            // Yukarı: yalnızca geç, karar kaydedilmiyor.
+                            !horizontal && offsetY < -threshold -> {
+                                flyToY = -1800f; decision = onSkip; dismissed = true
                             }
                             else -> {
                                 offsetX = 0f
