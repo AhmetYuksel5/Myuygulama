@@ -2,7 +2,6 @@ package com.ahmety.uygulama.feature.ebook
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -256,10 +256,11 @@ fun BookReaderRoute(
                 val last = (chapter?.paragraphs?.lastIndex ?: 0).coerceAtLeast(0)
                 val target = when {
                     landAtEnd -> last
-                    else -> viewModel.consumePendingParagraph() ?: 0
+                    else -> viewModel.lastParagraph()
                 }
                 landAtEnd = false
                 runCatching { listState.scrollToItem(target.coerceIn(0, last)) }
+                switching = false
             }
 
             // Nerede kaldığını sürekli değil, durulunca kaydediyoruz.
@@ -271,7 +272,13 @@ fun BookReaderRoute(
                     }
             }
 
+            // Bölüm değişimi ile listenin yeni içeriği ölçülmesi arasında
+            // canScrollBackward/Forward hâlâ eski değeri veriyor; peş peşe iki
+            // dokunuş bir bölümü atlıyordu.
+            var switching by remember { mutableStateOf(false) }
+
             fun turnPage(forward: Boolean) {
+                if (switching) return
                 scope.launch {
                     val viewport = listState.layoutInfo.viewportSize.height.toFloat()
                     val step = (viewport * 0.88f).coerceAtLeast(200f)
@@ -279,12 +286,14 @@ fun BookReaderRoute(
                         if (listState.canScrollForward) {
                             listState.animateScrollBy(step)
                         } else if (state.chapterIndex < book.chapters.lastIndex) {
+                            switching = true
                             viewModel.selectChapter(state.chapterIndex + 1)
                         }
                     } else {
                         if (listState.canScrollBackward) {
                             listState.animateScrollBy(-step)
                         } else if (state.chapterIndex > 0) {
+                            switching = true
                             landAtEnd = true
                             viewModel.selectChapter(state.chapterIndex - 1)
                         }
@@ -352,10 +361,13 @@ fun BookReaderRoute(
                 }
 
                 if (chromeVisible) {
+                    val percent by remember(state, listState) {
+                        derivedStateOf { readingPercent(state, listState) }
+                    }
                     ReaderBottomBar(
                         chapterIndex = state.chapterIndex,
                         chapterCount = book.chapters.size,
-                        percent = readingPercent(state, listState),
+                        percent = percent,
                         theme = theme,
                         onOpenIndex = { showIndex = true },
                         onOpenDisplay = { showDisplay = true },
@@ -409,11 +421,27 @@ fun BookReaderRoute(
     }
 }
 
-/** Kitabın tamamına göre ilerleme; bölüm sayısı değil karakter sayısı esas. */
-@Composable
+/**
+ * Kitabın tamamına göre ilerleme; bölüm sayısı değil karakter sayısı esas.
+ *
+ * Sade bir fonksiyon: `@Composable` olsaydı `Int` döndürdüğü için kendi
+ * yeniden başlatma kapsamı olmaz, `layoutInfo` okuması çağıranın kapsamına
+ * yazılır ve her kaydırma karesinde bütün okuma ekranı yeniden bestelenirdi.
+ *
+ * Paragraf indeksine ek olarak ilk görünen paragrafın piksel kayması da
+ * hesaba katılıyor: uzun paragraflı bölümlerde yüzde sayfa çevirdikçe
+ * yerinde sayıp sonra sıçruyordu.
+ */
 private fun readingPercent(state: ReaderUiState, listState: LazyListState): Int {
-    val visible = listState.layoutInfo.totalItemsCount.coerceAtLeast(1)
-    val within = (listState.firstVisibleItemIndex.toFloat() / visible).coerceIn(0f, 1f)
+    val info = listState.layoutInfo
+    val total = info.totalItemsCount.coerceAtLeast(1)
+    val first = info.visibleItemsInfo.firstOrNull()
+    val partial = if (first != null && first.size > 0) {
+        ((-first.offset).toFloat() / first.size).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val within = ((listState.firstVisibleItemIndex + partial) / total).coerceIn(0f, 1f)
     val chars = state.charsBefore + state.chapterChars * within
     return ((chars / state.totalChars.toFloat()) * 100f).toInt().coerceIn(0, 100)
 }
@@ -439,7 +467,7 @@ private fun ChapterEndCard(
         if (hasNext) {
             Button(onClick = onNext, modifier = Modifier.padding(top = 10.dp)) {
                 Text(
-                    text = "Sonraki: ${nextTitle.ifBlank { "bölüm" }}",
+                    text = if (nextTitle.isBlank()) "Sonraki bölüm" else "Sonraki: $nextTitle",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -467,7 +495,11 @@ private fun ReaderBottomBar(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            // Zemin gezinme çubuğunun arkasına kadar uzanıyor; düğmeler
+            // çubuğun altına düşmesin diye boşluğu içeride veriyoruz.
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
         ) {
             TextButton(onClick = onOpenIndex) {
                 Text("İndeks", color = theme.text)

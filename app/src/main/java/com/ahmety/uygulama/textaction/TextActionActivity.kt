@@ -29,6 +29,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,13 +56,17 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class TextActionActivity : ComponentActivity() {
 
+    /** Ekranda duran metin. Yeni bir seçim gelirse burası değişiyor. */
+    private var selected by mutableStateOf("")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val selected = selectedText(intent)
-        if (selected.isNullOrBlank()) {
+        val text = selectedText(intent)
+        if (text.isNullOrBlank()) {
             finish()
             return
         }
+        selected = text
         setContent {
             MerkezTheme {
                 TextActionDialog(
@@ -69,6 +75,18 @@ class TextActionActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * Etkinlik `singleTask`; kutu açıkken başka bir uygulamadan ikinci bir
+     * metin gönderilirse `onCreate` çalışmaz. Bunu karşılamazsak kutuda eski
+     * metin durur ve kaydedilen de o olurdu.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val text = selectedText(intent)
+        if (!text.isNullOrBlank()) selected = text
     }
 
     private fun selectedText(intent: Intent?): String? {

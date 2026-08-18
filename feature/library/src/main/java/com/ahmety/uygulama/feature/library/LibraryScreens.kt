@@ -466,8 +466,11 @@ fun NoteEditorRoute(
         modifier = modifier
             .fillMaxSize()
             .background(noteColor(state.colorIndex))
-            .verticalScroll(rememberScrollState())
+            // imePadding kaydırmadan önce: klavye alanı kaydırılabilir
+            // içeriğin içine değil, kaydırma penceresinin kendisine
+            // uygulanmalı; aksi hâlde son maddeye odaklanınca zıplıyor.
             .imePadding()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

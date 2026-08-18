@@ -86,8 +86,8 @@ fun VocabRoute(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Kelime",
-                style = MaterialTheme.typography.headlineSmall,
+                text = "Bildiğin ${state.knownCount} kelime",
+                style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = { showSettings = !showSettings }) { Text("Ayar") }
@@ -139,14 +139,6 @@ fun VocabRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-
-        Text(
-            text = "Biliyorum ${state.knownCount} · Bilmiyorum ${state.learningCount} · " +
-                "Emin değilim ${state.unsureCount}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 6.dp),
-        )
 
         Box(
             modifier = Modifier
@@ -414,7 +406,7 @@ private fun WordCard(
                         )
                     }
                 } else {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(10.dp))
 
                     if (word.meaning.isNotBlank()) {
                         Text(
@@ -426,7 +418,7 @@ private fun WordCard(
                     }
 
                     if (word.definition.isNotBlank()) {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = word.definition,
                             style = MaterialTheme.typography.bodyMedium,
@@ -436,7 +428,7 @@ private fun WordCard(
                     }
 
                     if (word.context.isNotBlank()) {
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(10.dp))
                         BookQuote(
                             text = word.context,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -444,7 +436,7 @@ private fun WordCard(
                     }
 
                     if (word.examples.isNotEmpty()) {
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(12.dp))
                         word.examples.forEachIndexed { index, example ->
                             NumberedLine(
                                 number = index + 1,
@@ -454,12 +446,12 @@ private fun WordCard(
                     }
 
                     if (word.related.isNotEmpty()) {
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(8.dp))
                         RelatedChips(word.related)
                     }
 
                     if (word.phrases.isNotEmpty()) {
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(10.dp))
                         word.phrases.forEach { phrase ->
                             Row(
                                 modifier = Modifier
@@ -476,7 +468,7 @@ private fun WordCard(
                                     text = phrase,
                                     style = MaterialTheme.typography.bodySmall,
                                     textAlign = TextAlign.Start,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
@@ -534,7 +526,7 @@ private fun NumberedLine(number: Int, text: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 6.dp),
     ) {
         Text(
             text = "$number.",
@@ -552,24 +544,36 @@ private fun NumberedLine(number: Int, text: String) {
 }
 
 /** Eş/yakın anlamlı kelimeler mavi rozet içinde. */
+/**
+ * Eş/yakın anlamlılar mavi rozette. Zıt anlamlılar aynı rozete girmiyor:
+ * listelerin çoğunda bir zıt anlamlı var ve aynı renkte durunca yanlış
+ * eşleme ezberleniyor. Onlar ayrı renkte ve "(zıt)" eki olmadan çiziliyor —
+ * rengin kendisi zaten ayrımı söylüyor.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RelatedChips(words: List<String>) {
+    val opposite = MaterialTheme.colorScheme.tertiary
+    val onOpposite = MaterialTheme.colorScheme.onTertiary
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         words.forEach { related ->
+            val isOpposite = related.contains("(zıt)", ignoreCase = true)
             Box(
                 modifier = Modifier
-                    .background(CHIP_BLUE, RoundedCornerShape(50))
+                    .background(
+                        color = if (isOpposite) opposite else CHIP_BLUE,
+                        shape = RoundedCornerShape(50),
+                    )
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
                 Text(
-                    text = related,
+                    text = related.replace("(zıt)", "", ignoreCase = true).trim(),
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White,
+                    color = if (isOpposite) onOpposite else Color.White,
                 )
             }
         }

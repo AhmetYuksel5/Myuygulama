@@ -90,13 +90,6 @@ class BookReaderViewModel @Inject constructor(
     /** Bölüm başlangıçlarının karakter toplamı; ilerleme yüzdesi için. */
     private var chapterOffsets: List<Int> = emptyList()
 
-    /**
-     * Kitap ilk açıldığında kaldığın paragrafa dönmek için bir kez okunur.
-     * Bölüm değiştirdiğinde ise metnin başından başlanmalı; bu yüzden
-     * "tüketilen" bir değer.
-     */
-    private var pendingParagraph: Int? = null
-
     fun load(id: Long) {
         if (bookId == id && _state.value.book != null) return
         bookId = id
@@ -110,8 +103,6 @@ class BookReaderViewModel @Inject constructor(
 
             val chapter = repository.lastChapter(id)
                 .coerceIn(0, (chapters.lastIndex).coerceAtLeast(0))
-            pendingParagraph = repository.lastParagraph(id)
-
             _state.value = ReaderUiState(
                 book = book,
                 chapterIndex = chapter,
@@ -124,12 +115,16 @@ class BookReaderViewModel @Inject constructor(
         }
     }
 
-    /** Kaldığın paragraf; yalnızca ilk açılışta bir kez döner. */
-    fun consumePendingParagraph(): Int? {
-        val value = pendingParagraph
-        pendingParagraph = null
-        return value
-    }
+    /**
+     * Kaldığın paragraf. "Bir kez tüketilen" bir değer değil, her seferinde
+     * depodan okunuyor: telefonu çevirince ya da tema değişince ekran
+     * yeniden kuruluyor ama görünüm modeli yaşamaya devam ettiği için
+     * tüketilmiş bir değerle bölümün başına dönülüyordu.
+     *
+     * Bölüm değiştirmek zaten 0 yazdığı için ileri geçişte metnin başından
+     * başlanıyor.
+     */
+    fun lastParagraph(): Int = repository.lastParagraph(bookId)
 
     fun selectChapter(index: Int) {
         val chapters = _state.value.book?.chapters.orEmpty()

@@ -19,7 +19,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -115,6 +118,15 @@ fun MerkezApp() {
     val immersive = currentDestination?.route?.startsWith("$BOOK_ROUTE/") == true
 
     Scaffold(
+        // Okuma ekranında alt inset'i Scaffold'a bırakmıyoruz: bıraksaydık
+        // sayfanın krem/siyah zemini gezinme çubuğunun hizasına kadar
+        // uzanmaz, orada uygulama zemini renginde bir bant kalırdı.
+        // Okuyucu kendi alt boşluğunu kendisi veriyor.
+        contentWindowInsets = if (immersive) {
+            WindowInsets.statusBars
+        } else {
+            ScaffoldDefaults.contentWindowInsets
+        },
         bottomBar = {
             if (immersive) return@Scaffold
             NavigationBar {
