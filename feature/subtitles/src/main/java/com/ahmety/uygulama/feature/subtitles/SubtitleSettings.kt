@@ -38,6 +38,14 @@ class SubtitleSettings @Inject constructor(
         get() = prefs.getString(KEY_TOKEN, null).orEmpty()
         set(value) = prefs.edit().putString(KEY_TOKEN, value).apply()
 
+    /**
+     * Hesabın kullanacağı sunucu. Giriş yanıtı farklı bir adres verirse
+     * (VIP hesaplarda vip-api'ye dönüyor) oraya yazılıyor.
+     */
+    var baseUrl: String
+        get() = prefs.getString(KEY_BASE, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_BASE
+        set(value) = prefs.edit().putString(KEY_BASE, value.trim()).apply()
+
     val configured: Boolean get() = apiKey.isNotBlank()
 
     fun maskedKey(): String {
@@ -56,5 +64,7 @@ class SubtitleSettings @Inject constructor(
         const val KEY_USER = "username"
         const val KEY_PASS = "password"
         const val KEY_TOKEN = "token"
+        const val KEY_BASE = "base_url"
+        const val DEFAULT_BASE = "https://api.opensubtitles.com"
     }
 }

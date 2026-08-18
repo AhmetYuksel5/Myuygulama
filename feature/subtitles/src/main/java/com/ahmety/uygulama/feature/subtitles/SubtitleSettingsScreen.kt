@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * OpenSubtitles erişim bilgileri.
@@ -31,9 +33,13 @@ import androidx.compose.ui.unit.dp
  * günlük indirme hakkı çok düşük kalıyor.
  */
 @Composable
-fun SubtitleSettingsScreen(modifier: Modifier = Modifier) {
+fun SubtitleSettingsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: SubtitleSettingsViewModel = hiltViewModel(),
+) {
     val context = LocalContext.current
     val settings = remember { SubtitleSettings(context) }
+    val test by viewModel.message.collectAsStateWithLifecycle()
 
     var apiKey by remember { mutableStateOf("") }
     var username by remember { mutableStateOf(settings.username) }
@@ -96,6 +102,7 @@ fun SubtitleSettingsScreen(modifier: Modifier = Modifier) {
                     saved = settings.maskedKey()
                 },
             ) { Text("Kaydet") }
+            TextButton(onClick = viewModel::test) { Text("Bağlantıyı sına") }
             TextButton(
                 onClick = {
                     settings.clear()
@@ -104,5 +111,10 @@ fun SubtitleSettingsScreen(modifier: Modifier = Modifier) {
                 },
             ) { Text("Sil") }
         }
+
+        test?.let { message ->
+            Text(text = message, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
+

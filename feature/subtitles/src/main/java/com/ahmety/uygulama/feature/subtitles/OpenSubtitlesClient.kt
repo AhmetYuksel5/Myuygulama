@@ -2,6 +2,7 @@ package com.ahmety.uygulama.feature.subtitles
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -57,11 +58,21 @@ class OpenSubtitlesClient @Inject constructor(
             if (key.isBlank()) {
                 return@withContext SubtitleResult.Failed("OpenSubtitles anahtarı girilmemiş.")
             }
-            val url = buildString {
-                append("$BASE/subtitles?languages=en,tr&order_by=download_count&order_direction=desc")
-                append("&query=").append(query.trim().replace(" ", "%20"))
-                if (year != null) append("&year=").append(year)
+            // İlk aramadan önce giriş yapıyoruz: hesabın hangi sunucuyu
+            // kullanacağını ancak giriş yanıtı söylüyor ve indirme kotası da
+            // orada açılıyor.
+            if (settings.token.isBlank() && settings.username.isNotBlank()) {
+                login()
             }
+            // Adresi elle birleştirmiyoruz: film adlarında boşluk, kesme
+            // işareti, iki nokta oluyor ve yanlış kodlama sunucuyu şaşırtıyor.
+            val url = "$BASE/subtitles".toHttpUrl().newBuilder()
+                .addQueryParameter("languages", "en,tr")
+                .addQueryParameter("order_by", "download_count")
+                .addQueryParameter("order_direction", "desc")
+                .addQueryParameter("query", query.trim().lowercase())
+                .apply { if (year != null) addQueryParameter("year", year.toString()) }
+                .build()
             request(Request.Builder().url(url).get()).map { body ->
                 val items = JSONObject(body).optJSONArray("data") ?: return@map emptyList()
                 (0 until items.length()).mapNotNull { index ->
@@ -132,7 +143,14 @@ class OpenSubtitlesClient @Inject constructor(
             Request.Builder().url("$BASE/login").post(payload.toRequestBody(JSON)),
             useToken = false,
         ).map { body ->
-            settings.token = JSONObject(body).optString("token")
+            val json = JSONObject(body)
+            settings.token = json.optString("token")
+            // API, hesabın hangi sunucuyu kullanacağını giriş yanıtında
+            // söylüyor: VIP hesaplarda adres vip-api'ye dönüyor. Onu
+            // kullanmazsak istekler yanlış sunucuya gidiyor.
+            json.optString("base_url").takeIf { it.isNotBlank() }?.let { host ->
+                settings.baseUrl = if (host.startsWith("http")) host else "https://$host"
+            }
             Unit
         }
     }
@@ -144,23 +162,31 @@ class OpenSubtitlesClient @Inject constructor(
     ): SubtitleResult<String> = runCatching {
         if (auth) {
             builder.header("Api-Key", settings.apiKey)
-            builder.header("Content-Type", "application/json")
             // API kendi istemcisini tanıyabilsin diye kimliğimizi veriyoruz;
-            // eksikse istekler 403 dönüyor.
+            // eksikse ya da tanınmıyorsa istekler reddediliyor.
             builder.header("User-Agent", USER_AGENT)
+            builder.header("Accept", "application/json")
             val token = settings.token
             if (useToken && token.isNotBlank()) {
                 builder.header("Authorization", "Bearer $token")
             }
         }
-        http.newCall(builder.build()).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                SubtitleResult.Failed(readableError(response.code))
-            } else {
-                SubtitleResult.Ok(body)
+        val request = builder.build()
+        // 5xx sunucu tarafı ve çoğu zaman geçici; birkaç saniye bekleyip
+        // yeniden denemek kullanıcıyı boşuna uğraştırmaktan iyi.
+        var lastCode = 0
+        repeat(SERVER_RETRIES) { attempt ->
+            if (attempt > 0) Thread.sleep(RETRY_DELAY_MS * attempt)
+            http.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (response.isSuccessful) return@runCatching SubtitleResult.Ok(body)
+                lastCode = response.code
+                if (response.code < 500) {
+                    return@runCatching SubtitleResult.Failed(readableError(response.code))
+                }
             }
         }
+        SubtitleResult.Failed(readableError(lastCode))
     }.getOrElse { error ->
         SubtitleResult.Failed("Bağlantı kurulamadı: ${error.message ?: "bilinmeyen hata"}")
     }
@@ -177,13 +203,22 @@ class OpenSubtitlesClient @Inject constructor(
         401 -> "Anahtar ya da oturum reddedildi. Ayarlardan yeniden gir."
         403 -> "Erişim reddedildi. Anahtarın doğru olduğundan emin ol."
         406 -> "Günlük indirme hakkın doldu."
+        410 -> "İndirme bağlantısının süresi dolmuş, yeniden dene."
         429 -> "Çok sık istek gönderildi, biraz bekle."
+        502, 503, 504 ->
+            "OpenSubtitles sunucusu şu an yanıt vermiyor ($code). Birkaç dakika sonra dene."
+        in 500..599 -> "OpenSubtitles sunucusunda hata ($code)."
         else -> "Sunucu $code döndü."
     }
 
+    /** Hesabın sunucusu; giriş yanıtı farklı bir adres verirse o kullanılıyor. */
+    private val BASE: String
+        get() = settings.baseUrl.trimEnd('/') + "/api/v1"
+
     private companion object {
-        const val BASE = "https://api.opensubtitles.com/api/v1"
         const val USER_AGENT = "Uygulama v1.0"
         val JSON = "application/json".toMediaType()
+        const val SERVER_RETRIES = 3
+        const val RETRY_DELAY_MS = 1_500L
     }
 }
