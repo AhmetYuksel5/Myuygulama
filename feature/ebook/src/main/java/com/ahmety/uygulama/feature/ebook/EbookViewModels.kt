@@ -88,18 +88,29 @@ class BookReaderViewModel @Inject constructor(
         bookId = id
         viewModelScope.launch {
             val book = repository.loadBook(id)
-            _state.value = ReaderUiState(book = book, loading = false)
+            // Kaldığın bölümden devam et.
+            val chapter = repository.lastChapter(id)
+                .coerceIn(0, (book?.chapters?.lastIndex ?: 0).coerceAtLeast(0))
+            _state.value = ReaderUiState(book = book, chapterIndex = chapter, loading = false)
             refreshHighlights()
         }
     }
 
     fun selectChapter(index: Int) {
         _state.value = _state.value.copy(chapterIndex = index)
+        repository.saveLastChapter(bookId, index)
     }
 
     fun highlight(word: String, contextSentence: String, color: HighlightColor) {
         viewModelScope.launch {
-            repository.toggleHighlight(bookId, word, contextSentence, color)
+            repository.setHighlight(bookId, word, contextSentence, color)
+            refreshHighlights()
+        }
+    }
+
+    fun removeHighlight(word: String) {
+        viewModelScope.launch {
+            repository.removeHighlight(bookId, word)
             refreshHighlights()
         }
     }

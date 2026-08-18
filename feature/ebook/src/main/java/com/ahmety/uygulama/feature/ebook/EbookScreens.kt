@@ -4,7 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +16,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -213,14 +214,14 @@ fun BookReaderRoute(
             val chapter = book.chapters.getOrNull(state.chapterIndex)
 
             Column(modifier = modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                // Kitapta yüzlerce bölüm olabiliyor; hepsini birden çizmek
+                // ekranı dondurur.
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    book.chapters.forEachIndexed { index, item ->
+                    itemsIndexed(book.chapters) { index, item ->
                         FilterChip(
                             selected = index == state.chapterIndex,
                             onClick = { viewModel.selectChapter(index) },
@@ -234,7 +235,13 @@ fun BookReaderRoute(
                     }
                 }
 
+                val listState = rememberLazyListState()
+                // Bölüm değişince metnin başına dön; aksi hâlde yeni bölüm
+                // önceki bölümün kaydırma konumundan açılıyor.
+                LaunchedEffect(state.chapterIndex) { listState.scrollToItem(0) }
+
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -273,6 +280,10 @@ fun BookReaderRoute(
                 )
                 pending = null
             },
+            onRemove = {
+                viewModel.removeHighlight(request.word)
+                pending = null
+            },
         )
     }
 }
@@ -297,10 +308,11 @@ private fun HighlightableParagraph(
     val painted: AnnotatedString = remember(paragraph, colors) {
         buildAnnotatedString {
             append(paragraph)
-            forEachWord(paragraph) { start, end ->
-                val word = paragraph.substring(start, end).lowercase()
+            forEachWord(paragraph) { rawStart, rawEnd ->
+                val bounds = trimBounds(paragraph, rawStart, rawEnd) ?: return@forEachWord
+                val word = paragraph.substring(bounds.first, bounds.second).lowercase()
                 colors[word]?.let { color ->
-                    addStyle(SpanStyle(background = paintOf(color)), start, end)
+                    addStyle(SpanStyle(background = paintOf(color)), bounds.first, bounds.second)
                 }
             }
         }
@@ -330,6 +342,7 @@ private fun ColorPickerDialog(
     current: HighlightColor?,
     onDismiss: () -> Unit,
     onPick: (HighlightColor, Boolean) -> Unit,
+    onRemove: () -> Unit,
 ) {
     // Bağlam varsayılan olarak açık: kullanıcı bir kelimenin birden çok
     // anlamı olabildiği için cümlesiyle birlikte saklamak istiyor.
@@ -342,7 +355,7 @@ private fun ColorPickerDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (current != null) {
                     Text(
-                        text = "Şu an: ${current.label}. Aynı renge dokunmak işareti kaldırır.",
+                        text = "Şu an: ${current.label}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -369,7 +382,11 @@ private fun ColorPickerDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = keepContext, onCheckedChange = { keepContext = it })
                         Text(
-                            text = "Cümleyi de sakla",
+                            text = if (current == null) {
+                                "Cümleyi de sakla"
+                            } else {
+                                "Bu cümleyi de ekle"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
@@ -389,6 +406,13 @@ private fun ColorPickerDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+        dismissButton = {
+            if (current != null) {
+                TextButton(onClick = onRemove) {
+                    Text("İşareti kaldır", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
     )
 }
 
@@ -408,8 +432,20 @@ internal fun wordBoundsAt(text: String, offset: Int): Pair<Int, Int>? {
     while (start > 0 && isWordChar(text[start - 1])) start--
     var end = index + 1
     while (end < text.length && isWordChar(text[end])) end++
-    val word = text.substring(start, end).trim('\'', '-', '’')
-    return if (word.length < 2) null else start to end
+    return trimBounds(text, start, end)
+}
+
+/**
+ * Kelimeye yapışan tırnak/tireyi sınırların dışında bırakır. Yalnızca uzunluk
+ * kontrolünde kırpmak yetmiyordu: `'quiet'` içindeki kelime `quiet'` olarak
+ * kaydedilip boyama eşleşmesini de bozuyordu.
+ */
+private fun trimBounds(text: String, startIn: Int, endIn: Int): Pair<Int, Int>? {
+    var start = startIn
+    var end = endIn
+    while (start < end && !text[start].isLetter()) start++
+    while (end > start && !text[end - 1].isLetter()) end--
+    return if (end - start < 2) null else start to end
 }
 
 /** Paragraf içinde her kelimeyi dolaşır. */

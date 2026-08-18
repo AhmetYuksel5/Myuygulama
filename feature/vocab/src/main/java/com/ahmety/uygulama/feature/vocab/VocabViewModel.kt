@@ -81,11 +81,22 @@ class VocabViewModel @Inject constructor(
             VocabMode.UNSURE -> words.filter {
                 statusByWord[it.word] == VocabStatus.UNSURE.name
             }
-            VocabMode.BOOK -> words.filter { it.fromBook }
+            // Karar verilen kelime destede kalırsa üstteki kart değişmiyor
+            // ve deste kilitleniyor; karar verilmemişleri (ve "emin değilim")
+            // gösteriyoruz.
+            VocabMode.BOOK -> words.filter {
+                val status = statusByWord[it.word]
+                it.fromBook && (status == null || status == VocabStatus.UNSURE.name)
+            }
         }
 
+        // "Şimdilik dursun" dediklerin sona gitsin: aynı kart hemen tekrar
+        // karşına çıkmasın ama deste bitmeden bir kez daha sorulsun.
+        val ordered = deck.shuffledStably(shuffleSeed)
+            .sortedBy { if (statusByWord[it.word] == VocabStatus.UNSURE.name) 1 else 0 }
+
         VocabUiState(
-            deck = deck.shuffledStably(shuffleSeed),
+            deck = ordered,
             mode = currentMode,
             knownCount = known,
             learningCount = learning,

@@ -15,9 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -25,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,7 +43,17 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.model.VocabWord
+import kotlinx.coroutines.delay
 import kotlin.math.abs
+
+/** Kelimeyi cihazın tarayıcısında aratır. */
+private fun lookUp(context: android.content.Context, word: String) {
+    val intent = android.content.Intent(
+        android.content.Intent.ACTION_VIEW,
+        android.net.Uri.parse("https://www.google.com/search?q=" + android.net.Uri.encode("$word meaning")),
+    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
+}
 
 @Composable
 fun VocabRoute(
@@ -51,6 +62,7 @@ fun VocabRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val threshold by viewModel.swipeThreshold.collectAsStateWithLifecycle()
+    val density = LocalDensity.current
     var showSettings by remember { mutableStateOf(false) }
 
     Column(
@@ -102,13 +114,13 @@ fun VocabRoute(
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(
-                    enabled = threshold > 40,
-                    onClick = { viewModel.setSwipeThreshold(threshold - 20) },
+                    enabled = threshold > 20,
+                    onClick = { viewModel.setSwipeThreshold(threshold - 5) },
                 ) { Text("−") }
-                Text("$threshold", style = MaterialTheme.typography.bodyMedium)
+                Text("$threshold dp", style = MaterialTheme.typography.bodyMedium)
                 TextButton(
-                    enabled = threshold < 400,
-                    onClick = { viewModel.setSwipeThreshold(threshold + 20) },
+                    enabled = threshold < 160,
+                    onClick = { viewModel.setSwipeThreshold(threshold + 5) },
                 ) { Text("+") }
             }
             Text(
@@ -143,7 +155,7 @@ fun VocabRoute(
                     SwipeableCard(
                         key = top.word,
                         word = top,
-                        threshold = threshold.toFloat(),
+                        threshold = with(density) { threshold.dp.toPx() },
                         onKnown = { viewModel.markKnown(top) },
                         onLearning = { viewModel.markLearning(top) },
                         onUnsure = { viewModel.markUnsure(top) },
@@ -175,7 +187,7 @@ private fun EmptyDeck(mode: VocabMode) {
             VocabMode.UNSURE -> "Emin olamadığın kelime yok."
             VocabMode.BOOK -> "Kitaptan gelen kelime yok. Kitapta bir kelimeyi mavi " +
                 "işaretlersen burada belirir."
-            VocabMode.ALL -> "Tebrikler, destedeki tüm kelimeleri elediniz."
+            VocabMode.ALL -> "Tebrikler, destedeki tüm kelimeleri eledin."
         },
         style = MaterialTheme.typography.bodyLarge,
         textAlign = TextAlign.Center,
@@ -208,13 +220,22 @@ private fun SwipeableCard(
         targetValue = if (dismissed) flyToX else offsetX,
         animationSpec = tween(durationMillis = if (dismissed) 200 else 0),
         label = "cardOffsetX",
-        finishedListener = { if (dismissed) decision?.invoke() },
     )
     val animatedY by animateFloatAsState(
         targetValue = if (dismissed) flyToY else offsetY,
         animationSpec = tween(durationMillis = if (dismissed) 200 else 0),
         label = "cardOffsetY",
     )
+
+    // Kararı animasyonun bitiş dinleyicisine bağlamak yanlıştı: aşağı
+    // fırlatmada yatay hedef 0 kaldığı için o animasyon hiç başlamıyor ve
+    // karar hiç uygulanmıyordu. Yönden bağımsız olarak burada uyguluyoruz.
+    LaunchedEffect(dismissed) {
+        if (dismissed) {
+            delay(220)
+            decision?.invoke()
+        }
+    }
 
     val horizontalProgress = (offsetX / threshold).coerceIn(-1f, 1f)
     val verticalProgress = (offsetY / threshold).coerceIn(-1f, 1f)
@@ -311,8 +332,7 @@ private fun WordCard(
                             Modifier
                         },
                     )
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp),
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -380,9 +400,9 @@ private fun WordCard(
                         word.examples.forEach { example ->
                             Text(
                                 text = example,
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(bottom = 10.dp),
+                                modifier = Modifier.padding(bottom = 8.dp),
                             )
                         }
                     }
@@ -395,6 +415,22 @@ private fun WordCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
+                    }
+
+                    // Kitaptan gelip destede karşılığı olmayan kelimenin anlamı
+                    // yok; boş bir kart göstermek yerine sözlüğe yönlendiriyoruz.
+                    if (word.meaning.isBlank() && word.definition.isBlank()) {
+                        val context = LocalContext.current
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Bu kelime kitaptan geldi, sözlükte karşılığı yok.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                        TextButton(onClick = { lookUp(context, word.word) }) {
+                            Text("Sözlükte ara")
+                        }
                     }
                 }
             }

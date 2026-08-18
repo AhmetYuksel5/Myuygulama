@@ -35,6 +35,8 @@ class BookRepository @Inject constructor(
     private val entryRepository: EntryRepository,
 ) {
 
+    private val readerPrefs = context.getSharedPreferences("merkez_kitap", Context.MODE_PRIVATE)
+
     private val booksDir: File
         get() = File(context.filesDir, "kitaplar").apply { mkdirs() }
 
@@ -88,10 +90,14 @@ class BookRepository @Inject constructor(
             .filter { HighlightRef.sourceId(it.source) == bookId && isBook(it.source) }
 
     /**
-     * Kelimeyi işaretler. Aynı kelime aynı kitapta zaten işaretliyse rengini
-     * değiştirir; aynı renkteyse işareti kaldırır (aç/kapa).
+     * Kelimeyi işaretler ya da rengini değiştirir.
+     *
+     * Aynı kelimeyi ikinci bir cümlede işaretlersen o cümle de saklanıyor:
+     * bir kelimenin birden çok anlamı olabiliyor ve hangi bağlamda
+     * görüldüğü önemli. İşareti kaldırmak ayrı bir eylem ([removeHighlight]);
+     * eskiden aynı renge tekrar dokunmak sessizce siliyordu.
      */
-    suspend fun toggleHighlight(
+    suspend fun setHighlight(
         bookId: Long,
         word: String,
         contextSentence: String,
@@ -103,22 +109,44 @@ class BookRepository @Inject constructor(
             it.title.equals(trimmed, ignoreCase = true)
         }
         val source = HighlightRef.encode(HighlightRef.KIND_BOOK, bookId, color)
+        val sentence = contextSentence.trim()
 
-        when {
-            existing == null -> entryRepository.createEntry(
+        if (existing == null) {
+            entryRepository.createEntry(
                 type = EntryType.HIGHLIGHT,
                 title = trimmed,
-                body = contextSentence.trim(),
+                body = sentence,
                 source = source,
             )
-            HighlightRef.color(existing.source) == color -> entryRepository.deleteEntry(existing.id)
-            else -> {
-                entryRepository.updateSource(existing.id, source)
-                if (contextSentence.isNotBlank()) {
-                    entryRepository.updateEntry(existing.id, existing.title, contextSentence.trim())
-                }
-            }
+            return
         }
+
+        if (HighlightRef.color(existing.source) != color) {
+            entryRepository.updateSource(existing.id, source)
+        }
+        // Yeni bir bağlam cümlesiyse alt alta ekle.
+        val known = existing.body.lineSequence().map { it.trim() }.toSet()
+        if (sentence.isNotBlank() && sentence !in known) {
+            val merged = listOf(existing.body, sentence)
+                .filter { it.isNotBlank() }
+                .joinToString("\n")
+            entryRepository.updateEntry(existing.id, existing.title, merged)
+        }
+    }
+
+    /** İşareti tamamen kaldırır. */
+    suspend fun removeHighlight(bookId: Long, word: String) {
+        val trimmed = word.trim()
+        highlightsFor(bookId)
+            .firstOrNull { it.title.equals(trimmed, ignoreCase = true) }
+            ?.let { entryRepository.deleteEntry(it.id) }
+    }
+
+    /** Kitapta en son okunan bölüm — kaldığın yerden devam edebilmek için. */
+    fun lastChapter(bookId: Long): Int = readerPrefs.getInt("chapter_$bookId", 0)
+
+    fun saveLastChapter(bookId: Long, index: Int) {
+        readerPrefs.edit().putInt("chapter_$bookId", index).apply()
     }
 
     suspend fun deleteBook(entry: Entry) {

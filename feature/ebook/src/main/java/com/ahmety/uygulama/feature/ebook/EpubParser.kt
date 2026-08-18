@@ -3,6 +3,7 @@ package com.ahmety.uygulama.feature.ebook
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import java.io.File
+import java.net.URLDecoder
 import java.util.zip.ZipFile
 
 /** Kitabın tek bir bölümü: başlık + paragraflar. */
@@ -81,25 +82,33 @@ object EpubParser {
 
     private fun readChapter(zip: ZipFile, path: String): EpubChapter? {
         val entry = zip.getEntry(path) ?: return null
-        val html = runCatching {
-            zip.getInputStream(entry).bufferedReader().use { it.readText() }
+        // Kodlamayı Jsoup'un kendisi bulsun: EPUB2 kitapları her zaman UTF-8
+        // değil, zorlarsak Türkçe/aksanlı harfler bozuk çıkıyor.
+        val doc = runCatching {
+            zip.getInputStream(entry).use { stream -> Jsoup.parse(stream, null, "") }
         }.getOrNull() ?: return null
-
-        val doc = Jsoup.parse(html)
         doc.select("script, style, nav, svg, img, figure").remove()
 
         val title = doc.selectFirst("h1, h2, h3, title")?.text()?.trim().orEmpty()
-        val paragraphs = doc.select("p, h1, h2, h3, h4, li, blockquote")
+        var paragraphs = doc.select("p, h1, h2, h3, h4, li, blockquote")
             .map { it.text().trim() }
             .filter { it.length > 1 }
-            .distinct()
+        // Bazı kitaplar paragrafları <div> ile kuruyor; hiç <p> yoksa yedek.
+        if (paragraphs.isEmpty()) {
+            paragraphs = doc.select("div")
+                .map { it.ownText().trim() }
+                .filter { it.length > 1 }
+        }
 
         return if (paragraphs.isEmpty()) null else EpubChapter(title, paragraphs)
     }
 
     /** OPF'deki göreli yolu ZIP içindeki gerçek yola çevirir. */
     private fun resolve(basePath: String, href: String): String {
-        val clean = href.substringBefore('#')
+        // "My%20Chapter.xhtml" gibi yollar ZIP içinde çözülmüş adla duruyor.
+        val clean = runCatching {
+            URLDecoder.decode(href.substringBefore('#'), "UTF-8")
+        }.getOrDefault(href.substringBefore('#'))
         if (basePath.isBlank()) return clean
         return "$basePath/$clean"
             // "a/b/../c" gibi yolları düzleştir.
@@ -117,7 +126,6 @@ object EpubParser {
 
     private fun ZipFile.readXml(path: String) = runCatching {
         val entry = getEntry(path) ?: return@runCatching null
-        val text = getInputStream(entry).bufferedReader().use { it.readText() }
-        Jsoup.parse(text, "", Parser.xmlParser())
+        getInputStream(entry).use { stream -> Jsoup.parse(stream, null, "", Parser.xmlParser()) }
     }.getOrNull()
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
+import com.ahmety.uygulama.core.model.HighlightRef
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,7 +41,12 @@ class NotesViewModel @Inject constructor(
         repository.observeByType(EntryType.ARTICLE),
         repository.observeArchivedByType(EntryType.NOTE),
         repository.observeByType(EntryType.HIGHLIGHT),
-    ) { notes, articles, archived, highlights ->
+    ) { notes, articles, archived, allHighlights ->
+        // Kitaptaki kelime işaretlemeleri buraya düşmemeli: bir kitapta
+        // yüzlerce kelime işaretlenebiliyor, liste kullanılmaz hale geliyordu.
+        val highlights = allHighlights.filter {
+            HighlightRef.kind(it.source) != HighlightRef.KIND_BOOK
+        }
         // Sabitlenenler üstte; gerisi güncellenme sırasına göre geliyor.
         val sorted = notes.sortedByDescending { NoteStyle.decode(it.source).pinned }
         NotesUiState(
