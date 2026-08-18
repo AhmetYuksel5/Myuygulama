@@ -82,6 +82,7 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:database"))
     implementation(project(":core:designsystem"))
+    implementation(project(":core:ai"))
     implementation(project(":feature:habits"))
     implementation(project(":feature:tasks"))
     implementation(project(":feature:calendar"))

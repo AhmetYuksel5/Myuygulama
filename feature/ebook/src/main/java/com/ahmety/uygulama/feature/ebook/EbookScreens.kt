@@ -2,6 +2,7 @@ package com.ahmety.uygulama.feature.ebook
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +28,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,16 +39,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -320,7 +323,11 @@ fun BookReaderRoute(
     }
 }
 
-/** Altta: nerede kaldığın + indeks + görünüm. */
+/**
+ * Altta ince bir şerit: sayfa çevirir gibi yatay çekerek bölüm değiştirilir.
+ * Sürgülü çubuk yerine bu — okurken yanlışlıkla konumu kaybetmiyorsun ve
+ * hareket kitabın kendi hareketine benziyor.
+ */
 @Composable
 private fun ReaderBottomBar(
     chapterIndex: Int,
@@ -337,16 +344,11 @@ private fun ReaderBottomBar(
         tonalElevation = 0.dp,
         shadowElevation = 8.dp,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            if (chapterCount > 1) {
-                Slider(
-                    value = chapterIndex.toFloat(),
-                    onValueChange = { onSeekChapter(it.toInt()) },
-                    valueRange = 0f..(chapterCount - 1).toFloat(),
-                    steps = (chapterCount - 2).coerceAtLeast(0),
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) {
                 TextButton(onClick = onOpenIndex) {
                     Text("İndeks", color = theme.text)
                 }
@@ -354,12 +356,87 @@ private fun ReaderBottomBar(
                     text = "${chapterIndex + 1} / $chapterCount",
                     style = MaterialTheme.typography.labelMedium,
                     color = theme.text.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onOpenDisplay) {
                     Text("Görünüm", color = theme.text)
                 }
             }
+
+            PageTurnStrip(
+                chapterIndex = chapterIndex,
+                chapterCount = chapterCount,
+                theme = theme,
+                onTurn = onSeekChapter,
+            )
+        }
+    }
+}
+
+/** Sayfa çevirme şeridi: sola çek = sonraki bölüm, sağa çek = önceki. */
+@Composable
+private fun PageTurnStrip(
+    chapterIndex: Int,
+    chapterCount: Int,
+    theme: ReaderTheme,
+    onTurn: (Int) -> Unit,
+) {
+    var drag by remember(chapterIndex) { mutableStateOf(0f) }
+    val haptic = LocalHapticFeedback.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(30.dp)
+            .pointerInput(chapterIndex, chapterCount) {
+                val threshold = 60.dp.toPx()
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        when {
+                            drag < -threshold && chapterIndex < chapterCount - 1 -> {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onTurn(chapterIndex + 1)
+                            }
+                            drag > threshold && chapterIndex > 0 -> {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onTurn(chapterIndex - 1)
+                            }
+                        }
+                        drag = 0f
+                    },
+                    onHorizontalDrag = { change, amount ->
+                        change.consume()
+                        drag += amount
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        // İnce bir sayfa kenarı; parmakla sürüklendiğinde birlikte kayıyor.
+        val progress = if (chapterCount <= 1) {
+            0f
+        } else {
+            chapterIndex.toFloat() / (chapterCount - 1)
+        }
+        Canvas(modifier = Modifier.fillMaxWidth().height(30.dp)) {
+            val lineY = size.height / 2f
+            val inset = 16.dp.toPx()
+            val width = size.width - inset * 2
+            drawLine(
+                color = theme.text.copy(alpha = 0.18f),
+                start = Offset(inset, lineY),
+                end = Offset(inset + width, lineY),
+                strokeWidth = 2f,
+            )
+            // Nerede kaldığını gösteren kısa işaret, sürüklerken parmakla kayar.
+            val marker = inset + width * progress + drag.coerceIn(-width / 2f, width / 2f)
+            drawLine(
+                color = theme.text.copy(alpha = 0.75f),
+                start = Offset((marker - 18.dp.toPx()).coerceAtLeast(inset), lineY),
+                end = Offset((marker + 18.dp.toPx()).coerceAtMost(inset + width), lineY),
+                strokeWidth = 6f,
+            )
         }
     }
 }

@@ -35,6 +35,7 @@ class VocabRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val vocabDao: VocabDao,
     private val entryRepository: EntryRepository,
+    private val enrichment: WordEnrichmentStore,
     private val changeRecorder: ChangeRecorder,
     private val json: Json,
     private val now: Now,
@@ -61,15 +62,43 @@ class VocabRepository @Inject constructor(
                 .filter { HighlightRef.color(it.source) == HighlightColor.BLUE }
                 .filter { it.title.isNotBlank() }
                 .map { entry ->
+                    val word = entry.title.trim()
+                    // Daha önce yapay zekâyla doldurulduysa onu kullan.
+                    val filled = enrichment.get(word)
                     VocabWord(
-                        word = entry.title.trim(),
-                        meaning = "",
+                        word = word,
+                        meaning = filled?.meaning.orEmpty(),
+                        definition = filled?.definition.orEmpty(),
+                        examples = filled?.examples.orEmpty(),
+                        related = filled?.related.orEmpty(),
+                        phrases = filled?.phrases.orEmpty(),
                         context = entry.body.trim(),
                         fromBook = true,
                     )
                 }
                 .distinctBy { it.word.lowercase() }
         }
+
+    /** Yapay zekâyla üretilen bilgiyi saklar. */
+    fun saveEnrichment(info: com.ahmety.uygulama.core.ai.WordInfo) {
+        enrichment.put(info)
+    }
+
+    /**
+     * Akıştan gelen kitap kelimelerine, varsa yapay zekâ ile doldurulmuş
+     * bilgileri uygular. Akış veritabanından geldiği için zenginleştirme
+     * yazıldığında kendiliğinden güncellenmiyor.
+     */
+    fun applyEnrichment(words: List<VocabWord>): List<VocabWord> = words.map { word ->
+        val filled = enrichment.get(word.word) ?: return@map word
+        word.copy(
+            meaning = filled.meaning,
+            definition = filled.definition,
+            examples = filled.examples,
+            related = filled.related,
+            phrases = filled.phrases,
+        )
+    }
 
     /**
      * Deste + kitaptan gelenler. Aynı kelime iki kaynakta da varsa kitaptan
@@ -124,6 +153,7 @@ class VocabRepository @Inject constructor(
                     definition = raw.d,
                     examples = raw.e,
                     related = raw.r,
+                    phrases = raw.p,
                 )
             }
         }
@@ -136,6 +166,7 @@ class VocabRepository @Inject constructor(
         val d: String = "",
         val e: List<String> = emptyList(),
         val r: List<String> = emptyList(),
+        val p: List<String> = emptyList(),
     )
 
     private companion object {

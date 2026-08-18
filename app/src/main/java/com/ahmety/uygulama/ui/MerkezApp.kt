@@ -44,6 +44,7 @@ import com.ahmety.uygulama.feature.library.SearchRoute
 import com.ahmety.uygulama.feature.tasks.TasksRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
+import com.ahmety.uygulama.ui.ai.AiSettingsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
@@ -176,6 +177,7 @@ fun MerkezApp() {
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
+                    onOpenAi = { navController.navigate(AI_ROUTE) },
                     onOpenUpdates = { navController.navigate(UPDATE_ROUTE) },
                 )
             }
@@ -209,6 +211,9 @@ fun MerkezApp() {
             composable(CURSOR_ROUTE) {
                 QuickCursorScreen()
             }
+            composable(AI_ROUTE) {
+                AiSettingsScreen()
+            }
             composable(UPDATE_ROUTE) {
                 UpdateScreen()
             }
@@ -238,6 +243,7 @@ private const val VOCAB_ROUTE = "vocab"
 private const val BOOKS_ROUTE = "books"
 private const val BOOK_ROUTE = "book"
 private const val SEARCH_ROUTE = "search"
+private const val AI_ROUTE = "ai"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
@@ -256,6 +262,7 @@ private fun MoreScreen(
     onOpenSync: () -> Unit,
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
+    onOpenAi: () -> Unit,
     onOpenUpdates: () -> Unit,
 ) {
     Column(
@@ -308,6 +315,11 @@ private fun MoreScreen(
             headlineContent = { Text("Tek elle imleç") },
             supportingContent = { Text("Ulaşılamayan köşelere basmak için sanal imleç") },
             modifier = Modifier.clickable(onClick = onOpenCursor),
+        )
+        ListItem(
+            headlineContent = { Text("Yapay zekâ") },
+            supportingContent = { Text("OpenAI anahtarı — kitaptan gelen kelimeleri doldurur") },
+            modifier = Modifier.clickable(onClick = onOpenAi),
         )
         ListItem(
             headlineContent = { Text("Güncellemeler") },

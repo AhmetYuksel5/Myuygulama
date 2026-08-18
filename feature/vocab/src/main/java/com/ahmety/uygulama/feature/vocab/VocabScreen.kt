@@ -63,6 +63,9 @@ fun VocabRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val threshold by viewModel.swipeThreshold.collectAsStateWithLifecycle()
+    val enrichingWord by viewModel.enriching.collectAsStateWithLifecycle()
+    val aiMessage by viewModel.aiMessage.collectAsStateWithLifecycle()
+    val aiReady = remember { viewModel.aiConfigured }
     val density = LocalDensity.current
     var showSettings by remember { mutableStateOf(false) }
 
@@ -157,12 +160,31 @@ fun VocabRoute(
                         key = top.word,
                         word = top,
                         threshold = with(density) { threshold.dp.toPx() },
+                        enriching = enrichingWord == top.word,
+                        onEnrich = if (aiReady) {
+                            { viewModel.enrich(top) }
+                        } else {
+                            null
+                        },
                         onKnown = { viewModel.markKnown(top) },
                         onLearning = { viewModel.markLearning(top) },
                         onUnsure = { viewModel.markUnsure(top) },
                     )
                 }
             }
+        }
+
+        aiMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.clearAiMessage() }
+                    .padding(top = 4.dp),
+            )
         }
 
         Text(
@@ -206,6 +228,8 @@ private fun SwipeableCard(
     key: String,
     word: VocabWord,
     threshold: Float,
+    enriching: Boolean,
+    onEnrich: (() -> Unit)?,
     onKnown: () -> Unit,
     onLearning: () -> Unit,
     onUnsure: () -> Unit,
@@ -284,7 +308,7 @@ private fun SwipeableCard(
                 )
             },
     ) {
-        WordCard(word = word, tint = tint)
+        WordCard(word = word, tint = tint, enriching = enriching, onEnrich = onEnrich)
     }
 }
 
@@ -312,6 +336,8 @@ private fun WordCard(
     word: VocabWord,
     tint: Color,
     interactive: Boolean = true,
+    enriching: Boolean = false,
+    onEnrich: (() -> Unit)? = null,
 ) {
     var revealed by remember(word.word) { mutableStateOf(false) }
 
@@ -418,8 +444,21 @@ private fun WordCard(
                         )
                     }
 
-                    // Kitaptan gelip destede karşılığı olmayan kelimenin anlamı
-                    // yok; boş bir kart göstermek yerine sözlüğe yönlendiriyoruz.
+                    if (word.phrases.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        word.phrases.forEach { phrase ->
+                            Text(
+                                text = phrase,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                        }
+                    }
+
+                    // Kitaptan gelip destede karşılığı olmayan kelime: boş kart
+                    // göstermek yerine yapay zekâyla doldurmayı öneriyoruz.
                     if (word.meaning.isBlank() && word.definition.isBlank()) {
                         val context = LocalContext.current
                         Spacer(Modifier.height(8.dp))
@@ -429,8 +468,15 @@ private fun WordCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
-                        TextButton(onClick = { lookUp(context, word.word) }) {
-                            Text("Sözlükte ara")
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (onEnrich != null) {
+                                TextButton(enabled = !enriching, onClick = onEnrich) {
+                                    Text(if (enriching) "Getiriliyor…" else "Anlamını getir")
+                                }
+                            }
+                            TextButton(onClick = { lookUp(context, word.word) }) {
+                                Text("Sözlükte ara")
+                            }
                         }
                     }
                 }

@@ -15,6 +15,8 @@ data class VocabWord(
     val examples: List<String> = emptyList(),
     /** Eş/zıt anlamlılar ve aynı kökten türeyenler. */
     val related: List<String> = emptyList(),
+    /** Kelimenin yaygın kullanıldığı öbekler ("abundant supply — bol arz"). */
+    val phrases: List<String> = emptyList(),
     /** Kitaptan aktarıldıysa kelimenin geçtiği cümle. */
     val context: String = "",
     /** Kitapta mavi işaretlenip aktarılan kelime mi. */

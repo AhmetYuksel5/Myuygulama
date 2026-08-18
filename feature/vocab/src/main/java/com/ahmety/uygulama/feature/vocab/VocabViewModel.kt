@@ -3,6 +3,9 @@ package com.ahmety.uygulama.feature.vocab
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ahmety.uygulama.core.ai.AiResult
+import com.ahmety.uygulama.core.ai.AiSettings
+import com.ahmety.uygulama.core.ai.OpenAiClient
 import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,8 +35,50 @@ data class VocabUiState(
 @HiltViewModel
 class VocabViewModel @Inject constructor(
     private val repository: VocabRepository,
+    private val openAi: OpenAiClient,
+    private val aiSettings: AiSettings,
     @ApplicationContext context: Context,
 ) : ViewModel() {
+
+    /** Anlamı getirilen kelime (yükleniyor göstergesi için). */
+    private val _enriching = MutableStateFlow<String?>(null)
+    val enriching: StateFlow<String?> = _enriching
+
+    private val _aiMessage = MutableStateFlow<String?>(null)
+    val aiMessage: StateFlow<String?> = _aiMessage
+
+    val aiConfigured: Boolean get() = aiSettings.configured
+
+    /**
+     * Kitaptan gelip sözlükte karşılığı olmayan kelimenin anlamını, tanımını,
+     * örneklerini ve öbeklerini yapay zekâyla doldurur. Bağlam cümlesi de
+     * gönderiliyor: kelimenin hangi anlamda kullanıldığı oradan anlaşılıyor.
+     */
+    fun enrich(word: VocabWord) {
+        if (_enriching.value != null) return
+        _enriching.value = word.word
+        viewModelScope.launch {
+            when (val result = openAi.describeWord(word.word, word.context)) {
+                is AiResult.Ok -> {
+                    repository.saveEnrichment(result.value)
+                    _aiMessage.value = null
+                    // Deste yeniden hesaplansın: zenginleştirme veritabanında
+                    // değil kendi deposunda durduğu için akış kendiliğinden
+                    // tetiklenmiyor.
+                    bookRefresh.value = bookRefresh.value + 1
+                }
+                is AiResult.Failed -> _aiMessage.value = result.reason
+            }
+            _enriching.value = null
+        }
+    }
+
+    fun clearAiMessage() {
+        _aiMessage.value = null
+    }
+
+    /** Yapay zekâ yazımından sonra desteyi yeniden hesaplatmak için sayaç. */
+    private val bookRefresh = MutableStateFlow(0)
 
     private val prefs = VocabPrefs(context)
 
@@ -61,8 +106,9 @@ class VocabViewModel @Inject constructor(
         // Kitapta yeni işaretlenen mavi kelime, uygulamayı yeniden başlatmadan
         // burada belirmeli; bu yüzden akış olarak dinliyoruz.
         repository.observeBookWords(),
-    ) { asset, progress, currentMode, bookWords ->
-        val words = repository.mergeWords(asset, bookWords)
+        bookRefresh,
+    ) { asset, progress, currentMode, bookWords, _ ->
+        val words = repository.mergeWords(asset, repository.applyEnrichment(bookWords))
         val statusByWord = progress.associate { it.word to it.status }
         val known = statusByWord.values.count { it == VocabStatus.KNOWN.name }
         val learning = statusByWord.values.count { it == VocabStatus.LEARNING.name }
