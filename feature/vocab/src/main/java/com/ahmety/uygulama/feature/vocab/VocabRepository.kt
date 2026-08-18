@@ -115,6 +115,8 @@ class VocabRepository @Inject constructor(
                 definition = word.definition,
                 examples = word.examples,
                 related = word.related,
+                family = word.family,
+                confusions = word.confusions,
                 collocations = word.collocations,
             ),
         )
@@ -137,6 +139,8 @@ class VocabRepository @Inject constructor(
             definition = filled.definition,
             examples = filled.examples,
             related = filled.related,
+            family = filled.family,
+            confusions = filled.confusions,
             collocations = filled.collocations,
         )
     }

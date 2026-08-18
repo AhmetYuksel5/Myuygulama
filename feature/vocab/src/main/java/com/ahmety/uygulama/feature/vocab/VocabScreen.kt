@@ -336,6 +336,8 @@ private fun WordEditDialog(
     var meaning by remember(word.word) { mutableStateOf(word.meaning) }
     var definition by remember(word.word) { mutableStateOf(word.definition) }
     var examples by remember(word.word) { mutableStateOf(word.examples.joinToString("\n")) }
+    var family by remember(word.word) { mutableStateOf(word.family.joinToString(", ")) }
+    var confusions by remember(word.word) { mutableStateOf(word.confusions.joinToString("\n")) }
     var collocations by remember(word.word) {
         mutableStateOf(
             word.collocations.joinToString("\n") { "${it.pattern}: ${it.words.joinToString(", ")}" },
@@ -371,6 +373,18 @@ private fun WordEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
+                    value = family,
+                    onValueChange = { family = it },
+                    label = { Text("Kelime ailesi (virgülle)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = confusions,
+                    onValueChange = { confusions = it },
+                    label = { Text("Karıştırma (her satır \"kelime — fark\")") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
                     value = collocations,
                     onValueChange = { collocations = it },
                     label = { Text("Eşdizim (her satır \"kalıp: kelime, kelime\")") },
@@ -386,6 +400,9 @@ private fun WordEditDialog(
                             meaning = meaning.trim(),
                             definition = definition.trim(),
                             examples = examples.lines().map { it.trim() }.filter { it.isNotBlank() },
+                            family = family.split(',').map { it.trim() }.filter { it.isNotBlank() },
+                            confusions = confusions.lines().map { it.trim() }
+                                .filter { it.isNotBlank() },
                             collocations = parseCollocations(collocations),
                         ),
                     )
@@ -727,9 +744,22 @@ private fun WordCard(
                         }
                     }
 
+                    if (word.family.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        LabeledBlock("Aile", word.family.joinToString(" → "))
+                    }
+
                     if (word.related.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
+                        LabeledBlock("İlgili", "")
                         RelatedChips(word.related)
+                    }
+
+                    if (word.confusions.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        word.confusions.forEach { line ->
+                            LabeledBlock("Karıştırma", line)
+                        }
                     }
 
                     if (word.collocations.isNotEmpty()) {
@@ -883,3 +913,30 @@ internal fun parseCollocations(text: String): List<Collocation> = text.lines()
             .filter { it.isNotBlank() }
         if (pattern.isBlank() || words.isEmpty()) null else Collocation(pattern, words)
     }
+
+/**
+ * Etiketli tek satır: solda ne olduğu, sağında içeriği. Eşdizim satırlarıyla
+ * aynı hizada duruyor ki kart tek bir düzen gibi okunsun.
+ */
+@Composable
+private fun LabeledBlock(label: String, text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(74.dp),
+        )
+        if (text.isNotBlank()) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Start,
+            )
+        }
+    }
+}

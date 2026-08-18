@@ -20,6 +20,8 @@ data class WordInfo(
     val definition: String,
     val examples: List<String>,
     val related: List<String>,
+    val family: List<String>,
+    val confusions: List<String>,
     /**
      * Kelimenin hangi kelimelerle birlikte kullanıldığı, dilbilgisi kalıbına
      * göre gruplanmış — Oxford Collocations Dictionary mantığı.
@@ -118,7 +120,18 @@ class OpenAiClient @Inject constructor(
         append("t (Turkish meanings, 1-3, comma separated), ")
         append("d (short English definition, max 12 words, no final period), ")
         append("e (array of exactly 3 natural example sentences using it, 6-16 words each), ")
-        append("r (array of 3-5 related words; mark opposites like \"scarce (zıt)\"), ")
+        append("r (RELATED: 5-6 words from the same semantic field — words that ")
+        append("naturally co-occur in the same topic, NOT a synonym list. ")
+        append("If a true synonym belongs there, include it here; no separate ")
+        append("synonyms section), ")
+        append("f (WORD FAMILY: derivations of the same root with a part-of-speech ")
+        append("tag in Turkish — f for fiil, i for isim, s for sıfat, z for zarf; ")
+        append("format \"decision (i)\". Empty array if the word has no common ")
+        append("derivations), ")
+        append("x (DON'T CONFUSE: only if there is a word Turkish learners commonly ")
+        append("confuse with this one — false friend, similar spelling, or close ")
+        append("meaning with different usage. Format \"word — tek cümlelik fark\" ")
+        append("in Turkish. Empty array if there is no such word), ")
         append("c (collocations grouped by grammatical pattern, like an Oxford ")
         append("Collocations Dictionary entry: array of objects with g and w. ")
         append("g is the pattern label in Turkish, chosen from exactly these: ")
@@ -130,6 +143,8 @@ class OpenAiClient @Inject constructor(
         append("no article unless it is part of the collocation. ")
         append("Give 2-4 groups, only patterns that genuinely apply to this word's ")
         append("part of speech). ")
+        append("Never pad a section to reach a count: fewer good items beat filler, ")
+        append("and an empty array is better than a weak entry. ")
         append("No markdown, no extra keys, no commentary.")
     }
 
@@ -149,7 +164,7 @@ class OpenAiClient @Inject constructor(
         append("idiom, phrasal verb, inversion, ellipsis, tense — name it and explain), ")
         append("r (array of 0-4 idioms or phrasal verbs that appear in it, ")
         append("each as \"expression — Turkish meaning\"), ")
-        append("c (empty array). ")
+        append("c, f, x (empty arrays). ")
         append("No markdown, no extra keys, no commentary.")
     }
 
@@ -157,6 +172,8 @@ class OpenAiClient @Inject constructor(
         val examples = json.optJSONArray("e").toStringList()
         val related = json.optJSONArray("r").toStringList()
         val collocations = json.optJSONArray("c").toCollocations()
+        val family = json.optJSONArray("f").toStringList()
+        val confusions = json.optJSONArray("x").toStringList()
         val meaning = json.optString("t").trim()
         if (meaning.isBlank() && examples.isEmpty()) {
             return AiResult.Failed("Yanıt anlaşılamadı.")
@@ -168,6 +185,8 @@ class OpenAiClient @Inject constructor(
                 definition = json.optString("d").trim(),
                 examples = examples,
                 related = related,
+                family = family,
+                confusions = confusions,
                 collocations = collocations,
             ),
         )

@@ -13,8 +13,23 @@ data class VocabWord(
     /** Kısa İngilizce tanım. */
     val definition: String = "",
     val examples: List<String> = emptyList(),
-    /** Eş/zıt anlamlılar ve aynı kökten türeyenler. */
+    /**
+     * Aynı anlam alanından kelimeler — aynı konuda doğal olarak birlikte
+     * geçenler. Eş anlamlı listesi değil; gerçekten eş anlamlı bir kelime
+     * varsa o da buraya giriyor.
+     */
     val related: List<String> = emptyList(),
+    /**
+     * Kelime ailesi: aynı kökten türeyenler, tür etiketiyle.
+     * "decide (f)" → "decision (i)" → "decisive (s)". Yaygın türevi yoksa boş.
+     */
+    val family: List<String> = emptyList(),
+    /**
+     * Karıştırılan kelimeler: yalancı eş değerler, benzer yazılışlar ya da
+     * anlamı yakın ama kullanımı farklı olanlar. Her satır
+     * "kelime — tek cümlelik fark" biçiminde. Yoksa boş.
+     */
+    val confusions: List<String> = emptyList(),
     /**
      * Kelimenin hangi kelimelerle birlikte kullanıldığı, dilbilgisi kalıbına
      * göre gruplanmış. Oxford Collocations Dictionary mantığı: "make a

@@ -49,6 +49,8 @@ class WordEnrichmentStore @Inject constructor(
                 definition = json.optString("d"),
                 examples = json.optJSONArray("e").toList(),
                 related = json.optJSONArray("r").toList(),
+                family = json.optJSONArray("f").toList(),
+                confusions = json.optJSONArray("x").toList(),
                 collocations = json.optJSONArray("c").toCollocations(),
             )
         }.getOrNull()?.also { cache[key] = it }
@@ -60,6 +62,8 @@ class WordEnrichmentStore @Inject constructor(
             put("d", info.definition)
             put("e", JSONArray().apply { info.examples.forEach { put(it) } })
             put("r", JSONArray().apply { info.related.forEach { put(it) } })
+            put("f", JSONArray().apply { info.family.forEach { put(it) } })
+            put("x", JSONArray().apply { info.confusions.forEach { put(it) } })
             put(
                 "c",
                 JSONArray().apply {
@@ -82,6 +86,8 @@ class WordEnrichmentStore @Inject constructor(
             definition = info.definition,
             examples = info.examples,
             related = info.related,
+            family = info.family,
+            confusions = info.confusions,
             collocations = info.collocations,
         )
     }

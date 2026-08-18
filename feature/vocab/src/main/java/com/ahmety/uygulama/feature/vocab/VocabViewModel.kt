@@ -309,6 +309,8 @@ class VocabViewModel @Inject constructor(
                             definition = word.definition.ifBlank { fresh.definition },
                             examples = (word.examples + fresh.examples).distinct(),
                             related = (word.related + fresh.related).distinct(),
+                            family = (word.family + fresh.family).distinct(),
+                            confusions = (word.confusions + fresh.confusions).distinct(),
                             collocations = mergeCollocations(word.collocations, fresh.collocations),
                         ),
                     )

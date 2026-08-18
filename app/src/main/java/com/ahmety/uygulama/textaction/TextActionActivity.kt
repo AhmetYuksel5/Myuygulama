@@ -174,8 +174,14 @@ private fun TextActionDialog(
                 info.examples.forEachIndexed { index, example ->
                     LabeledLine(lead = "${index + 1}.", text = example)
                 }
+                if (info.family.isNotEmpty()) {
+                    LabeledLine(lead = "Aile", text = info.family.joinToString(" → "), dim = true)
+                }
                 if (info.related.isNotEmpty()) {
                     RelatedChips(info.related)
+                }
+                info.confusions.forEach { line ->
+                    LabeledLine(lead = "Karıştırma", text = line, dim = true)
                 }
                 info.collocations.forEach { group ->
                     LabeledLine(lead = group.pattern, text = group.words.joinToString(" · "), dim = true)
@@ -221,7 +227,7 @@ private fun LabeledLine(lead: String, text: String, dim: Boolean = false) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             // Eşdizim kalıbının adı ("fiil +") sayıdan geniş.
-            modifier = Modifier.width(if (dim) 58.dp else 22.dp),
+            modifier = Modifier.width(if (dim) 74.dp else 22.dp),
         )
         Text(
             text = text,
