@@ -1,5 +1,6 @@
 package com.ahmety.uygulama.core.ai
 
+import com.ahmety.uygulama.core.model.Collocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -19,7 +20,11 @@ data class WordInfo(
     val definition: String,
     val examples: List<String>,
     val related: List<String>,
-    val phrases: List<String>,
+    /**
+     * Kelimenin hangi kelimelerle birlikte kullanıldığı, dilbilgisi kalıbına
+     * göre gruplanmış — Oxford Collocations Dictionary mantığı.
+     */
+    val collocations: List<Collocation>,
 )
 
 sealed interface AiResult<out T> {
@@ -50,24 +55,16 @@ class OpenAiClient @Inject constructor(
      * ilgili kelimelerini üretir. [context] verilirse (kitapta geçtiği cümle)
      * anlam o bağlama göre seçilir — bir kelimenin birden çok anlamı olabiliyor.
      */
-    suspend fun describeWord(word: String, context: String = ""): AiResult<WordInfo> {
+    suspend fun describeWord(
+        word: String,
+        context: String = "",
+        passage: Boolean = false,
+    ): AiResult<WordInfo> {
         // "word" tek kelime de olabilir, kitaptan seçilmiş bir öbek de.
         val key = settings.apiKey
         if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
 
-        val instruction = buildString {
-            append("You are a bilingual English-Turkish lexicographer. ")
-            append("The input may be a single word OR a multi-word phrase taken ")
-            append("from a book; treat it as one unit. ")
-            append("Return STRICT JSON with keys: ")
-            append("t (Turkish meanings, 1-3, comma separated), ")
-            append("d (short English definition, max 12 words, no final period), ")
-            append("e (array of exactly 3 natural example sentences using it, 6-16 words each), ")
-            append("r (array of 3-5 related words; mark opposites like \"scarce (zıt)\"), ")
-            append("p (array of exactly 5 common collocations, each formatted as ")
-            append("\"english phrase — Turkish meaning\" using an em dash). ")
-            append("No markdown, no extra keys, no commentary.")
-        }
+        val instruction = if (passage) passageInstruction() else wordInstruction()
         val userText = if (context.isBlank()) {
             "Input: $word"
         } else {
@@ -112,10 +109,54 @@ class OpenAiClient @Inject constructor(
         }
     }
 
+    /** Tek kelime ya da öbek için sözlük maddesi. */
+    private fun wordInstruction(): String = buildString {
+        append("You are a bilingual English-Turkish lexicographer. ")
+        append("The input may be a single word OR a multi-word phrase taken ")
+        append("from a book; treat it as one unit. ")
+        append("Return STRICT JSON with keys: ")
+        append("t (Turkish meanings, 1-3, comma separated), ")
+        append("d (short English definition, max 12 words, no final period), ")
+        append("e (array of exactly 3 natural example sentences using it, 6-16 words each), ")
+        append("r (array of 3-5 related words; mark opposites like \"scarce (zıt)\"), ")
+        append("c (collocations grouped by grammatical pattern, like an Oxford ")
+        append("Collocations Dictionary entry: array of objects with g and w. ")
+        append("g is the pattern label in Turkish, chosen from exactly these: ")
+        append("\"fiil +\" (verbs used with this noun), \"sıfat +\" (adjectives used ")
+        append("with this noun), \"zarf +\" (adverbs used with this adjective or verb), ")
+        append("\"+ isim\" (nouns this adjective or verb typically goes with), ")
+        append("\"+ edat\" (prepositions), \"kalıp\" (fixed expressions). ")
+        append("w is an array of 3-6 collocates, English only, no translation, ")
+        append("no article unless it is part of the collocation. ")
+        append("Give 2-4 groups, only patterns that genuinely apply to this word's ")
+        append("part of speech). ")
+        append("No markdown, no extra keys, no commentary.")
+    }
+
+    /**
+     * Anlaşılmayan bir cümle/cümlecik için. Sözlük maddesi işe yaramaz:
+     * burada gereken çeviri, sade bir İngilizce karşılık ve cümleyi zor
+     * kılan yapının açıklaması.
+     */
+    private fun passageInstruction(): String = buildString {
+        append("You are a bilingual English-Turkish teacher. ")
+        append("The input is a sentence or clause a Turkish learner did not understand. ")
+        append("Any surrounding text is context only — explain THE INPUT itself. ")
+        append("Return STRICT JSON with keys: ")
+        append("t (natural Turkish translation of the input), ")
+        append("d (the same idea in simple English, max 15 words), ")
+        append("e (array of 1-3 short notes in Turkish explaining what makes it hard: ")
+        append("idiom, phrasal verb, inversion, ellipsis, tense — name it and explain), ")
+        append("r (array of 0-4 idioms or phrasal verbs that appear in it, ")
+        append("each as \"expression — Turkish meaning\"), ")
+        append("c (empty array). ")
+        append("No markdown, no extra keys, no commentary.")
+    }
+
     private fun parseWord(word: String, json: JSONObject): AiResult<WordInfo> {
         val examples = json.optJSONArray("e").toStringList()
         val related = json.optJSONArray("r").toStringList()
-        val phrases = json.optJSONArray("p").toStringList()
+        val collocations = json.optJSONArray("c").toCollocations()
         val meaning = json.optString("t").trim()
         if (meaning.isBlank() && examples.isEmpty()) {
             return AiResult.Failed("Yanıt anlaşılamadı.")
@@ -127,9 +168,20 @@ class OpenAiClient @Inject constructor(
                 definition = json.optString("d").trim(),
                 examples = examples,
                 related = related,
-                phrases = phrases,
+                collocations = collocations,
             ),
         )
+    }
+
+    /** `c` alanı: kalıp adı + o kalıptaki kelimeler. */
+    private fun JSONArray?.toCollocations(): List<Collocation> {
+        if (this == null) return emptyList()
+        return (0 until length()).mapNotNull { index ->
+            val group = optJSONObject(index) ?: return@mapNotNull null
+            val pattern = group.optString("g").trim()
+            val words = group.optJSONArray("w").toStringList()
+            if (pattern.isBlank() || words.isEmpty()) null else Collocation(pattern, words)
+        }
     }
 
     private fun JSONArray?.toStringList(): List<String> {

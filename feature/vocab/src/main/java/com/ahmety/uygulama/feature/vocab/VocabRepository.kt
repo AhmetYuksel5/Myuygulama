@@ -1,6 +1,5 @@
 package com.ahmety.uygulama.feature.vocab
 
-import android.content.Context
 import com.ahmety.uygulama.core.database.dao.VocabDao
 import com.ahmety.uygulama.core.database.entity.ChangeEntityType
 import com.ahmety.uygulama.core.database.entity.ChangeOperation
@@ -18,27 +17,24 @@ import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.nextSchedule
 import com.ahmety.uygulama.core.model.startOfDay
 import com.ahmety.uygulama.core.model.VocabWord
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Kelime listesi iki kaynaktan geliyor:
- *  - uygulamayla gelen sabit deste (asset),
- *  - kitapta **mavi** işaretlediğin kelimeler (bilmediğin kelimeler).
+ * Kelime listesi tamamen kendi okuduğun ve izlediğinden geliyor: kitapta
+ * **mavi** işaretlediğin kelimeler, **kırmızı** işaretlediğin cümleler, film
+ * altyazısından çıkarılanlar ve başka uygulamalarda seçip gönderdiklerin.
+ * Hazır bir deste yok — bilmediğin kelime zaten senin karşına çıkan kelime.
  *
- * Kullanıcı durumu (biliyorum / bilmiyorum / emin değilim) veritabanında;
- * yazmalar değişiklik günlüğünden geçtiği için ikinci telefona da taşınıyor.
+ * Kararlar ve tekrar programı veritabanında; yazmalar değişiklik
+ * günlüğünden geçtiği için ikinci telefona da taşınıyor.
  */
 @Singleton
 class VocabRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val vocabDao: VocabDao,
     private val entryRepository: EntryRepository,
     private val enrichment: WordEnrichmentStore,
@@ -48,23 +44,6 @@ class VocabRepository @Inject constructor(
     private val now: Now,
 ) {
 
-    private val jsonParser = Json { ignoreUnknownKeys = true }
-
-    @Volatile
-    private var cached: List<VocabWord>? = null
-
-    /** Uygulamayla gelen sabit deste. */
-    suspend fun assetWords(): List<VocabWord> = withContext(Dispatchers.IO) {
-        val all = cached ?: loadFromAsset().also { cached = it }
-        val skip = hidden.words()
-        if (skip.isEmpty()) all else all.filter { it.word.lowercase() !in skip }
-    }
-
-    /**
-     * Kitapta **mavi** işaretlenmiş kelimeler. Akış olarak veriyoruz: kitapta
-     * yeni bir kelime işaretleyince kelime destesinde uygulamayı yeniden
-     * başlatmadan belirmesi gerekiyor.
-     */
     /**
      * Kitapta/altyazıda **mavi** işaretlenmiş kelimeler. Akış olarak veriyoruz:
      * yeni bir kelime işaretleyince uygulamayı yeniden başlatmadan destede
@@ -79,7 +58,9 @@ class VocabRepository @Inject constructor(
     ) { entries, documents ->
         val titleById = documents.associate { it.id to it.title.trim() }
         entries
-            .filter { HighlightRef.color(it.source) == HighlightColor.BLUE }
+            // Mavi = bilmediğin kelime, kırmızı = anlamadığın cümle/cümlecik.
+            // İkisi de çalışılacak; kartta farklı davranıyorlar.
+            .filter { HighlightRef.color(it.source) in STUDIED_COLORS }
             .filter { it.title.isNotBlank() }
             .filter { it.title.trim().lowercase() !in hidden.words() }
             .map { entry ->
@@ -87,21 +68,24 @@ class VocabRepository @Inject constructor(
                 // Daha önce yapay zekâyla doldurulduysa onu kullan.
                 val filled = enrichment.get(word)
                 val kind = HighlightRef.kind(entry.source)
+                val passage = HighlightRef.color(entry.source) == HighlightColor.RED
                 VocabWord(
                     word = word,
                     meaning = filled?.meaning.orEmpty(),
                     definition = filled?.definition.orEmpty(),
                     examples = filled?.examples.orEmpty(),
                     related = filled?.related.orEmpty(),
-                    phrases = filled?.phrases.orEmpty(),
+                    collocations = filled?.collocations.orEmpty(),
                     context = entry.body.trim(),
                     source = when (kind) {
                         HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
+                        HighlightRef.KIND_SELECTION -> VocabSource.SELECTION
                         else -> VocabSource.BOOK
                     },
                     sourceName = HighlightRef.sourceId(entry.source)
                         ?.let { titleById[it] }
                         .orEmpty(),
+                    isPassage = passage,
                 )
             }
             .distinctBy { it.word.lowercase() }
@@ -115,11 +99,10 @@ class VocabRepository @Inject constructor(
      * listesine yazıyoruz.
      */
     suspend fun deleteWord(word: VocabWord) {
-        if (word.fromLibrary) {
-            entryRepository.listByType(EntryType.HIGHLIGHT)
-                .filter { it.title.trim().equals(word.word, ignoreCase = true) }
-                .forEach { entryRepository.deleteEntry(it.id) }
-        }
+        entryRepository.listByType(EntryType.HIGHLIGHT)
+            .filter { it.title.trim().equals(word.word, ignoreCase = true) }
+            .forEach { entryRepository.deleteEntry(it.id) }
+        // Aynı kelime kitapta yeniden işaretlenirse geri gelmesin.
         hidden.hide(word.word)
     }
 
@@ -132,7 +115,7 @@ class VocabRepository @Inject constructor(
                 definition = word.definition,
                 examples = word.examples,
                 related = word.related,
-                phrases = word.phrases,
+                collocations = word.collocations,
             ),
         )
     }
@@ -154,33 +137,8 @@ class VocabRepository @Inject constructor(
             definition = filled.definition,
             examples = filled.examples,
             related = filled.related,
-            phrases = filled.phrases,
+            collocations = filled.collocations,
         )
-    }
-
-    /**
-     * Deste + kitaptan gelenler. Aynı kelime iki kaynakta da varsa kitaptan
-     * geleni önceliyoruz: kendi bağlam cümleni taşıyor.
-     */
-    fun mergeWords(asset: List<VocabWord>, fromBooks: List<VocabWord>): List<VocabWord> {
-        val byWord = LinkedHashMap<String, VocabWord>()
-        fromBooks.forEach { byWord[it.word.lowercase()] = it }
-        asset.forEach { existing ->
-            val key = existing.word.lowercase()
-            val book = byWord[key]
-            byWord[key] = if (book == null) {
-                existing
-            } else {
-                // Kitaptan gelen kelimenin anlamı yok; destede varsa
-                // anlamını/örneklerini kullan, bağlam cümlesini koru.
-                existing.copy(
-                    context = book.context,
-                    source = book.source,
-                    sourceName = book.sourceName,
-                )
-            }
-        }
-        return byWord.values.toList()
     }
 
     fun observeProgress(): Flow<List<VocabProgressEntity>> = vocabDao.observeAll()
@@ -233,36 +191,9 @@ class VocabRepository @Inject constructor(
 
     fun nowMillis(): Long = now.millis()
 
-    private fun loadFromAsset(): List<VocabWord> = runCatching {
-        context.assets.open(ASSET_NAME).bufferedReader().use { reader ->
-            jsonParser.decodeFromString(
-                kotlinx.serialization.builtins.ListSerializer(RawWord.serializer()),
-                reader.readText(),
-            ).map { raw ->
-                VocabWord(
-                    word = raw.w,
-                    meaning = raw.t,
-                    definition = raw.d,
-                    examples = raw.e,
-                    related = raw.r,
-                    phrases = raw.p,
-                )
-            }
-        }
-    }.getOrDefault(emptyList())
-
-    @kotlinx.serialization.Serializable
-    private data class RawWord(
-        val w: String,
-        val t: String = "",
-        val d: String = "",
-        val e: List<String> = emptyList(),
-        val r: List<String> = emptyList(),
-        val p: List<String> = emptyList(),
-    )
-
     private companion object {
-        const val ASSET_NAME = "vocab_upper_intermediate.json"
+        /** Kelime destesine düşen işaretleme renkleri. */
+        val STUDIED_COLORS = setOf(HighlightColor.BLUE, HighlightColor.RED)
     }
 }
 

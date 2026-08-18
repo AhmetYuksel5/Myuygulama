@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.AiSettings
 import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.model.Collocation
 import com.ahmety.uygulama.core.model.VocabDecision
 import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
@@ -55,6 +56,7 @@ data class VocabUiState(
     val unsureCount: Int = 0,
     val bookCount: Int = 0,
     val subtitleCount: Int = 0,
+    val selectionCount: Int = 0,
     /** Bugün vadesi gelen kelime sayısı (kuyruk sınırından önce). */
     val dueToday: Int = 0,
     /** Bugün eklenen yeni kelime sayısı ve günlük sınır. */
@@ -105,7 +107,7 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(word.word, word.context)) {
+            when (val result = openAi.describeWord(word.word, word.context, word.isPassage)) {
                 is AiResult.Ok -> {
                     repository.saveEnrichment(result.value)
                     _aiMessage.value = null
@@ -142,26 +144,20 @@ class VocabViewModel @Inject constructor(
     private val prefs = VocabPrefs(context)
 
     private val mode = MutableStateFlow(VocabMode.TODAY)
-    private val assetWords = MutableStateFlow<List<VocabWord>>(emptyList())
 
     private val _swipeThreshold = MutableStateFlow(prefs.swipeThreshold)
     val swipeThreshold: StateFlow<Int> = _swipeThreshold
 
 
-    init {
-        viewModelScope.launch { assetWords.value = repository.assetWords() }
-    }
-
     val uiState: StateFlow<VocabUiState> = combine(
-        assetWords,
         repository.observeProgress(),
         mode,
         // Kitapta yeni işaretlenen mavi kelime, uygulamayı yeniden başlatmadan
         // burada belirmeli; bu yüzden akış olarak dinliyoruz.
         repository.observeBookWords(),
         session,
-    ) { asset, progress, currentMode, bookWords, sessionState ->
-        val words = repository.mergeWords(asset, repository.applyEnrichment(bookWords))
+    ) { progress, currentMode, bookWords, sessionState ->
+        val words = repository.applyEnrichment(bookWords)
         val known = progress.count { it.status == VocabStatus.KNOWN.name }
         val learning = progress.count {
             it.status == VocabStatus.LEARNING.name || it.status == VocabStatus.UNSURE.name
@@ -207,12 +203,10 @@ class VocabViewModel @Inject constructor(
 
         val backlog = due.count { (scheduled(it)?.dueAt ?: 0L) < dayStart }
 
-        // Henüz programa girmemiş kelimeler. Sıra sabit: önce kendi
-        // kitabından/filminden gelenler (bağlamını taşıyorlar, daha iyi
-        // tutunuyorlar), sonra sabit deste.
+        // Henüz programa girmemiş kelimeler. Sıra sabit, rastgele değil.
         val fresh = filtered
             .filter { scheduled(it) == null }
-            .sortedWith(compareBy({ if (it.fromLibrary) 0 else 1 }, { it.word.lowercase() }))
+            .sortedBy { it.word.lowercase() }
 
         // Birikme varken yeni kelime vermiyoruz; yığın erimeden üstüne
         // eklemek kullanıcıyı kaçırıyor.
@@ -253,6 +247,7 @@ class VocabViewModel @Inject constructor(
             unsureCount = ignored,
             bookCount = bookWords.count { it.source == VocabSource.BOOK },
             subtitleCount = bookWords.count { it.source == VocabSource.SUBTITLE },
+            selectionCount = bookWords.count { it.source == VocabSource.SELECTION },
             sources = bookWords
                 .filter { it.sourceName.isNotBlank() }
                 .map { it.source to it.sourceName }
@@ -263,7 +258,7 @@ class VocabViewModel @Inject constructor(
             newToday = introducedToday,
             backlog = backlog,
             nextDueInDays = nextDue,
-            loaded = asset.isNotEmpty() || bookWords.isNotEmpty(),
+            loaded = true,
             turn = sessionState.turn,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VocabUiState())
@@ -305,7 +300,7 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(word.word, word.context)) {
+            when (val result = openAi.describeWord(word.word, word.context, word.isPassage)) {
                 is AiResult.Ok -> {
                     val fresh = result.value
                     repository.saveEdit(
@@ -314,7 +309,7 @@ class VocabViewModel @Inject constructor(
                             definition = word.definition.ifBlank { fresh.definition },
                             examples = (word.examples + fresh.examples).distinct(),
                             related = (word.related + fresh.related).distinct(),
-                            phrases = (word.phrases + fresh.phrases).distinct(),
+                            collocations = mergeCollocations(word.collocations, fresh.collocations),
                         ),
                     )
                     _aiMessage.value = null
@@ -360,6 +355,22 @@ class VocabViewModel @Inject constructor(
 }
 
 /** Günlük yeni kelime sınırı. Sınırsız yeni kelime, günler sonra taşıyamayacağın bir tekrar yükü demek. */
+/**
+ * Aynı kalıptaki collocation'ları tek grupta topluyor: "örnek çoğalt" ikinci
+ * kez çağrıldığında "fiil +" iki ayrı blok olarak görünmemeli.
+ */
+private fun mergeCollocations(
+    current: List<Collocation>,
+    fresh: List<Collocation>,
+): List<Collocation> {
+    val byPattern = LinkedHashMap<String, MutableList<String>>()
+    (current + fresh).forEach { group ->
+        val words = byPattern.getOrPut(group.pattern) { mutableListOf() }
+        group.words.forEach { word -> if (word !in words) words += word }
+    }
+    return byPattern.map { (pattern, words) -> Collocation(pattern, words) }
+}
+
 private const val DAILY_NEW_LIMIT = 8
 
 /** Bu kadar kelime birikmişse yeni kelime verilmiyor; önce yığın erisin. */

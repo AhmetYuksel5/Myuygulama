@@ -1,11 +1,14 @@
+@file:OptIn(ExperimentalFoundationApi::class)
+
 package com.ahmety.uygulama.feature.vocab
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ahmety.uygulama.core.model.Collocation
 import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabWord
 import kotlinx.coroutines.delay
@@ -131,7 +135,7 @@ fun VocabRoute(
         }
 
         // Kaynak süzgeci yalnızca kitaptan/filmden gelen kelime varken.
-        if (state.bookCount > 0 || state.subtitleCount > 0) {
+        if (state.bookCount > 0 || state.subtitleCount > 0 || state.selectionCount > 0) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
@@ -156,6 +160,13 @@ fun VocabRoute(
                         selected = filter.source == VocabSource.SUBTITLE &&
                             filter.sourceName.isBlank(),
                     ) { viewModel.setFilter(VocabFilter(source = VocabSource.SUBTITLE)) }
+                }
+                if (state.selectionCount > 0) {
+                    ModeChip(
+                        label = "Seçtiklerim (${state.selectionCount})",
+                        selected = filter.source == VocabSource.SELECTION &&
+                            filter.sourceName.isBlank(),
+                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.SELECTION)) }
                 }
                 // Tek tek başlıklar: "şu kitaptan" ya da "şu filmden" çalışmak.
                 state.sources.forEach { (source, name) ->
@@ -325,7 +336,11 @@ private fun WordEditDialog(
     var meaning by remember(word.word) { mutableStateOf(word.meaning) }
     var definition by remember(word.word) { mutableStateOf(word.definition) }
     var examples by remember(word.word) { mutableStateOf(word.examples.joinToString("\n")) }
-    var phrases by remember(word.word) { mutableStateOf(word.phrases.joinToString("\n")) }
+    var collocations by remember(word.word) {
+        mutableStateOf(
+            word.collocations.joinToString("\n") { "${it.pattern}: ${it.words.joinToString(", ")}" },
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -356,9 +371,9 @@ private fun WordEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
-                    value = phrases,
-                    onValueChange = { phrases = it },
-                    label = { Text("Öbekler (her satır bir öbek)") },
+                    value = collocations,
+                    onValueChange = { collocations = it },
+                    label = { Text("Eşdizim (her satır \"kalıp: kelime, kelime\")") },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -371,7 +386,7 @@ private fun WordEditDialog(
                             meaning = meaning.trim(),
                             definition = definition.trim(),
                             examples = examples.lines().map { it.trim() }.filter { it.isNotBlank() },
-                            phrases = phrases.lines().map { it.trim() }.filter { it.isNotBlank() },
+                            collocations = parseCollocations(collocations),
                         ),
                     )
                 },
@@ -531,9 +546,6 @@ private fun SwipeableCard(
                 rotationZ = animatedX / 40f
             }
             .pointerInput(key) {
-                detectTapGestures(onLongPress = { onLongPress() })
-            }
-            .pointerInput(key) {
                 detectDragGestures(
                     onDragEnd = {
                         val horizontal = abs(offsetX) > abs(offsetY)
@@ -583,6 +595,7 @@ private fun SwipeableCard(
             onEnrich = onEnrich,
             revealed = revealed,
             onToggleReveal = { revealed = !revealed },
+            onLongPress = onLongPress,
         )
     }
 }
@@ -615,6 +628,7 @@ private fun WordCard(
     onEnrich: (() -> Unit)? = null,
     revealed: Boolean = false,
     onToggleReveal: () -> Unit = {},
+    onLongPress: () -> Unit = {},
 ) {
 
     Card(
@@ -630,7 +644,13 @@ private fun WordCard(
                     .fillMaxSize()
                     .then(
                         if (interactive) {
-                            Modifier.clickable(onClick = onToggleReveal)
+                            // Uzun basış da burada: dış katmandaki bir
+                            // algılayıcı dokunuşu göremiyor, çünkü bu
+                            // clickable onu önce tüketiyor.
+                            Modifier.combinedClickable(
+                                onClick = onToggleReveal,
+                                onLongClick = onLongPress,
+                            )
                         } else {
                             Modifier
                         },
@@ -712,27 +732,10 @@ private fun WordCard(
                         RelatedChips(word.related)
                     }
 
-                    if (word.phrases.isNotEmpty()) {
+                    if (word.collocations.isNotEmpty()) {
                         Spacer(Modifier.height(10.dp))
-                        word.phrases.forEach { phrase ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 4.dp),
-                            ) {
-                                Text(
-                                    text = "•",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.width(18.dp),
-                                )
-                                Text(
-                                    text = phrase,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    textAlign = TextAlign.Start,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
+                        word.collocations.forEach { group ->
+                            CollocationRow(group)
                         }
                     }
 
@@ -844,3 +847,39 @@ private fun RelatedChips(words: List<String>) {
 
 /** Açık ve koyu temada da beyaz yazıyı taşıyan bir mavi. */
 private val CHIP_BLUE = Color(0xFF1565C0)
+
+/**
+ * Bir kullanım kalıbı: solda kalıbın adı, sağında o kalıptaki kelimeler.
+ * Oxford eşdizim sözlüğündeki gibi — "make · take · reach a decision".
+ */
+@Composable
+private fun CollocationRow(group: Collocation) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Text(
+            text = group.pattern,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(58.dp),
+        )
+        Text(
+            text = group.words.joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Start,
+        )
+    }
+}
+
+/** "kalıp: kelime, kelime" satırlarını çözer; bozuk satırları atlar. */
+internal fun parseCollocations(text: String): List<Collocation> = text.lines()
+    .mapNotNull { line ->
+        val pattern = line.substringBefore(':', "").trim()
+        val words = line.substringAfter(':', "")
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        if (pattern.isBlank() || words.isEmpty()) null else Collocation(pattern, words)
+    }

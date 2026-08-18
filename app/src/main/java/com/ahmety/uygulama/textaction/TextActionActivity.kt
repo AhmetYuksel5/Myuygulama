@@ -177,8 +177,8 @@ private fun TextActionDialog(
                 if (info.related.isNotEmpty()) {
                     RelatedChips(info.related)
                 }
-                info.phrases.forEach { phrase ->
-                    LabeledLine(lead = "•", text = phrase, dim = true)
+                info.collocations.forEach { group ->
+                    LabeledLine(lead = group.pattern, text = group.words.joinToString(" · "), dim = true)
                 }
             }
 
@@ -220,7 +220,8 @@ private fun LabeledLine(lead: String, text: String, dim: Boolean = false) {
             text = lead,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(22.dp),
+            // Eşdizim kalıbının adı ("fiil +") sayıdan geniş.
+            modifier = Modifier.width(if (dim) 58.dp else 22.dp),
         )
         Text(
             text = text,

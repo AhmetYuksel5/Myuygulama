@@ -2,6 +2,7 @@ package com.ahmety.uygulama.feature.vocab
 
 import android.content.Context
 import com.ahmety.uygulama.core.ai.WordInfo
+import com.ahmety.uygulama.core.model.Collocation
 import com.ahmety.uygulama.core.model.VocabWord
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
@@ -48,7 +49,7 @@ class WordEnrichmentStore @Inject constructor(
                 definition = json.optString("d"),
                 examples = json.optJSONArray("e").toList(),
                 related = json.optJSONArray("r").toList(),
-                phrases = json.optJSONArray("p").toList(),
+                collocations = json.optJSONArray("c").toCollocations(),
             )
         }.getOrNull()?.also { cache[key] = it }
     }
@@ -59,7 +60,18 @@ class WordEnrichmentStore @Inject constructor(
             put("d", info.definition)
             put("e", JSONArray().apply { info.examples.forEach { put(it) } })
             put("r", JSONArray().apply { info.related.forEach { put(it) } })
-            put("p", JSONArray().apply { info.phrases.forEach { put(it) } })
+            put(
+                "c",
+                JSONArray().apply {
+                    info.collocations.forEach { group ->
+                        put(
+                            JSONObject()
+                                .put("g", group.pattern)
+                                .put("w", JSONArray().apply { group.words.forEach { put(it) } }),
+                        )
+                    }
+                },
+            )
         }
         val key = info.word.lowercase()
         prefs.edit().putString(key, json.toString()).apply()
@@ -70,11 +82,21 @@ class WordEnrichmentStore @Inject constructor(
             definition = info.definition,
             examples = info.examples,
             related = info.related,
-            phrases = info.phrases,
+            collocations = info.collocations,
         )
     }
 
     fun has(word: String): Boolean = prefs.contains(word.lowercase())
+
+    private fun JSONArray?.toCollocations(): List<Collocation> {
+        if (this == null) return emptyList()
+        return (0 until length()).mapNotNull { index ->
+            val group = optJSONObject(index) ?: return@mapNotNull null
+            val pattern = group.optString("g").trim()
+            val words = group.optJSONArray("w").toList()
+            if (pattern.isBlank() || words.isEmpty()) null else Collocation(pattern, words)
+        }
+    }
 
     private fun JSONArray?.toList(): List<String> {
         if (this == null) return emptyList()

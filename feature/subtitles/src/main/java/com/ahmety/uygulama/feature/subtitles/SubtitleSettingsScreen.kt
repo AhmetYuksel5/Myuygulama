@@ -3,7 +3,6 @@ package com.ahmety.uygulama.feature.subtitles
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -47,13 +46,14 @@ fun SubtitleSettingsScreen(
     var saved by remember { mutableStateOf(settings.maskedKey()) }
 
     Column(
+        // Yüksekliği çağıran belirliyor: bu ekran hem kendi başına hem de
+        // film hazırlığındaki ayar kutusunun içinde açılıyor.
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Altyazı (OpenSubtitles)", style = MaterialTheme.typography.titleMedium)
         Text(
             text = "opensubtitles.com'da ücretsiz hesap aç, Consumers sayfasından bir API " +
                 "anahtarı üret ve buraya yapıştır. Anahtar yalnızca bu telefonda durur.",

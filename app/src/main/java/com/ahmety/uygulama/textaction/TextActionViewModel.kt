@@ -70,7 +70,10 @@ class TextActionViewModel @Inject constructor(
         }
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
-            when (val result = client.describeWord(text)) {
+            // Dört kelimeden uzun bir seçim sözlük maddesi değil, anlamadığın
+            // bir cümledir; yapay zekâdan çeviri ve açıklama isteniyor.
+            val passage = text.split(' ').count { it.isNotBlank() } >= PASSAGE_WORDS
+            when (val result = client.describeWord(text, passage = passage)) {
                 is AiResult.Ok -> _state.value = _state.value.copy(
                     loading = false,
                     info = result.value,
@@ -151,5 +154,8 @@ class TextActionViewModel @Inject constructor(
     private companion object {
         /** Yanlışlıkla bütün bir yazının seçilmesine karşı üst sınır. */
         const val MAX_LENGTH = 400
+
+        /** Bu kadar kelimeden uzun seçim, sözlük maddesi değil cümle sayılıyor. */
+        const val PASSAGE_WORDS = 4
     }
 }

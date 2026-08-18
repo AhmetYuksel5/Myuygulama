@@ -30,6 +30,11 @@ class SubtitleViewModel @Inject constructor(
     private val _state = MutableStateFlow(SubtitleUiState(configured = settings.configured))
     val state: StateFlow<SubtitleUiState> = _state.asStateFlow()
 
+    /** Ayar kutusu kapanınca anahtarın girilip girilmediğini yeniden okuyoruz. */
+    fun refreshConfigured() {
+        _state.value = _state.value.copy(configured = settings.configured)
+    }
+
     fun onQueryChange(value: String) {
         _state.value = _state.value.copy(query = value)
     }
@@ -50,7 +55,14 @@ class SubtitleViewModel @Inject constructor(
             pair = null,
         )
         viewModelScope.launch {
-            when (val result = repository.prepare(current.query, current.year.toIntOrNull())) {
+            // Beklenmedik bir hata ekranı kapatmasın: ne olduğunu yazıp
+            // duruyoruz, kullanıcı yeniden deneyebiliyor.
+            val outcome = runCatching {
+                repository.prepare(current.query, current.year.toIntOrNull())
+            }.getOrElse { error ->
+                SubtitleResult.Failed("Beklenmedik hata: ${error.message ?: error::class.simpleName}")
+            }
+            when (val result = outcome) {
                 is SubtitleResult.Failed -> _state.value = _state.value.copy(
                     busy = false,
                     step = "",
@@ -63,7 +75,9 @@ class SubtitleViewModel @Inject constructor(
                         pair = result.value,
                         step = "Bilmediğin kelimeler çıkarılıyor…",
                     )
-                    val words = repository.extractWords(result.value, WORD_LIMIT)
+                    val words = runCatching {
+                        repository.extractWords(result.value, WORD_LIMIT)
+                    }.getOrElse { emptyList() }
                     _state.value = _state.value.copy(
                         busy = false,
                         step = "",
@@ -86,7 +100,7 @@ class SubtitleViewModel @Inject constructor(
         if (current.busy || current.words.isEmpty()) return
         _state.value = current.copy(busy = true, step = "Kelimeler ekleniyor…")
         viewModelScope.launch {
-            val count = repository.save(pair, current.words)
+            val count = runCatching { repository.save(pair, current.words) }.getOrElse { 0 }
             _state.value = _state.value.copy(
                 busy = false,
                 step = "",

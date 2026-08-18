@@ -24,6 +24,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:model"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.okhttp)
     implementation(libs.hilt.android)

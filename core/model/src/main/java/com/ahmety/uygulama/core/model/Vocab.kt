@@ -3,9 +3,9 @@ package com.ahmety.uygulama.core.model
 /**
  * Bir kelime kartı.
  *
- * Kart yüzünde yalnızca kelime durur; anlam, tanım, örnekler ve ilgili
- * kelimeler kelimeye dokununca açılır. Böylece önce hatırlamayı deneyip
- * sonra kontrol edebiliyorsun.
+ * Kart yüzünde yalnızca kelime durur; anlam, tanım, örnekler ve eşdizimler
+ * kelimeye dokununca açılır. Böylece önce hatırlamayı deneyip sonra kontrol
+ * edebiliyorsun.
  */
 data class VocabWord(
     val word: String,
@@ -15,25 +15,44 @@ data class VocabWord(
     val examples: List<String> = emptyList(),
     /** Eş/zıt anlamlılar ve aynı kökten türeyenler. */
     val related: List<String> = emptyList(),
-    /** Kelimenin yaygın kullanıldığı öbekler ("abundant supply — bol arz"). */
-    val phrases: List<String> = emptyList(),
+    /**
+     * Kelimenin hangi kelimelerle birlikte kullanıldığı, dilbilgisi kalıbına
+     * göre gruplanmış. Oxford Collocations Dictionary mantığı: "make a
+     * decision" mi "do a decision" mı sorusunun cevabı burada.
+     */
+    val collocations: List<Collocation> = emptyList(),
     /** Kitaptan/filmden aktarıldıysa kelimenin geçtiği cümle. */
     val context: String = "",
     /** Kelimenin nereden geldiği. */
-    val source: VocabSource = VocabSource.DECK,
+    val source: VocabSource = VocabSource.SELECTION,
     /** Geldiği kitabın ya da filmin adı; kaynağa göre süzmek için. */
     val sourceName: String = "",
-) {
-    /** Sabit desteden değil, kendi okuduğun/izlediğin şeyden gelen kelime. */
-    val fromLibrary: Boolean get() = source != VocabSource.DECK
-}
+    /**
+     * Kitapta **kırmızı** işaretlenen parça: tek kelime değil, anlaşılmayan
+     * bir cümle ya da cümlecik. Anlamı sözlük maddesi gibi değil, çeviri ve
+     * açıklama olarak isteniyor.
+     */
+    val isPassage: Boolean = false,
+)
 
-/** Kelimenin hangi kaynaktan geldiği. */
+/**
+ * Bir kullanım kalıbı ve o kalıptaki kelimeler.
+ *
+ * [pattern] kalıbın adı ("fiil +", "+ isim", "sıfat +", "+ edat"), [words] ise
+ * o kalıpta kelimeyle birlikte kullanılanlar. Türkçe karşılık koymuyoruz:
+ * kelimenin anlamı kartın üstünde zaten var, buradaki mesele doğru eşdizim.
+ */
+data class Collocation(
+    val pattern: String,
+    val words: List<String>,
+)
+
+/** Kelimenin nereden geldiği. */
 enum class VocabSource(val label: String) {
-    /** Uygulamayla gelen sabit deste. */
-    DECK("Deste"),
+    /** Başka bir uygulamada seçip gönderdiğin metin. */
+    SELECTION("Seçtiklerim"),
 
-    /** Kitapta mavi işaretlenen kelime. */
+    /** Kitapta işaretlenen kelime ya da cümle. */
     BOOK("Kitaptan"),
 
     /** Film altyazısından çıkarılan kelime. */
