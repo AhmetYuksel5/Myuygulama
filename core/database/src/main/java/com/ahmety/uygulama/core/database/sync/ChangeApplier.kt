@@ -103,13 +103,47 @@ class ChangeApplier @Inject constructor(
         return true
     }
 
+    /**
+     * Kelime ilerlemesi tekrar programını da taşıyor; "son yazan kazanır"
+     * tek başına yetmiyor.
+     *
+     * Kazananı yine [VocabProgressEntity.updatedAt] belirliyor, ama sayaçlar
+     * geri gitmemeli ve sıradaki tekrar tarihi ileri alınmalı: aynı kelime
+     * iki telefonda arka arkaya sorulursa çalışma boşa gider. En kötü ihtimalle
+     * bir kademe ilerleme kaybediyoruz, o zararsız.
+     */
     private suspend fun applyVocab(payload: String): Boolean {
         val incoming = json.decodeFromString(VocabProgressEntity.serializer(), payload)
         val local = vocabDao.get(incoming.word)
         // word birincil anahtar; id sorunu yok, sadece zaman karşılaştırması.
         if (local != null && incoming.updatedAt < local.updatedAt) return false
-        vocabDao.upsert(incoming)
+        val merged = if (local == null) {
+            incoming
+        } else {
+            incoming.copy(
+                reviewCount = maxOf(incoming.reviewCount, local.reviewCount),
+                lapseCount = maxOf(incoming.lapseCount, local.lapseCount),
+                revealCount = maxOf(incoming.revealCount, local.revealCount),
+                dueAt = maxOfNullable(incoming.dueAt, local.dueAt),
+                lastReviewedAt = maxOfNullable(incoming.lastReviewedAt, local.lastReviewedAt),
+                introducedAt = minOfNullable(incoming.introducedAt, local.introducedAt),
+            )
+        }
+        vocabDao.upsert(merged)
         return true
+    }
+
+    /** İkisi de doluysa büyüğü; biri boşsa dolu olan. */
+    private fun maxOfNullable(a: Long?, b: Long?): Long? = when {
+        a == null -> b
+        b == null -> a
+        else -> maxOf(a, b)
+    }
+
+    private fun minOfNullable(a: Long?, b: Long?): Long? = when {
+        a == null -> b
+        b == null -> a
+        else -> minOf(a, b)
     }
 
     private fun EntryEntity.serialized(): String = json.encodeToString(EntryEntity.serializer(), this)

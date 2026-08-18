@@ -94,7 +94,13 @@ fun VocabRoute(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Bildiğin ${state.knownCount} kelime",
+                text = buildString {
+                    append("Bugün ${state.dueToday}")
+                    if (state.newToday < state.newLimit && state.backlog <= 0) {
+                        append(" · yeni ${state.newToday}/${state.newLimit}")
+                    }
+                    append(" · öğrendiğin ${state.knownCount}")
+                },
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -107,11 +113,13 @@ fun VocabRoute(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
         ) {
-            ModeChip("Tümü", state.mode == VocabMode.ALL) { viewModel.setMode(VocabMode.ALL) }
+            ModeChip("Bugün (${state.dueToday})", state.mode == VocabMode.TODAY) {
+                viewModel.setMode(VocabMode.TODAY)
+            }
             ModeChip(
-                label = "Çalıştıklarım (${state.learningCount})",
-                selected = state.mode == VocabMode.LEARNING,
-            ) { viewModel.setMode(VocabMode.LEARNING) }
+                label = "Tümü (${state.learningCount})",
+                selected = state.mode == VocabMode.ALL,
+            ) { viewModel.setMode(VocabMode.ALL) }
             ModeChip(
                 label = "Öğrendiklerim (${state.knownCount})",
                 selected = state.mode == VocabMode.KNOWN,
@@ -166,7 +174,7 @@ fun VocabRoute(
         ) {
             when {
                 !state.loaded -> Text("Yükleniyor…")
-                state.deck.isEmpty() -> EmptyDeck(state.mode)
+                state.deck.isEmpty() -> EmptyDeck(state)
                 else -> {
                     state.deck.getOrNull(1)?.let { next ->
                         WordCardStatic(next)
@@ -184,10 +192,10 @@ fun VocabRoute(
                         } else {
                             null
                         },
-                        onKnown = { viewModel.markKnown(top) },
-                        onLearning = { viewModel.markLearning(top) },
-                        onIgnore = { viewModel.markIgnored(top) },
-                        onSkip = { viewModel.skip(top) },
+                        onKnown = { viewModel.markKnown(top, it) },
+                        onLearning = { viewModel.markLearning(top, it) },
+                        onIgnore = { viewModel.markIgnored(top, it) },
+                        onSkip = { viewModel.skip(top, it) },
                         onLongPress = { menuWord = top },
                     )
                 }
@@ -421,19 +429,37 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EmptyDeck(mode: VocabMode) {
-    Text(
-        text = when (mode) {
-            VocabMode.LEARNING -> "Çalıştığın kelime yok."
-            VocabMode.IGNORED -> "Önemsize atılmış kelime yok."
-            VocabMode.KNOWN -> "Henüz öğrendiğin kelime yok."
-            VocabMode.ALL -> "Bu kaynakta çalışılacak kelime kalmadı."
-        },
-        style = MaterialTheme.typography.bodyLarge,
-        textAlign = TextAlign.Center,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun EmptyDeck(state: VocabUiState) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(24.dp),
-    )
+    ) {
+        Text(
+            text = when (state.mode) {
+                VocabMode.TODAY -> "Bugünlük bitti."
+                VocabMode.ALL -> "Bu kaynakta çalışılacak kelime kalmadı."
+                VocabMode.IGNORED -> "Önemsize atılmış kelime yok."
+                VocabMode.KNOWN -> "Henüz öğrendiğin kelime yok."
+            },
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        if (state.mode == VocabMode.TODAY) {
+            Text(
+                text = when {
+                    state.backlog > 0 ->
+                        "Biriken ${state.backlog} kelime var; yeni kelime, yığın erirken bekliyor."
+                    state.nextDueInDays != null ->
+                        "Sıradaki tekrar ${state.nextDueInDays} gün sonra."
+                    else -> "Yeni kelime eklemek için kitapta ya da altyazıda işaretle."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
 }
 
 /**
@@ -447,12 +473,15 @@ private fun SwipeableCard(
     threshold: Float,
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
-    onKnown: () -> Unit,
-    onLearning: () -> Unit,
-    onIgnore: () -> Unit,
-    onSkip: () -> Unit,
+    onKnown: (Boolean) -> Unit,
+    onLearning: (Boolean) -> Unit,
+    onIgnore: (Boolean) -> Unit,
+    onSkip: (Boolean) -> Unit,
     onLongPress: () -> Unit,
 ) {
+    // Anlamı açtıysan hatırlayamadın demektir; karar bunu da taşıyor,
+    // program kademeyi ilerletmiyor.
+    var revealed by remember(key) { mutableStateOf(false) }
     var offsetX by remember(key) { mutableFloatStateOf(0f) }
     var offsetY by remember(key) { mutableFloatStateOf(0f) }
     var dismissed by remember(key) { mutableStateOf(false) }
@@ -511,19 +540,27 @@ private fun SwipeableCard(
                         when {
                             // Sol: çalıştım, tekrar çalışacağım.
                             horizontal && offsetX < -threshold -> {
-                                flyToX = -1600f; decision = onLearning; dismissed = true
+                                flyToX = -1600f
+                                decision = { onLearning(revealed) }
+                                dismissed = true
                             }
                             // Sağ: şimdilik geç; karar kaydedilmiyor.
                             horizontal && offsetX > threshold -> {
-                                flyToX = 1600f; decision = onSkip; dismissed = true
+                                flyToX = 1600f
+                                decision = { onSkip(revealed) }
+                                dismissed = true
                             }
                             // Aşağı: önemsiz kelimeler arasına.
                             !horizontal && offsetY > threshold -> {
-                                flyToY = 1800f; decision = onIgnore; dismissed = true
+                                flyToY = 1800f
+                                decision = { onIgnore(revealed) }
+                                dismissed = true
                             }
                             // Yukarı: öğrendim, bir daha çıkmasın.
                             !horizontal && offsetY < -threshold -> {
-                                flyToY = -1800f; decision = onKnown; dismissed = true
+                                flyToY = -1800f
+                                decision = { onKnown(revealed) }
+                                dismissed = true
                             }
                             else -> {
                                 offsetX = 0f
@@ -539,7 +576,14 @@ private fun SwipeableCard(
                 )
             },
     ) {
-        WordCard(word = word, tint = tint, enriching = enriching, onEnrich = onEnrich)
+        WordCard(
+            word = word,
+            tint = tint,
+            enriching = enriching,
+            onEnrich = onEnrich,
+            revealed = revealed,
+            onToggleReveal = { revealed = !revealed },
+        )
     }
 }
 
@@ -569,8 +613,9 @@ private fun WordCard(
     interactive: Boolean = true,
     enriching: Boolean = false,
     onEnrich: (() -> Unit)? = null,
+    revealed: Boolean = false,
+    onToggleReveal: () -> Unit = {},
 ) {
-    var revealed by remember(word.word) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxSize(),
@@ -585,7 +630,7 @@ private fun WordCard(
                     .fillMaxSize()
                     .then(
                         if (interactive) {
-                            Modifier.clickable { revealed = !revealed }
+                            Modifier.clickable(onClick = onToggleReveal)
                         } else {
                             Modifier
                         },

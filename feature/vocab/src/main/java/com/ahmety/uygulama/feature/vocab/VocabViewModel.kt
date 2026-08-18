@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.AiSettings
 import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.model.VocabDecision
 import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
+import com.ahmety.uygulama.core.model.startOfDay
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,11 +28,11 @@ import javax.inject.Inject
  * filmi seçmeye yarıyor, kip ise öğrenme durumunu süzüyor.
  */
 enum class VocabMode(val label: String) {
-    /** Öğrenilmemiş her şey. */
-    ALL("Tümü"),
+    /** Bugün vadesi gelenler ve günlük yeni kelimeler. */
+    TODAY("Bugün"),
 
-    /** Çalışılmakta olanlar. */
-    LEARNING("Çalıştıklarım"),
+    /** Programdaki her şey — vadesi gelmemiş olanlar da. */
+    ALL("Tümü"),
 
     /** Aşağı atılan, şimdilik gerekmeyenler. */
     IGNORED("Önemsiz"),
@@ -53,6 +55,15 @@ data class VocabUiState(
     val unsureCount: Int = 0,
     val bookCount: Int = 0,
     val subtitleCount: Int = 0,
+    /** Bugün vadesi gelen kelime sayısı (kuyruk sınırından önce). */
+    val dueToday: Int = 0,
+    /** Bugün eklenen yeni kelime sayısı ve günlük sınır. */
+    val newToday: Int = 0,
+    val newLimit: Int = DAILY_NEW_LIMIT,
+    /** Vadesi bir günden fazla geçmiş kelime sayısı. */
+    val backlog: Int = 0,
+    /** Sonraki tekrarın kaç gün sonra olduğu; deste bitince gösteriliyor. */
+    val nextDueInDays: Int? = null,
     /** Süzgeç listesi için: elindeki kitap ve film adları. */
     val sources: List<Pair<VocabSource, String>> = emptyList(),
     val filter: VocabFilter = VocabFilter(),
@@ -130,18 +141,12 @@ class VocabViewModel @Inject constructor(
 
     private val prefs = VocabPrefs(context)
 
-    private val mode = MutableStateFlow(VocabMode.ALL)
+    private val mode = MutableStateFlow(VocabMode.TODAY)
     private val assetWords = MutableStateFlow<List<VocabWord>>(emptyList())
 
     private val _swipeThreshold = MutableStateFlow(prefs.swipeThreshold)
     val swipeThreshold: StateFlow<Int> = _swipeThreshold
 
-    /**
-     * Karıştırma anahtarı. Deste her yeniden hesaplandığında sıranın
-     * zıplamaması için oturum boyunca sabit; kelimeye göre türetilen bir
-     * sözde-rastgele sıra veriyor.
-     */
-    private val shuffleSeed = System.nanoTime()
 
     init {
         viewModelScope.launch { assetWords.value = repository.assetWords() }
@@ -157,12 +162,11 @@ class VocabViewModel @Inject constructor(
         session,
     ) { asset, progress, currentMode, bookWords, sessionState ->
         val words = repository.mergeWords(asset, repository.applyEnrichment(bookWords))
-        val statusByWord = progress.associate { it.word to it.status }
-        val known = statusByWord.values.count { it == VocabStatus.KNOWN.name }
-        val learning = statusByWord.values.count {
-            it == VocabStatus.LEARNING.name || it == VocabStatus.UNSURE.name
+        val known = progress.count { it.status == VocabStatus.KNOWN.name }
+        val learning = progress.count {
+            it.status == VocabStatus.LEARNING.name || it.status == VocabStatus.UNSURE.name
         }
-        val ignored = statusByWord.values.count { it == VocabStatus.IGNORED.name }
+        val ignored = progress.count { it.status == VocabStatus.IGNORED.name }
 
         // Kaynak süzgeci önce: "şu kitaptan" ya da "şu filmden" çalışmak
         // istediğinde deste ona iniyor.
@@ -175,28 +179,71 @@ class VocabViewModel @Inject constructor(
             }
         }
 
-        val deck = when (currentMode) {
-            // Karar verilmemişler ve çalışılmakta olanlar birlikte: kelime
-            // zaten bilinmediği için listede, "öğrendim" diyene kadar çıkıyor.
-            VocabMode.ALL -> filtered.filter {
-                val status = statusOf(statusByWord, it.word)
-                status == null || status == VocabStatus.LEARNING
+        val schedules = progress.associateBy({ it.word }, { it.toSchedule() })
+        val nowMillis = repository.nowMillis()
+        val dayStart = startOfDay(nowMillis, repository.zoneOffsetMillis(nowMillis))
+        val endOfToday = dayStart + DAY_MILLIS
+        val introducedToday = progress.count { (it.introducedAt ?: 0L) >= dayStart }
+
+        // Programdaki kelimeler: vadesi gelmiş olanlar en çok bekleyenden
+        // başlayarak, sonra kademesi düşük olanlar. Karıştırma yok —
+        // "rastgele olmasın" istenen tam olarak buydu.
+        fun scheduled(word: VocabWord) = schedules[word.word]
+        val due = filtered
+            .filter { word ->
+                val plan = scheduled(word)
+                plan != null &&
+                    plan.status == VocabStatus.LEARNING &&
+                    plan.dueAt != null &&
+                    plan.dueAt!! <= endOfToday
             }
-            VocabMode.LEARNING -> filtered.filter {
-                statusOf(statusByWord, it.word) == VocabStatus.LEARNING
-            }
-            VocabMode.IGNORED -> filtered.filter {
-                statusOf(statusByWord, it.word) == VocabStatus.IGNORED
-            }
-            VocabMode.KNOWN -> filtered.filter {
-                statusOf(statusByWord, it.word) == VocabStatus.KNOWN
-            }
+            .sortedWith(
+                compareBy(
+                    { scheduled(it)?.dueAt ?: Long.MAX_VALUE },
+                    { scheduled(it)?.box ?: 0 },
+                    { it.word.lowercase() },
+                ),
+            )
+
+        val backlog = due.count { (scheduled(it)?.dueAt ?: 0L) < dayStart }
+
+        // Henüz programa girmemiş kelimeler. Sıra sabit: önce kendi
+        // kitabından/filminden gelenler (bağlamını taşıyorlar, daha iyi
+        // tutunuyorlar), sonra sabit deste.
+        val fresh = filtered
+            .filter { scheduled(it) == null }
+            .sortedWith(compareBy({ if (it.fromLibrary) 0 else 1 }, { it.word.lowercase() }))
+
+        // Birikme varken yeni kelime vermiyoruz; yığın erimeden üstüne
+        // eklemek kullanıcıyı kaçırıyor.
+        val newAllowance = if (backlog > BACKLOG_PAUSE) {
+            0
+        } else {
+            (DAILY_NEW_LIMIT - introducedToday).coerceAtLeast(0)
         }
 
-        // Bu oturumda karar verdiklerin en sona gidiyor. Hiçbiri desteden
-        // düşmüyor: karar kalıcı değilse deste bitmeden yine karşına çıkıyor.
-        val ordered = deck.shuffledStably(shuffleSeed)
-            .sortedBy { word -> if (word.word in sessionState.skipped) 1 else 0 }
+        val deck = when (currentMode) {
+            VocabMode.TODAY -> interleave(due, fresh.take(newAllowance))
+            VocabMode.ALL -> due + filtered.filter {
+                val plan = scheduled(it)
+                plan == null || (plan.status == VocabStatus.LEARNING && it !in due)
+            }
+            VocabMode.IGNORED -> filtered.filter {
+                scheduled(it)?.status == VocabStatus.IGNORED
+            }.sortedBy { it.word.lowercase() }
+            VocabMode.KNOWN -> filtered.filter {
+                scheduled(it)?.status == VocabStatus.KNOWN
+            }.sortedBy { it.word.lowercase() }
+        }
+
+        // Bu oturumda "geç" denenler en sona; program sırası bozulmuyor.
+        val ordered = deck.sortedBy { if (it.word in sessionState.skipped) 1 else 0 }
+
+        val nextDue = schedules.values
+            .mapNotNull { it.dueAt }
+            .filter { it > endOfToday }
+            .minOrNull()
+            ?.let { ((it - dayStart) / DAY_MILLIS).toInt() }
 
         VocabUiState(
             deck = ordered,
@@ -212,25 +259,30 @@ class VocabViewModel @Inject constructor(
                 .distinct()
                 .sortedBy { it.second.lowercase() },
             filter = sessionState.filter,
+            dueToday = due.size,
+            newToday = introducedToday,
+            backlog = backlog,
+            nextDueInDays = nextDue,
             loaded = asset.isNotEmpty() || bookWords.isNotEmpty(),
             turn = sessionState.turn,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VocabUiState())
 
     /** Yukarı: öğrendim, bir daha gösterme. */
-    fun markKnown(word: VocabWord) = setStatus(word, VocabStatus.KNOWN)
+    fun markKnown(word: VocabWord, revealed: Boolean) =
+        decide(word, VocabDecision.LEARNED, revealed)
 
     /** Sol: çalıştım, tekrar çalışacağım — sıradaki gelsin. */
-    fun markLearning(word: VocabWord) = setStatus(word, VocabStatus.LEARNING)
+    fun markLearning(word: VocabWord, revealed: Boolean) =
+        decide(word, VocabDecision.STUDIED, revealed)
 
     /** Aşağı: önemsiz kelimeler arasına at; silme. */
-    fun markIgnored(word: VocabWord) = setStatus(word, VocabStatus.IGNORED)
+    fun markIgnored(word: VocabWord, revealed: Boolean) =
+        decide(word, VocabDecision.IGNORE, revealed)
 
-    /**
-     * Sağ: şimdilik geç. Hiçbir karar kaydedilmiyor; kelime destenin sonuna
-     * gidiyor ve bu oturumda yeniden karşına çıkıyor.
-     */
-    fun skip(word: VocabWord) = advance(word)
+    /** Sağ: şimdilik geç. Kelime yarına atılıyor, kademesi tükenmiyor. */
+    fun skip(word: VocabWord, revealed: Boolean) =
+        decide(word, VocabDecision.POSTPONE, revealed)
 
     /** Listeden tamamen kaldır. */
     fun delete(word: VocabWord) {
@@ -292,16 +344,10 @@ class VocabViewModel @Inject constructor(
         )
     }
 
-    private fun setStatus(word: VocabWord, status: VocabStatus) {
+    private fun decide(word: VocabWord, decision: VocabDecision, revealed: Boolean) {
         advance(word)
-        viewModelScope.launch { repository.setStatus(word.word, status) }
+        viewModelScope.launch { repository.applyDecision(word.word, decision, revealed) }
     }
-
-    /** Eski "emin değilim" kayıtlarını bugünkü anlamına indirger. */
-    private fun statusOf(statusByWord: Map<String, String>, word: String): VocabStatus? =
-        statusByWord[word]
-            ?.let { runCatching { VocabStatus.valueOf(it) }.getOrNull() }
-            ?.normalized()
 
     fun setMode(newMode: VocabMode) {
         mode.value = newMode
@@ -313,14 +359,31 @@ class VocabViewModel @Inject constructor(
     }
 }
 
+/** Günlük yeni kelime sınırı. Sınırsız yeni kelime, günler sonra taşıyamayacağın bir tekrar yükü demek. */
+private const val DAILY_NEW_LIMIT = 8
+
+/** Bu kadar kelime birikmişse yeni kelime verilmiyor; önce yığın erisin. */
+private const val BACKLOG_PAUSE = 40
+
+private const val DAY_MILLIS = 86_400_000L
+
 /**
- * Rastgele ama kararlı sıralama: aynı oturumda deste yeniden hesaplansa da
- * kartlar yer değiştirmiyor, ama sıra alfabetik olmaktan çıkıyor.
+ * Tekrarların arasına yeni kelimeleri serpiştirir: üst üste sekiz yeni kelime
+ * yorucu, hepsini sona atmak da sıkıcı.
  */
-private fun List<VocabWord>.shuffledStably(seed: Long): List<VocabWord> =
-    sortedBy { word ->
-        var hash = seed xor word.word.hashCode().toLong()
-        hash = hash xor (hash shl 13)
-        hash = hash xor (hash ushr 7)
-        hash
+private fun interleave(due: List<VocabWord>, fresh: List<VocabWord>): List<VocabWord> {
+    if (fresh.isEmpty()) return due
+    if (due.isEmpty()) return fresh
+    val step = (due.size / (fresh.size + 1)).coerceAtLeast(1)
+    val result = mutableListOf<VocabWord>()
+    var nextFresh = 0
+    due.forEachIndexed { index, word ->
+        result += word
+        if (nextFresh < fresh.size && (index + 1) % step == 0) {
+            result += fresh[nextFresh++]
+        }
     }
+    while (nextFresh < fresh.size) result += fresh[nextFresh++]
+    return result
+}
+

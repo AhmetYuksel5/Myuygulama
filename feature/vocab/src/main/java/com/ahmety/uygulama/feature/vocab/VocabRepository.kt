@@ -12,7 +12,11 @@ import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
 import com.ahmety.uygulama.core.model.VocabSource
+import com.ahmety.uygulama.core.model.VocabDecision
+import com.ahmety.uygulama.core.model.VocabSchedule
 import com.ahmety.uygulama.core.model.VocabStatus
+import com.ahmety.uygulama.core.model.nextSchedule
+import com.ahmety.uygulama.core.model.startOfDay
 import com.ahmety.uygulama.core.model.VocabWord
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -184,11 +188,35 @@ class VocabRepository @Inject constructor(
     fun observeCount(status: VocabStatus): Flow<Int> =
         vocabDao.observeCountByStatus(status.name)
 
-    suspend fun setStatus(word: String, status: VocabStatus) {
+    /**
+     * Karara göre kelimeyi programda ilerletir.
+     *
+     * Zamanlamanın kendisi [nextSchedule] içinde, saf bir fonksiyonda; burada
+     * yalnızca satırı okuyup yazıyoruz. [revealed] kartın anlamının açılıp
+     * açılmadığı: açtıysan hatırlayamadın, kademe ilerlemiyor.
+     */
+    suspend fun applyDecision(word: String, decision: VocabDecision, revealed: Boolean) {
+        val timestamp = now.millis()
+        val existing = vocabDao.get(word)
+        val next = nextSchedule(
+            current = existing?.toSchedule() ?: VocabSchedule(word = word),
+            decision = decision,
+            now = timestamp,
+            revealed = revealed,
+            dayStart = startOfDay(timestamp, zoneOffsetMillis(timestamp)),
+        )
         val entity = VocabProgressEntity(
             word = word,
-            status = status.name,
-            updatedAt = now.millis(),
+            status = next.status.name,
+            updatedAt = timestamp,
+            box = next.box,
+            dueAt = next.dueAt,
+            lastReviewedAt = next.lastReviewedAt,
+            introducedAt = next.introducedAt,
+            reviewCount = next.reviewCount,
+            lapseCount = next.lapseCount,
+            postponeCount = next.postponeCount,
+            revealCount = next.revealCount,
         )
         vocabDao.upsert(entity)
         changeRecorder.record(
@@ -198,6 +226,12 @@ class VocabRepository @Inject constructor(
             payload = json.encodeToString(VocabProgressEntity.serializer(), entity),
         )
     }
+
+    /** Cihazın UTC farkı; gün sınırı yerel saatle hesaplansın diye. */
+    fun zoneOffsetMillis(at: Long): Long =
+        java.util.TimeZone.getDefault().getOffset(at).toLong()
+
+    fun nowMillis(): Long = now.millis()
 
     private fun loadFromAsset(): List<VocabWord> = runCatching {
         context.assets.open(ASSET_NAME).bufferedReader().use { reader ->
@@ -231,3 +265,17 @@ class VocabRepository @Inject constructor(
         const val ASSET_NAME = "vocab_upper_intermediate.json"
     }
 }
+
+/** Veritabanı satırını zamanlama mantığının anladığı saf hâle çevirir. */
+fun VocabProgressEntity.toSchedule(): VocabSchedule = VocabSchedule(
+    word = word,
+    status = runCatching { VocabStatus.valueOf(status) }.getOrDefault(VocabStatus.NEW).normalized(),
+    box = box,
+    dueAt = dueAt,
+    lastReviewedAt = lastReviewedAt,
+    introducedAt = introducedAt,
+    reviewCount = reviewCount,
+    lapseCount = lapseCount,
+    postponeCount = postponeCount,
+    revealCount = revealCount,
+)
