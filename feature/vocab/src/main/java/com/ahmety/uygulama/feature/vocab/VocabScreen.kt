@@ -163,7 +163,9 @@ fun VocabRoute(
                     }
                     val top = state.deck.first()
                     SwipeableCard(
-                        key = top.word,
+                        // Karar sayacı anahtarda: aynı kelime yeniden üste
+                        // gelse bile kart sıfırdan kuruluyor.
+                        key = "${top.word}#${state.turn}",
                         word = top,
                         threshold = with(density) { threshold.dp.toPx() },
                         enriching = enrichingWord == top.word,

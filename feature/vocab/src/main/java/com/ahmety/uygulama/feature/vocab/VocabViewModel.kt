@@ -28,6 +28,13 @@ data class VocabUiState(
     val unsureCount: Int = 0,
     val bookCount: Int = 0,
     val loaded: Boolean = false,
+    /**
+     * Verilen karar sayısı. Karttaki animasyon durumunun anahtarına giriyor:
+     * aynı kelime üstte kalsa bile (deste tek kartlıysa ya da "geç" denen
+     * kelime yine öne geldiyse) kart yeniden kuruluyor. Bu olmadan kart
+     * ekran dışında donup kalıyordu.
+     */
+    val turn: Int = 0,
 ) {
     val remaining: Int get() = deck.size
 }
@@ -84,6 +91,8 @@ class VocabViewModel @Inject constructor(
      */
     private data class VocabSession(
         val refresh: Int = 0,
+        /** Her kararda artıyor; aynı değerle yeniden yayın yapılmasını da önlüyor. */
+        val turn: Int = 0,
         val skipped: Set<String> = emptySet(),
     )
 
@@ -145,8 +154,9 @@ class VocabViewModel @Inject constructor(
             }
         }
 
-        // Sona atılanlar: önce "emin değilim", en sonda "geç" dedikleri.
-        // İkisi de kalıcı karar değil; deste bitmeden yine karşına çıkıyorlar.
+        // Bu oturumda karar verdiklerin en sona gidiyor; ondan önce "emin
+        // değilim" dedikleri geliyor. Hiçbiri desteden düşmüyor: karar
+        // kalıcı değilse deste bitmeden yine karşına çıkıyorlar.
         val ordered = deck.shuffledStably(shuffleSeed)
             .sortedBy { word ->
                 when {
@@ -164,6 +174,7 @@ class VocabViewModel @Inject constructor(
             unsureCount = unsure,
             bookCount = bookWords.size,
             loaded = asset.isNotEmpty() || bookWords.isNotEmpty(),
+            turn = sessionState.turn,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VocabUiState())
 
@@ -180,11 +191,27 @@ class VocabViewModel @Inject constructor(
      * Yukarı sürükleme: yalnızca geç. Hiçbir karar kaydedilmiyor; kelime
      * destenin sonuna gidiyor ve bu oturumda yeniden karşına çıkıyor.
      */
-    fun skip(word: VocabWord) {
-        session.value = session.value.copy(skipped = session.value.skipped + word.word)
+    fun skip(word: VocabWord) = advance(word)
+
+    /**
+     * Karar verilen kelimeyi destenin sonuna atar ve karar sayacını artırır.
+     *
+     * İkisi de şart. Durum yazması desteyi her zaman değiştirmiyor:
+     * "Bilmediklerim" kipinde zaten bilmediğin bir kelimeye yine sağa
+     * kaydırınca, "Emin değilim" kipinde aşağı kaydırınca ya da deste tek
+     * kartlıysa üstteki kart aynı kalıyordu. Kartın animasyon durumu bu
+     * anahtara bağlı olduğu için kart ekran dışında donup kalıyor, deste
+     * kilitleniyordu.
+     */
+    private fun advance(word: VocabWord) {
+        session.value = session.value.copy(
+            turn = session.value.turn + 1,
+            skipped = session.value.skipped + word.word,
+        )
     }
 
     private fun setStatus(word: VocabWord, status: VocabStatus) {
+        advance(word)
         viewModelScope.launch { repository.setStatus(word.word, status) }
     }
 
