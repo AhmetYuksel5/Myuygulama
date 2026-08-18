@@ -44,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,6 +91,14 @@ import java.util.Locale
  * Ev tuşuna basıldığında ana sayfaya dönmek için kullanılan sinyal.
  * Activity'den Compose'a, [LauncherRoot] imzasını değiştirmeden.
  */
+/** Simge öbeğinin ekrandaki yeri ve boyu. */
+data class ClusterBounds(
+    val widthDp: Int,
+    val heightDp: Int,
+    val bottomDp: Int,
+    val sideDp: Int,
+)
+
 internal object LauncherHomeSignal {
     val requests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 }
@@ -113,6 +122,11 @@ fun LauncherRoot() {
     var loaded by remember { mutableStateOf(false) }
     var onRight by remember { mutableStateOf(store.onRight) }
     var iconSizeDp by remember { mutableIntStateOf(store.iconSizeDp) }
+    var clusterW by remember { mutableIntStateOf(store.clusterWidthDp) }
+    var clusterH by remember { mutableIntStateOf(store.clusterHeightDp) }
+    var clusterB by remember { mutableIntStateOf(store.clusterBottomDp) }
+    var clusterS by remember { mutableIntStateOf(store.clusterSideDp) }
+    val cluster = ClusterBounds(clusterW, clusterH, clusterB, clusterS)
     var apps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
 
     var editing by remember { mutableStateOf<Favorite?>(null) }
@@ -198,6 +212,7 @@ fun LauncherRoot() {
                     loaded = loaded,
                     onRight = onRight,
                     iconSizeDp = iconSizeDp,
+                    cluster = cluster,
                     onEdit = { editing = it },
                     onOpenSettings = { showSettings = true },
                     onAddApp = { appPicker = { app -> addAppFavorite(app) } },
@@ -214,7 +229,7 @@ fun LauncherRoot() {
                     onOpenApp = { LauncherAction.OpenApp(it.packageName).run(context) },
                     onAddFavorite = { addAppFavorite(it) },
                 )
-                else -> WidgetsPage()
+                else -> WidgetsPage(modifier = Modifier.systemBarsPadding())
             }
         }
 
@@ -254,6 +269,13 @@ fun LauncherRoot() {
             iconSizeDp = iconSizeDp,
             onRightChange = { onRight = it; store.onRight = it },
             onIconSizeChange = { iconSizeDp = it; store.iconSizeDp = it },
+            cluster = cluster,
+            onClusterChange = { updated ->
+                clusterW = updated.widthDp; store.clusterWidthDp = updated.widthDp
+                clusterH = updated.heightDp; store.clusterHeightDp = updated.heightDp
+                clusterB = updated.bottomDp; store.clusterBottomDp = updated.bottomDp
+                clusterS = updated.sideDp; store.clusterSideDp = updated.sideDp
+            },
             onOpenApp = {
                 showSettings = false
                 openDashboard(context)
@@ -280,6 +302,7 @@ private fun HomePage(
     loaded: Boolean,
     onRight: Boolean,
     iconSizeDp: Int,
+    cluster: ClusterBounds,
     onEdit: (Favorite) -> Unit,
     onOpenSettings: () -> Unit,
     onAddApp: () -> Unit,
@@ -291,16 +314,28 @@ private fun HomePage(
     Box(modifier = Modifier.fillMaxSize()) {
         // Simgeler önce çizilsin ki üstteki düğmeler onların üzerinde kalsın.
         if (loaded && favorites.isNotEmpty()) {
-            ArcFavorites(
-                favorites = favorites,
-                onRight = onRight,
-                iconSizeDp = iconSizeDp,
-                onEdit = onEdit,
-                context = context,
+            // Simgeler tüm ekranı değil, ayarladığın öbeği kaplıyor; böylece
+            // altındaki widget'ların ve duvar kâğıdının üstünü kapatmıyor.
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding(),
-            )
+                    .align(if (onRight) Alignment.BottomEnd else Alignment.BottomStart)
+                    .padding(
+                        start = if (onRight) 0.dp else cluster.sideDp.dp,
+                        end = if (onRight) cluster.sideDp.dp else 0.dp,
+                        bottom = cluster.bottomDp.dp,
+                    )
+                    .width(cluster.widthDp.dp)
+                    .height(cluster.heightDp.dp),
+            ) {
+                ArcFavorites(
+                    favorites = favorites,
+                    onRight = onRight,
+                    iconSizeDp = iconSizeDp,
+                    onEdit = onEdit,
+                    context = context,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         } else if (loaded) {
             Text(
                 text = "Ana ekran boş. Sağ üstteki + ile uygulama veya kısayol ekle; " +
@@ -335,7 +370,7 @@ private fun HomePage(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Kısayol ekle (kişi / navigasyon)") },
+                        text = { Text("Kısayol ekle") },
                         onClick = {
                             addMenuOpen = false
                             onAddShortcut()
@@ -375,7 +410,16 @@ private fun ArcFavorites(
                     FavoriteIcon(
                         favorite = fav,
                         iconSizeDp = iconSizeDp,
-                        onTap = { fav.tap.run(context) },
+                        // Eylem atanmamışsa tek dokunuş uygulamayı açsın:
+                        // beklenen varsayılan bu.
+                        onTap = {
+                            val action = if (fav.tap == LauncherAction.None && fav.packageName != null) {
+                                LauncherAction.OpenApp(fav.packageName)
+                            } else {
+                                fav.tap
+                            }
+                            action.run(context)
+                        },
                         onDoubleTap = { fav.doubleTap.run(context) },
                         onSwipeUp = { fav.swipeUp.run(context) },
                         onSwipeDown = { fav.swipeDown.run(context) },
@@ -515,10 +559,16 @@ private fun DrawerPage(
         else apps.filter { it.label.contains(query, ignoreCase = true) }
     }
 
+    // Surface, içerik rengini de sağlıyor: düz Column'da metinler varsayılan
+    // siyahla çiziliyordu ve koyu zeminde okunmuyordu.
+    Surface(
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.93f))
             .systemBarsPadding()
             .padding(top = 16.dp),
     ) {
@@ -558,6 +608,7 @@ private fun DrawerPage(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -589,25 +640,6 @@ private fun DrawerAppCell(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
-private fun WidgetsPage() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.93f))
-            .systemBarsPadding(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Bu sayfaya widget ekleme yakında gelecek.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(32.dp),
         )
     }
 }
@@ -692,6 +724,8 @@ private fun LauncherSettingsDialog(
     iconSizeDp: Int,
     onRightChange: (Boolean) -> Unit,
     onIconSizeChange: (Int) -> Unit,
+    cluster: ClusterBounds,
+    onClusterChange: (ClusterBounds) -> Unit,
     onOpenApp: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -718,6 +752,26 @@ private fun LauncherSettingsDialog(
                         onClick = { onIconSizeChange((iconSizeDp + 4).coerceAtMost(88)) },
                     ) { Text("+") }
                 }
+                Text("Simge öbeği", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = "Simgelerin durduğu alanı büyütüp küçültebilir, " +
+                        "istediğin yere kaydırabilirsin.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                ClusterStepper("Genişlik", cluster.widthDp, 140, 460, 20) {
+                    onClusterChange(cluster.copy(widthDp = it))
+                }
+                ClusterStepper("Yükseklik", cluster.heightDp, 140, 700, 20) {
+                    onClusterChange(cluster.copy(heightDp = it))
+                }
+                ClusterStepper("Alttan boşluk", cluster.bottomDp, 0, 600, 10) {
+                    onClusterChange(cluster.copy(bottomDp = it))
+                }
+                ClusterStepper("Kenardan boşluk", cluster.sideDp, 0, 300, 10) {
+                    onClusterChange(cluster.copy(sideDp = it))
+                }
+
                 OutlinedButton(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Outlined.Apps, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -726,6 +780,27 @@ private fun LauncherSettingsDialog(
             }
         },
     )
+}
+
+@Composable
+private fun ClusterStepper(
+    label: String,
+    value: Int,
+    min: Int,
+    max: Int,
+    step: Int,
+    onChange: (Int) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        TextButton(enabled = value > min, onClick = { onChange((value - step).coerceAtLeast(min)) }) {
+            Text("−")
+        }
+        Text("$value", style = MaterialTheme.typography.bodyMedium)
+        TextButton(enabled = value < max, onClick = { onChange((value + step).coerceAtMost(max)) }) {
+            Text("+")
+        }
+    }
 }
 
 @Composable

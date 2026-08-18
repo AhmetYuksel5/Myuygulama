@@ -1,5 +1,7 @@
 package com.ahmety.uygulama.ui.gestures
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -28,8 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlin.math.atan2
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -54,6 +62,7 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
     var sound by remember { mutableStateOf(settings.soundEnabled) }
     var soundVolume by remember { mutableIntStateOf(settings.soundVolume) }
     var vibrateStrength by remember { mutableIntStateOf(settings.vibrateStrength) }
+    var backAngle by remember { mutableIntStateOf(settings.backAngleDegrees) }
     var up by remember { mutableStateOf(settings.swipeUpAction) }
     var down by remember { mutableStateOf(settings.swipeDownAction) }
     var inward by remember { mutableStateOf(settings.swipeInAction) }
@@ -119,6 +128,21 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
                 "çakışma sürerse şeridi biraz kısaltmayı veya yerini kaydırmayı dene.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text("Yön ayrımı", style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = "Parmağın yatayla yaptığı açı bu çizginin altındaysa \"içeri\" " +
+                "(geri), üstündeyse yukarı/aşağı sayılır. Oku sürükleyerek ayarla.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        AnglePicker(
+            angle = backAngle,
+            onAngleChange = {
+                backAngle = it
+                settings.backAngleDegrees = it
+            },
         )
 
         Text("Jestlere atanan eylemler", style = MaterialTheme.typography.labelLarge)
@@ -194,6 +218,73 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Çeyrek daire üzerinde sürüklenen ok: geri ile dikey kaydırmayı ayıran açı.
+ * Sayı yerine açıyı göstermek, hangi parmak hareketinin neye karşılık geldiğini
+ * doğrudan anlatıyor.
+ */
+@Composable
+private fun AnglePicker(
+    angle: Int,
+    onAngleChange: (Int) -> Unit,
+) {
+    val outline = MaterialTheme.colorScheme.outlineVariant
+    val accent = MaterialTheme.colorScheme.primary
+    val onSurface = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Canvas(
+            modifier = Modifier
+                .size(150.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, _ ->
+                        change.consume()
+                        // Sol üst köşe merkez: sağa doğru yatay, aşağı doğru dikey.
+                        val dx = change.position.x.coerceAtLeast(1f)
+                        val dy = change.position.y.coerceAtLeast(0f)
+                        val degrees = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble()))
+                        onAngleChange(degrees.toInt().coerceIn(15, 75))
+                    }
+                },
+        ) {
+            val radius = size.minDimension
+            // Çeyrek daire: yatay (içeri) ve dikey (aşağı) kenarlar.
+            drawLine(outline, Offset.Zero, Offset(radius, 0f), strokeWidth = 3f)
+            drawLine(outline, Offset.Zero, Offset(0f, radius), strokeWidth = 3f)
+            drawArc(
+                color = outline,
+                startAngle = 0f,
+                sweepAngle = 90f,
+                useCenter = false,
+                topLeft = Offset(-radius, -radius),
+                size = Size(radius * 2, radius * 2),
+                style = Stroke(width = 3f),
+            )
+
+            // Ayrım çizgisi ve ok.
+            val radians = Math.toRadians(angle.toDouble())
+            val endX = (radius * kotlin.math.cos(radians)).toFloat()
+            val endY = (radius * kotlin.math.sin(radians)).toFloat()
+            drawLine(accent, Offset.Zero, Offset(endX, endY), strokeWidth = 8f)
+            drawCircle(accent, radius = 14f, center = Offset(endX, endY))
+        }
+
+        Column(modifier = Modifier.padding(start = 12.dp)) {
+            Text("$angle°", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text = "altı: içeri",
+                style = MaterialTheme.typography.labelSmall,
+                color = onSurface,
+            )
+            Text(
+                text = "üstü: yukarı/aşağı",
+                style = MaterialTheme.typography.labelSmall,
+                color = onSurface,
+            )
+        }
     }
 }
 

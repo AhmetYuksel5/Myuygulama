@@ -81,6 +81,17 @@ class GestureSettings(context: Context) {
         get() = prefs.getBoolean(KEY_VIBRATE, true)
         set(value) = prefs.edit().putBoolean(KEY_VIBRATE, value).apply()
 
+    /**
+     * Geri (içeri) ile dikey kaydırmayı ayıran açı, derece.
+     *
+     * Parmağın yatayla yaptığı açı bu değerin altındaysa hareket "içeri"
+     * sayılır (genelde geri), üstündeyse yukarı/aşağı sayılır. Küçük değer:
+     * dikey hareketler baskın. Büyük değer: geri baskın.
+     */
+    var backAngleDegrees: Int
+        get() = prefs.getInt(KEY_ANGLE, 45).coerceIn(15, 75)
+        set(value) = prefs.edit().putInt(KEY_ANGLE, value.coerceIn(15, 75)).apply()
+
     /** 0 = hafif, 1 = orta, 2 = güçlü. */
     var vibrateStrength: Int
         get() = prefs.getInt(KEY_VIBRATE_STRENGTH, 1)
@@ -120,6 +131,7 @@ class GestureSettings(context: Context) {
         private const val KEY_OPACITY = "opacity"
         private const val KEY_SOUND = "sound"
         private const val KEY_SOUND_VOLUME = "sound_volume"
+        private const val KEY_ANGLE = "back_angle"
         private const val KEY_VIBRATE = "vibrate"
         private const val KEY_VIBRATE_STRENGTH = "vibrate_strength"
         private const val KEY_ACTION_UP = "action_up"

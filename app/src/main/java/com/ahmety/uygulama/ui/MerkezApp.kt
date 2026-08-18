@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -69,13 +70,14 @@ private enum class TopLevelDestination(
 ) {
     TODAY("today", "Bugün", Icons.Outlined.Today),
     TASKS("tasks", "Görevler", Icons.Outlined.CheckCircle),
-    LIBRARY("library", "Notlar", Icons.Outlined.Description),
+    HOME_SCREEN("home_screen", "Ana ekran", Icons.Outlined.GridView),
     POCKET("pocket", "Pocket", Icons.Outlined.Bookmark),
     MORE("more", "Daha", Icons.Outlined.MoreHoriz),
 }
 
 @Composable
 fun MerkezApp() {
+    val context = LocalContext.current
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -118,12 +120,24 @@ fun MerkezApp() {
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
+                            if (destination == TopLevelDestination.HOME_SCREEN) {
+                                // Bu sekme bir ekran değil, kendi başlatıcımızı açar.
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(context, LauncherActivity::class.java)
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                    )
+                                }
+                                return@NavigationBarItem
+                            }
                             navController.navigate(destination.route) {
+                                // restoreState kullanmıyoruz: kaydedilen yığın alt
+                                // sayfayı da içerdiği için sekmeye basınca o alt
+                                // sayfaya dönüyor, sekmenin kendisi açılmıyordu.
                                 popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                                    saveState = false
                                 }
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
@@ -147,7 +161,7 @@ fun MerkezApp() {
                     onAddDialogConsumed = { pendingAddTask = false },
                 )
             }
-            composable(TopLevelDestination.LIBRARY.route) {
+            composable(NOTES_ROUTE) {
                 NotesRoute(
                     onOpenNote = { navController.navigate("$NOTE_ROUTE/$it") },
                 )
@@ -160,6 +174,7 @@ fun MerkezApp() {
             }
             composable(TopLevelDestination.MORE.route) {
                 MoreScreen(
+                    onOpenNotes = { navController.navigate(NOTES_ROUTE) },
                     onOpenVocab = { navController.navigate(VOCAB_ROUTE) },
                     onOpenBooks = { navController.navigate(BOOKS_ROUTE) },
                     onOpenSearch = { navController.navigate(SEARCH_ROUTE) },
@@ -224,6 +239,7 @@ fun MerkezApp() {
     }
 }
 
+private const val NOTES_ROUTE = "notes"
 private const val VOCAB_ROUTE = "vocab"
 private const val BOOKS_ROUTE = "books"
 private const val BOOK_ROUTE = "book"
@@ -238,6 +254,7 @@ private const val ARTICLE_ROUTE = "article"
 
 @Composable
 private fun MoreScreen(
+    onOpenNotes: () -> Unit,
     onOpenVocab: () -> Unit,
     onOpenBooks: () -> Unit,
     onOpenSearch: () -> Unit,
@@ -256,26 +273,10 @@ private fun MoreScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(text = "Daha", style = MaterialTheme.typography.headlineMedium)
-        Button(
-            onClick = {
-                // Varsayılan başlatıcı seçmeden de ana ekranı görebilmek için
-                // doğrudan açıyoruz; kararlı hâle gelene kadar bu yeterli.
-                runCatching {
-                    context.startActivity(
-                        Intent(context, LauncherActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Ana ekranı aç")
-        }
-        Text(
-            text = "Kendi başlatıcımız. Varsayılan yapmana gerek yok; buradan " +
-                "açıp deneyebilir, geri tuşuyla uygulamaya dönebilirsin.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ListItem(
+            headlineContent = { Text("Notlar") },
+            supportingContent = { Text("Renkli kartlar, listeler, fotoğraflar") },
+            modifier = Modifier.clickable(onClick = onOpenNotes),
         )
         ListItem(
             headlineContent = { Text("Kitaplık") },

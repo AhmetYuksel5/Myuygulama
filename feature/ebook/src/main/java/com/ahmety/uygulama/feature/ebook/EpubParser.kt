@@ -4,6 +4,8 @@ import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import java.io.File
 import java.net.URLDecoder
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.util.zip.ZipFile
 
 /** Kitabın tek bir bölümü: başlık + paragraflar. */
@@ -82,21 +84,27 @@ object EpubParser {
 
     private fun readChapter(zip: ZipFile, path: String): EpubChapter? {
         val entry = zip.getEntry(path) ?: return null
-        // Kodlamayı Jsoup'un kendisi bulsun: EPUB2 kitapları her zaman UTF-8
-        // değil, zorlarsak Türkçe/aksanlı harfler bozuk çıkıyor.
+        val bytes = runCatching {
+            zip.getInputStream(entry).use { it.readBytes() }
+        }.getOrNull() ?: return null
+
+        // Kodlama: dosya geçerli UTF-8 ise UTF-8 olarak okuyoruz. Bazı EPUB'lar
+        // gövdesi UTF-8 olduğu hâlde meta etiketinde latin-1 ilan ediyor;
+        // Jsoup o etikete uyunca tırnaklar "â€™" gibi çıkıyordu.
+        val charset = if (isValidUtf8(bytes)) "UTF-8" else null
         val doc = runCatching {
-            zip.getInputStream(entry).use { stream -> Jsoup.parse(stream, null, "") }
+            Jsoup.parse(bytes.inputStream(), charset, "")
         }.getOrNull() ?: return null
         doc.select("script, style, nav, svg, img, figure").remove()
 
-        val title = doc.selectFirst("h1, h2, h3, title")?.text()?.trim().orEmpty()
+        val title = repairMojibake(doc.selectFirst("h1, h2, h3, title")?.text()?.trim().orEmpty())
         var paragraphs = doc.select("p, h1, h2, h3, h4, li, blockquote")
-            .map { it.text().trim() }
+            .map { repairMojibake(it.text().trim()) }
             .filter { it.length > 1 }
         // Bazı kitaplar paragrafları <div> ile kuruyor; hiç <p> yoksa yedek.
         if (paragraphs.isEmpty()) {
             paragraphs = doc.select("div")
-                .map { it.ownText().trim() }
+                .map { repairMojibake(it.ownText().trim()) }
                 .filter { it.length > 1 }
         }
 
@@ -122,6 +130,35 @@ object EpubParser {
                 acc
             }
             .joinToString("/")
+    }
+
+    /** Baytlar geçerli UTF-8 mi (kesin kontrol). */
+    private fun isValidUtf8(bytes: ByteArray): Boolean = runCatching {
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        decoder.decode(ByteBuffer.wrap(bytes))
+        true
+    }.getOrDefault(false)
+
+    /**
+     * Kitabın kendisi bozuk üretilmişse (UTF-8 metin latin-1 olarak kaydedilmiş)
+     * okuma anında düzeltilemez; metinde "â€™" gibi imzalar varsa baytları geri
+     * çevirip yeniden çözüyoruz.
+     */
+    internal fun repairMojibake(text: String): String {
+        if (!text.contains('\u00e2') && !text.contains('\u00c3')) return text
+        val repaired = runCatching {
+            String(text.toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
+        }.getOrNull() ?: return text
+        // Yalnızca gerçekten düzeldiyse kullan.
+        return if (repaired.count { it == '\ufffd' } <= text.count { it == '\ufffd' } &&
+            !repaired.contains("\u00e2\u0080")
+        ) {
+            repaired
+        } else {
+            text
+        }
     }
 
     private fun ZipFile.readXml(path: String) = runCatching {

@@ -14,6 +14,8 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
 
 /**
  * Ekranın kenar(lar)ındaki ince şeritten yapılan kaydırmaları sistem
@@ -172,10 +174,18 @@ class EdgeGestureService : AccessibilityService() {
                     val dx = event.rawX - downX
                     // İçeri = şeritten ekranın ortasına doğru (sağ kenarda sola, solda sağa).
                     val inward = if (onRight) -dx else dx
+
+                    // Yön ayrımı sabit "hangisi büyük" kuralı yerine ayarlanan
+                    // açıyla yapılıyor: geri ile aşağı çekme birbirine karışıyordu.
+                    val angle = Math.toDegrees(
+                        atan2(abs(dy).toDouble(), abs(inward).toDouble()),
+                    )
+                    val moved = hypot(dx.toDouble(), dy.toDouble()) > threshold
                     val action = when {
-                        abs(dy) > abs(dx) && dy < -threshold -> settings.swipeUpAction
-                        abs(dy) > abs(dx) && dy > threshold -> settings.swipeDownAction
-                        inward > threshold -> settings.swipeInAction
+                        !moved -> null
+                        angle <= settings.backAngleDegrees && inward > 0 -> settings.swipeInAction
+                        angle > settings.backAngleDegrees && dy < 0 -> settings.swipeUpAction
+                        angle > settings.backAngleDegrees && dy > 0 -> settings.swipeDownAction
                         else -> null
                     }
                     if (action != null) perform(action)

@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -29,6 +29,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,7 +42,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -181,7 +186,13 @@ private fun BookCard(book: Entry, onOpen: () -> Unit, onDelete: () -> Unit) {
     }
 }
 
-/** Okuma ekranı: bölüm seçimi + kelimeye dokunup renkle işaretleme. */
+/**
+ * Okuma ekranı.
+ *
+ * Metne bir dokunuş arayüzü gizler (sadece kitap kalır), ikinci dokunuş altta
+ * ilerleme çubuğunu ve "İndeks" düğmesini getirir. Kelimeyi işaretlemek için
+ * **uzun bas** — okurken yanlışlıkla renk seçiciyi açmamak için.
+ */
 @Composable
 fun BookReaderRoute(
     bookId: Long,
@@ -191,7 +202,15 @@ fun BookReaderRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(bookId) { viewModel.load(bookId) }
 
+    val context = LocalContext.current
+    val prefs = remember { ReaderPrefs(context) }
+    var theme by remember { mutableStateOf(prefs.theme) }
+    var fontSize by remember { mutableStateOf(prefs.fontSizeSp) }
+
     var pending by remember { mutableStateOf<PendingHighlight?>(null) }
+    var chromeVisible by remember { mutableStateOf(true) }
+    var showIndex by remember { mutableStateOf(false) }
+    var showDisplay by remember { mutableStateOf(false) }
 
     when {
         state.loading -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -212,57 +231,72 @@ fun BookReaderRoute(
         else -> {
             val book = state.book!!
             val chapter = book.chapters.getOrNull(state.chapterIndex)
+            val listState = rememberLazyListState()
+            LaunchedEffect(state.chapterIndex) { listState.scrollToItem(0) }
 
-            Column(modifier = modifier.fillMaxSize()) {
-                // Kitapta yüzlerce bölüm olabiliyor; hepsini birden çizmek
-                // ekranı dondurur.
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    itemsIndexed(book.chapters) { index, item ->
-                        FilterChip(
-                            selected = index == state.chapterIndex,
-                            onClick = { viewModel.selectChapter(index) },
-                            label = {
-                                Text(
-                                    text = item.title.ifBlank { "Bölüm ${index + 1}" },
-                                    maxLines = 1,
-                                )
-                            },
-                        )
-                    }
-                }
-
-                val listState = rememberLazyListState()
-                // Bölüm değişince metnin başına dön; aksi hâlde yeni bölüm
-                // önceki bölümün kaydırma konumundan açılıyor.
-                LaunchedEffect(state.chapterIndex) { listState.scrollToItem(0) }
-
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(theme.background),
+            ) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(
+                        start = 20.dp,
+                        end = 20.dp,
+                        top = 28.dp,
+                        bottom = 96.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    item {
-                        Text(
-                            text = "Bir kelimeye dokun → rengini seç.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                     items(chapter?.paragraphs.orEmpty()) { paragraph ->
                         HighlightableParagraph(
                             paragraph = paragraph,
                             colors = state.highlightColors,
-                            onWordTapped = { word, sentence ->
+                            textColor = theme.text,
+                            fontSizeSp = fontSize,
+                            onTap = { chromeVisible = !chromeVisible },
+                            onWordLongPressed = { word, sentence ->
                                 pending = PendingHighlight(word, sentence)
                             },
                         )
                     }
                 }
+
+                if (chromeVisible) {
+                    ReaderBottomBar(
+                        chapterIndex = state.chapterIndex,
+                        chapterCount = book.chapters.size,
+                        theme = theme,
+                        onOpenIndex = { showIndex = true },
+                        onOpenDisplay = { showDisplay = true },
+                        onSeekChapter = { viewModel.selectChapter(it) },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
+            }
+
+            if (showIndex) {
+                ChapterIndexDialog(
+                    chapters = book.chapters,
+                    current = state.chapterIndex,
+                    onPick = {
+                        viewModel.selectChapter(it)
+                        showIndex = false
+                    },
+                    onDismiss = { showIndex = false },
+                )
+            }
+
+            if (showDisplay) {
+                DisplayOptionsDialog(
+                    theme = theme,
+                    fontSizeSp = fontSize,
+                    onTheme = { theme = it; prefs.theme = it },
+                    onFontSize = { fontSize = it; prefs.fontSizeSp = it },
+                    onDismiss = { showDisplay = false },
+                )
             }
         }
     }
@@ -288,6 +322,125 @@ fun BookReaderRoute(
     }
 }
 
+/** Altta: nerede kaldığın + indeks + görünüm. */
+@Composable
+private fun ReaderBottomBar(
+    chapterIndex: Int,
+    chapterCount: Int,
+    theme: ReaderTheme,
+    onOpenIndex: () -> Unit,
+    onOpenDisplay: () -> Unit,
+    onSeekChapter: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = theme.background,
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            if (chapterCount > 1) {
+                Slider(
+                    value = chapterIndex.toFloat(),
+                    onValueChange = { onSeekChapter(it.toInt()) },
+                    valueRange = 0f..(chapterCount - 1).toFloat(),
+                    steps = (chapterCount - 2).coerceAtLeast(0),
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onOpenIndex) {
+                    Text("İndeks", color = theme.text)
+                }
+                Text(
+                    text = "${chapterIndex + 1} / $chapterCount",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = theme.text.copy(alpha = 0.7f),
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onOpenDisplay) {
+                    Text("Görünüm", color = theme.text)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChapterIndexDialog(
+    chapters: List<EpubChapter>,
+    current: Int,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("İndeks") },
+        text = {
+            LazyColumn(modifier = Modifier.height(400.dp)) {
+                itemsIndexed(chapters) { index, chapter ->
+                    Text(
+                        text = chapter.title.ifBlank { "Bölüm ${index + 1}" },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (index == current) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(index) }
+                            .padding(vertical = 12.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+    )
+}
+
+@Composable
+private fun DisplayOptionsDialog(
+    theme: ReaderTheme,
+    fontSizeSp: Int,
+    onTheme: (ReaderTheme) -> Unit,
+    onFontSize: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Görünüm") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReaderTheme.entries.forEach { option ->
+                        FilterChip(
+                            selected = option == theme,
+                            onClick = { onTheme(option) },
+                            label = { Text(option.label) },
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Yazı boyutu", modifier = Modifier.weight(1f))
+                    TextButton(
+                        enabled = fontSizeSp > 14,
+                        onClick = { onFontSize(fontSizeSp - 1) },
+                    ) { Text("−") }
+                    Text("$fontSizeSp")
+                    TextButton(
+                        enabled = fontSizeSp < 28,
+                        onClick = { onFontSize(fontSizeSp + 1) },
+                    ) { Text("+") }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+    )
+}
+
 data class PendingHighlight(val word: String, val sentence: String)
 
 /**
@@ -301,9 +454,13 @@ data class PendingHighlight(val word: String, val sentence: String)
 private fun HighlightableParagraph(
     paragraph: String,
     colors: Map<String, HighlightColor>,
-    onWordTapped: (word: String, sentence: String) -> Unit,
+    textColor: Color,
+    fontSizeSp: Int,
+    onTap: () -> Unit,
+    onWordLongPressed: (word: String, sentence: String) -> Unit,
 ) {
     var layout by remember(paragraph) { mutableStateOf<TextLayoutResult?>(null) }
+    val haptic = LocalHapticFeedback.current
 
     val painted: AnnotatedString = remember(paragraph, colors) {
         buildAnnotatedString {
@@ -320,18 +477,28 @@ private fun HighlightableParagraph(
 
     Text(
         text = painted,
-        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 30.sp),
+        color = textColor,
+        style = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = fontSizeSp.sp,
+            lineHeight = (fontSizeSp * 1.65f).sp,
+        ),
         onTextLayout = { layout = it },
         modifier = Modifier
             .fillMaxWidth()
             .pointerInput(paragraph) {
-                detectTapGestures { position ->
-                    val result = layout ?: return@detectTapGestures
-                    val offset = result.getOffsetForPosition(position)
-                    val bounds = wordBoundsAt(paragraph, offset) ?: return@detectTapGestures
-                    val word = paragraph.substring(bounds.first, bounds.second)
-                    onWordTapped(word, sentenceAround(paragraph, bounds.first))
-                }
+                detectTapGestures(
+                    // Tek dokunuş okuma arayüzünü gizler/gösterir; işaretleme
+                    // uzun basmayla, yoksa okurken sürekli renk seçici açılıyor.
+                    onTap = { onTap() },
+                    onLongPress = { position ->
+                        val result = layout ?: return@detectTapGestures
+                        val offset = result.getOffsetForPosition(position)
+                        val bounds = wordBoundsAt(paragraph, offset) ?: return@detectTapGestures
+                        val word = paragraph.substring(bounds.first, bounds.second)
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onWordLongPressed(word, contextAround(paragraph, bounds.first, bounds.second))
+                    },
+                )
             },
     )
 }
@@ -344,37 +511,33 @@ private fun ColorPickerDialog(
     onPick: (HighlightColor, Boolean) -> Unit,
     onRemove: () -> Unit,
 ) {
-    // Bağlam varsayılan olarak açık: kullanıcı bir kelimenin birden çok
-    // anlamı olabildiği için cümlesiyle birlikte saklamak istiyor.
     var keepContext by remember { mutableStateOf(true) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(request.word) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (current != null) {
-                    Text(
-                        text = "Şu an: ${current.label}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                HighlightColor.entries.forEach { color ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(color, keepContext) }
-                            .padding(vertical = 6.dp),
-                    ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Renkler kendini anlatıyor; ad yazmaya gerek yok.
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    HighlightColor.entries.forEach { color ->
                         Box(
                             modifier = Modifier
-                                .size(26.dp)
-                                .background(highlightPaint(color), CircleShape),
+                                .size(46.dp)
+                                .background(highlightPaint(color), CircleShape)
+                                .then(
+                                    if (color == current) {
+                                        Modifier.border(
+                                            3.dp,
+                                            MaterialTheme.colorScheme.onSurface,
+                                            CircleShape,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .clickable { onPick(color, keepContext) },
                         )
-                        Spacer(Modifier.size(12.dp))
-                        Text(color.label, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
 
@@ -382,34 +545,19 @@ private fun ColorPickerDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = keepContext, onCheckedChange = { keepContext = it })
                         Text(
-                            text = if (current == null) {
-                                "Cümleyi de sakla"
-                            } else {
-                                "Bu cümleyi de ekle"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = request.sentence,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text(
-                        text = request.sentence,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                RoundedCornerShape(8.dp),
-                            )
-                            .padding(8.dp),
-                    )
                 }
-                Spacer(Modifier.height(2.dp))
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
         dismissButton = {
             if (current != null) {
                 TextButton(onClick = onRemove) {
-                    Text("İşareti kaldır", color = MaterialTheme.colorScheme.error)
+                    Text("Kaldır", color = MaterialTheme.colorScheme.error)
                 }
             }
         },
@@ -462,16 +610,40 @@ internal inline fun forEachWord(text: String, action: (start: Int, end: Int) -> 
     }
 }
 
-/** Kelimenin içinde geçtiği cümle — bağlamı ayrıca saklayabilmek için. */
-internal fun sentenceAround(text: String, offset: Int): String {
+/**
+ * Kelimenin bağlamı.
+ *
+ * Cümle kısaysa (en fazla [MAX_SENTENCE_WORDS] kelime) cümlenin tamamı;
+ * uzunsa kelimenin çevresinden [WINDOW_WORDS] kelimelik bir pencere alınır.
+ * Uzun cümlelerin tamamını saklamak kartı okunmaz hâle getiriyordu.
+ */
+internal fun contextAround(text: String, wordStart: Int, wordEnd: Int): String {
     val enders = charArrayOf('.', '!', '?')
-    var start = offset
+    var start = wordStart
     while (start > 0 && text[start - 1] !in enders) start--
-    var end = offset
+    var end = wordEnd
     while (end < text.length && text[end] !in enders) end++
     if (end < text.length) end++
-    return text.substring(start.coerceAtMost(end), end).trim()
+    val sentence = text.substring(start.coerceAtMost(end), end).trim()
+    if (sentence.split(' ').count { it.isNotBlank() } <= MAX_SENTENCE_WORDS) return sentence
+
+    // Uzun cümle: kelimenin önünden ve arkasından birkaç kelime.
+    val before = text.substring(start, wordStart).split(' ').filter { it.isNotBlank() }
+    val after = text.substring(wordEnd, end).split(' ').filter { it.isNotBlank() }
+    val word = text.substring(wordStart, wordEnd)
+    val left = before.takeLast(WINDOW_WORDS)
+    val right = after.take(WINDOW_WORDS)
+    return buildString {
+        if (before.size > WINDOW_WORDS) append("… ")
+        if (left.isNotEmpty()) append(left.joinToString(" ")).append(' ')
+        append(word)
+        if (right.isNotEmpty()) append(' ').append(right.joinToString(" "))
+        if (after.size > WINDOW_WORDS) append(" …")
+    }.trim()
 }
+
+private const val MAX_SENTENCE_WORDS = 10
+private const val WINDOW_WORDS = 5
 
 /** Composable olmayan yerlerden kullanılabilen renk eşlemesi. */
 internal fun paintOf(color: HighlightColor): Color = when (color) {

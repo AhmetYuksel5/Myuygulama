@@ -318,12 +318,47 @@ class LauncherStore(context: Context) {
         get() = prefs.getInt(KEY_ICON_SIZE, 60)
         set(value) = prefs.edit().putInt(KEY_ICON_SIZE, value.coerceIn(44, 88)).apply()
 
+    /**
+     * Simge öbeğinin kapladığı alan. Yay tüm ekranı kaplamak yerine bu
+     * dikdörtgenin içinde duruyor; böylece altındaki widget'ların ve duvar
+     * kâğıdının üstünü kapatmadan istediğin yere yerleştirebiliyorsun.
+     */
+    var clusterWidthDp: Int
+        get() = prefs.getInt(KEY_CLUSTER_W, 300)
+        set(value) = prefs.edit().putInt(KEY_CLUSTER_W, value.coerceIn(140, 460)).apply()
+
+    var clusterHeightDp: Int
+        get() = prefs.getInt(KEY_CLUSTER_H, 340)
+        set(value) = prefs.edit().putInt(KEY_CLUSTER_H, value.coerceIn(140, 700)).apply()
+
+    /** Öbeğin alttan ve seçili kenardan uzaklığı. */
+    var clusterBottomDp: Int
+        get() = prefs.getInt(KEY_CLUSTER_B, 90)
+        set(value) = prefs.edit().putInt(KEY_CLUSTER_B, value.coerceIn(0, 600)).apply()
+
+    var clusterSideDp: Int
+        get() = prefs.getInt(KEY_CLUSTER_S, 0)
+        set(value) = prefs.edit().putInt(KEY_CLUSTER_S, value.coerceIn(0, 300)).apply()
+
+    /** Ana ekrana yerleştirilen widget kimlikleri. */
+    var widgetIds: List<Int>
+        get() = prefs.getString(KEY_WIDGETS, null)
+            ?.split(',')
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            .orEmpty()
+        set(value) = prefs.edit().putString(KEY_WIDGETS, value.joinToString(",")).apply()
+
     companion object {
         private const val PREFS_NAME = "merkez_launcher"
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_SEEDED = "seeded"
         private const val KEY_RIGHT = "on_right"
         private const val KEY_ICON_SIZE = "icon_size"
+        private const val KEY_CLUSTER_W = "cluster_w"
+        private const val KEY_CLUSTER_H = "cluster_h"
+        private const val KEY_CLUSTER_B = "cluster_b"
+        private const val KEY_CLUSTER_S = "cluster_s"
+        private const val KEY_WIDGETS = "widget_ids"
     }
 }
 
