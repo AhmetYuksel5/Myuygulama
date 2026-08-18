@@ -1,10 +1,24 @@
 package com.ahmety.uygulama.core.model
 
-/** Uygulamayla gelen sabit kelime; asset'ten yüklenir, değişmez. */
+/**
+ * Bir kelime kartı.
+ *
+ * Kart yüzünde yalnızca kelime durur; anlam, tanım, örnekler ve ilgili
+ * kelimeler kelimeye dokununca açılır. Böylece önce hatırlamayı deneyip
+ * sonra kontrol edebiliyorsun.
+ */
 data class VocabWord(
     val word: String,
     val meaning: String,
-    val example: String,
+    /** Kısa İngilizce tanım. */
+    val definition: String = "",
+    val examples: List<String> = emptyList(),
+    /** Eş/zıt anlamlılar ve aynı kökten türeyenler. */
+    val related: List<String> = emptyList(),
+    /** Kitaptan aktarıldıysa kelimenin geçtiği cümle. */
+    val context: String = "",
+    /** Kitapta mavi işaretlenip aktarılan kelime mi. */
+    val fromBook: Boolean = false,
 )
 
 enum class VocabStatus {
@@ -16,6 +30,9 @@ enum class VocabStatus {
 
     /** Sağa sürüklendi: bilmiyorum, çalışılacak. */
     LEARNING,
+
+    /** Aşağı sürüklendi: emin olamadım, şimdilik dursun. */
+    UNSURE,
 }
 
 data class VocabCard(

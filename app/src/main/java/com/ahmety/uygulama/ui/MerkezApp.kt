@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.launcher.LauncherActivity
+import com.ahmety.uygulama.feature.ebook.BookReaderRoute
+import com.ahmety.uygulama.feature.ebook.BookShelfRoute
 import com.ahmety.uygulama.feature.library.NoteEditorRoute
 import com.ahmety.uygulama.feature.reader.ArticleRoute
 import com.ahmety.uygulama.feature.reader.SaveArticleDialog
@@ -159,6 +161,7 @@ fun MerkezApp() {
             composable(TopLevelDestination.MORE.route) {
                 MoreScreen(
                     onOpenVocab = { navController.navigate(VOCAB_ROUTE) },
+                    onOpenBooks = { navController.navigate(BOOKS_ROUTE) },
                     onOpenSearch = { navController.navigate(SEARCH_ROUTE) },
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
@@ -169,6 +172,15 @@ fun MerkezApp() {
             }
             composable(VOCAB_ROUTE) {
                 VocabRoute()
+            }
+            composable(BOOKS_ROUTE) {
+                BookShelfRoute(onOpenBook = { navController.navigate("$BOOK_ROUTE/$it") })
+            }
+            composable(
+                route = "$BOOK_ROUTE/{bookId}",
+                arguments = listOf(navArgument("bookId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                BookReaderRoute(bookId = backStackEntry.arguments?.getLong("bookId") ?: 0L)
             }
             composable(SEARCH_ROUTE) {
                 SearchRoute(
@@ -213,6 +225,8 @@ fun MerkezApp() {
 }
 
 private const val VOCAB_ROUTE = "vocab"
+private const val BOOKS_ROUTE = "books"
+private const val BOOK_ROUTE = "book"
 private const val SEARCH_ROUTE = "search"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
@@ -225,6 +239,7 @@ private const val ARTICLE_ROUTE = "article"
 @Composable
 private fun MoreScreen(
     onOpenVocab: () -> Unit,
+    onOpenBooks: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
@@ -261,6 +276,13 @@ private fun MoreScreen(
                 "açıp deneyebilir, geri tuşuyla uygulamaya dönebilirsin.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ListItem(
+            headlineContent = { Text("Kitaplık") },
+            supportingContent = {
+                Text("EPUB oku; kelimeleri renkli işaretle, mavi olanlar kelime çalışmasına düşer")
+            },
+            modifier = Modifier.clickable(onClick = onOpenBooks),
         )
         ListItem(
             headlineContent = { Text("Kelime çalışması") },
