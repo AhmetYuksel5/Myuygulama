@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
@@ -43,14 +44,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -520,6 +526,51 @@ private fun SwipeableCard(
     var flyToX by remember(key) { mutableFloatStateOf(0f) }
     var flyToY by remember(key) { mutableFloatStateOf(0f) }
     var decision by remember(key) { mutableStateOf<(() -> Unit)?>(null) }
+    val scrollState = rememberScrollState()
+
+    /** Dikey fırlatma kararını uygular; hem jestten hem kaydırma artığından çağrılıyor. */
+    fun decideVertical() {
+        when {
+            offsetY < -threshold -> {
+                flyToY = -1800f
+                decision = { onKnown(revealed) }
+                dismissed = true
+            }
+
+            offsetY > threshold -> {
+                flyToY = 1800f
+                decision = { onIgnore(revealed) }
+                dismissed = true
+            }
+
+            else -> offsetY = 0f
+        }
+    }
+
+    /**
+     * Kart açıkken içerik kaydırılabiliyor; ama "öğrendim" ve "önemsiz"
+     * jestleri de dikey. Kaydırmanın **tüketemediği** dikey hareketi buradan
+     * alıyoruz: metin sonuna gelindiğinde ya da zaten sığıyorsa kart hareket
+     * ediyor. Böylece iki davranış da kayboluyor değil, sırayla çalışıyor.
+     */
+    val verticalGestures = remember(key, threshold) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (dismissed || available.y == 0f) return Offset.Zero
+                offsetY += available.y
+                return Offset(0f, available.y)
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (!dismissed && offsetY != 0f) decideVertical()
+                return Velocity.Zero
+            }
+        }
+    }
 
     val animatedX by animateFloatAsState(
         targetValue = if (dismissed) flyToX else offsetX,
@@ -562,45 +613,33 @@ private fun SwipeableCard(
                 translationY = animatedY
                 rotationZ = animatedX / 40f
             }
+            .nestedScroll(verticalGestures)
             .pointerInput(key) {
                 detectDragGestures(
                     onDragEnd = {
-                        val horizontal = abs(offsetX) > abs(offsetY)
                         when {
-                            // Sol: çalıştım, tekrar çalışacağım.
-                            horizontal && offsetX < -threshold -> {
+                            offsetX < -threshold -> {
                                 flyToX = -1600f
                                 decision = { onLearning(revealed) }
                                 dismissed = true
                             }
-                            // Sağ: şimdilik geç; karar kaydedilmiyor.
-                            horizontal && offsetX > threshold -> {
+
+                            offsetX > threshold -> {
                                 flyToX = 1600f
                                 decision = { onSkip(revealed) }
                                 dismissed = true
                             }
-                            // Aşağı: önemsiz kelimeler arasına.
-                            !horizontal && offsetY > threshold -> {
-                                flyToY = 1800f
-                                decision = { onIgnore(revealed) }
-                                dismissed = true
-                            }
-                            // Yukarı: öğrendim, bir daha çıkmasın.
-                            !horizontal && offsetY < -threshold -> {
-                                flyToY = -1800f
-                                decision = { onKnown(revealed) }
-                                dismissed = true
-                            }
-                            else -> {
-                                offsetX = 0f
-                                offsetY = 0f
-                            }
+
+                            else -> offsetX = 0f
                         }
                     },
                     onDrag = { change, dragAmount ->
-                        change.consume()
-                        offsetX += dragAmount.x
-                        offsetY += dragAmount.y
+                        // Dikeyi tüketmiyoruz: kart açıkken metnin kaydırılması
+                        // ve "öğrendim/önemsiz" jestleri o katmandan geçiyor.
+                        if (abs(dragAmount.x) > abs(dragAmount.y) || offsetX != 0f) {
+                            change.consume()
+                            offsetX += dragAmount.x
+                        }
                     },
                 )
             },
@@ -613,6 +652,7 @@ private fun SwipeableCard(
             revealed = revealed,
             onToggleReveal = { revealed = !revealed },
             onLongPress = onLongPress,
+            scrollState = if (revealed) scrollState else null,
         )
     }
 }
@@ -646,6 +686,7 @@ private fun WordCard(
     revealed: Boolean = false,
     onToggleReveal: () -> Unit = {},
     onLongPress: () -> Unit = {},
+    scrollState: ScrollState? = null,
 ) {
 
     Card(
@@ -659,6 +700,15 @@ private fun WordCard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Kart artık örnekler, aile, ilgili kelimeler, karıştırma
+                    // ve eşdizim taşıyor; sığmayan kısım sessizce kırpılıyordu.
+                    .then(
+                        if (scrollState != null) {
+                            Modifier.verticalScroll(scrollState)
+                        } else {
+                            Modifier
+                        },
+                    )
                     .then(
                         if (interactive) {
                             // Uzun basış da burada: dış katmandaki bir
