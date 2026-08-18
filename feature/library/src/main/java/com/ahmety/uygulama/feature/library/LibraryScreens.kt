@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +49,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -459,16 +459,19 @@ fun NoteEditorRoute(
         onDispose { viewModel.save() }
     }
 
-    // Tek bir kaydırılabilir liste: klavye açıldığında alanlar sıkışmıyor.
-    LazyColumn(
+    // Düz kaydırılabilir sütun (tembel liste değil): madde ekranın dışına
+    // kayınca yok edilip yazdığın alanın odağı kaybolmasın. Not başına madde
+    // sayısı az olduğu için geri dönüşüme gerek yok.
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(noteColor(state.colorIndex))
-            .imePadding(),
-        contentPadding = PaddingValues(16.dp),
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item {
+        run {
             OutlinedTextField(
                 value = state.title,
                 onValueChange = viewModel::onTitleChange,
@@ -479,7 +482,7 @@ fun NoteEditorRoute(
         }
 
         if (state.images.isNotEmpty()) {
-            item {
+            run {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -498,7 +501,7 @@ fun NoteEditorRoute(
             }
         }
 
-        item {
+        run {
             OutlinedTextField(
                 value = state.plain,
                 onValueChange = viewModel::onPlainChange,
@@ -509,7 +512,7 @@ fun NoteEditorRoute(
         }
 
         // Liste maddeleri: ham "[ ] madde" metni yerine gerçek kutucuklar.
-        itemsIndexed(state.items) { index, item ->
+        state.items.forEachIndexed { index, item ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
@@ -536,7 +539,7 @@ fun NoteEditorRoute(
             }
         }
 
-        item {
+        run {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { viewModel.addChecklistItem() }) {
                     Text("Madde ekle")
@@ -547,10 +550,8 @@ fun NoteEditorRoute(
             }
         }
 
-        item {
-            Text("Renk", style = MaterialTheme.typography.labelLarge)
-        }
-        item {
+        Text("Renk", style = MaterialTheme.typography.labelLarge)
+        run {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 (0 until NOTE_COLOR_COUNT).forEach { index ->
                     val selected = index == state.colorIndex
@@ -572,14 +573,12 @@ fun NoteEditorRoute(
         }
 
         if (state.tags.isNotEmpty()) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.tags.forEach { tag -> AssistChip(onClick = {}, label = { Text("#$tag") }) }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.tags.forEach { tag -> AssistChip(onClick = {}, label = { Text("#$tag") }) }
             }
         }
 
-        item {
+        run {
             OutlinedTextField(
                 value = tagInput,
                 onValueChange = { tagInput = it },
@@ -588,17 +587,15 @@ fun NoteEditorRoute(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(
-                    onClick = {
-                        viewModel.addTag(tagInput)
-                        tagInput = ""
-                    },
-                    label = { Text("Etiketle") },
-                )
-                AssistChip(onClick = onBack, label = { Text("Bitti") })
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(
+                onClick = {
+                    viewModel.addTag(tagInput)
+                    tagInput = ""
+                },
+                label = { Text("Etiketle") },
+            )
+            AssistChip(onClick = onBack, label = { Text("Bitti") })
         }
     }
 }
