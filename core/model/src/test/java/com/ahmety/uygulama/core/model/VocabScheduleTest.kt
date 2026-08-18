@@ -21,8 +21,10 @@ class VocabScheduleTest {
             state = nextSchedule(state, VocabDecision.STUDIED, now, dayStart = today)
             gaps += ((state.dueAt!! - today) / day).toInt()
         }
-        // İlk üç kademe sapmasız: 1, 3, 7 gün.
+        // İlk üç kademe sapmasız: kullanıcının istediği 1, 3, 7 gün.
         assertEquals(listOf(1, 3, 7), gaps.take(3))
+        // Dördüncüsü 16 gün, sapmayla birlikte.
+        assertTrue("${gaps[3]}", gaps[3] in 14..18)
         // Sonrakiler artan sırada ve son kademede takılı kalıyor.
         assertTrue(gaps.zipWithNext().all { (a, b) -> b >= a })
         assertEquals(VOCAB_LADDER.size, state.box)
@@ -88,6 +90,7 @@ class VocabScheduleTest {
         }
         // Kısa aralıklara sapma uygulanmıyor.
         assertEquals(3, fuzzedDays(3, "abundant"))
+        assertEquals(7, fuzzedDays(7, "abundant"))
     }
 
     @Test

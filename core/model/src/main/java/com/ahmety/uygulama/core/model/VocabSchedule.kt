@@ -118,7 +118,9 @@ fun nextSchedule(
  * bulmalı, yoksa senkron sonrası kelime iki kez sorulur.
  */
 internal fun fuzzedDays(days: Int, word: String): Int {
-    if (days < 7) return days
+    // Kısa aralıklarda sapmaya gerek yok: yığılma uzun aralıklarda oluyor,
+    // ve 3 gün yerine 2 ya da 4 gün demek programın iskeletini bulanıklaştırır.
+    if (days <= 7) return days
     val spread = days * 15 / 100
     val offset = abs(word.hashCode().toLong()) % (2L * spread + 1L) - spread
     return (days + offset).toInt().coerceAtLeast(days - spread)
