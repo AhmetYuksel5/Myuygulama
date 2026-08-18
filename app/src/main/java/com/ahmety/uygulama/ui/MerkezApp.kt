@@ -10,10 +10,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.MoreHoriz
-import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +48,7 @@ import com.ahmety.uygulama.ui.ai.AiSettingsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
-import com.ahmety.uygulama.ui.update.UpdateScreen
+import com.ahmety.uygulama.ui.update.UpdateDialog
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -63,8 +63,8 @@ private enum class TopLevelDestination(
     val label: String,
     val icon: ImageVector,
 ) {
-    TODAY("today", "Bugün", Icons.Outlined.Today),
-    TASKS("tasks", "Görevler", Icons.Outlined.CheckCircle),
+    BOOKS("books", "Kitaplık", Icons.Outlined.MenuBook),
+    VOCAB("vocab", "Kelimeler", Icons.Outlined.Translate),
     HOME_SCREEN("home_screen", "Ana ekran", Icons.Outlined.GridView),
     POCKET("pocket", "Pocket", Icons.Outlined.Bookmark),
     MORE("more", "Daha", Icons.Outlined.MoreHoriz),
@@ -81,11 +81,12 @@ fun MerkezApp() {
     val navRequest by NavRequestBus.target.collectAsState()
     var pendingAddTask by remember { mutableStateOf(false) }
     var showSaveArticle by remember { mutableStateOf(false) }
+    var showUpdate by remember { mutableStateOf(false) }
     LaunchedEffect(navRequest) {
         when (navRequest) {
             NavRequestBus.TARGET_TASKS, NavRequestBus.TARGET_ADD_TASK -> {
                 if (navRequest == NavRequestBus.TARGET_ADD_TASK) pendingAddTask = true
-                navController.navigate(TopLevelDestination.TASKS.route) {
+                navController.navigate(TASKS_ROUTE) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
                     restoreState = true
@@ -93,6 +94,10 @@ fun MerkezApp() {
             }
         }
         if (navRequest != null) NavRequestBus.consume()
+    }
+
+    if (showUpdate) {
+        UpdateDialog(onDismiss = { showUpdate = false })
     }
 
     if (showSaveArticle) {
@@ -144,13 +149,13 @@ fun MerkezApp() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = TopLevelDestination.TODAY.route,
+            startDestination = TopLevelDestination.BOOKS.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(TopLevelDestination.TODAY.route) {
+            composable(TODAY_ROUTE) {
                 TodayScreen()
             }
-            composable(TopLevelDestination.TASKS.route) {
+            composable(TASKS_ROUTE) {
                 TasksRoute(
                     openAddDialog = pendingAddTask,
                     onAddDialogConsumed = { pendingAddTask = false },
@@ -169,22 +174,22 @@ fun MerkezApp() {
             }
             composable(TopLevelDestination.MORE.route) {
                 MoreScreen(
+                    onOpenToday = { navController.navigate(TODAY_ROUTE) },
+                    onOpenTasks = { navController.navigate(TASKS_ROUTE) },
                     onOpenNotes = { navController.navigate(NOTES_ROUTE) },
-                    onOpenVocab = { navController.navigate(VOCAB_ROUTE) },
-                    onOpenBooks = { navController.navigate(BOOKS_ROUTE) },
                     onOpenSearch = { navController.navigate(SEARCH_ROUTE) },
+                    onCheckUpdate = { showUpdate = true },
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenAi = { navController.navigate(AI_ROUTE) },
-                    onOpenUpdates = { navController.navigate(UPDATE_ROUTE) },
                 )
             }
-            composable(VOCAB_ROUTE) {
+            composable(TopLevelDestination.VOCAB.route) {
                 VocabRoute()
             }
-            composable(BOOKS_ROUTE) {
+            composable(TopLevelDestination.BOOKS.route) {
                 BookShelfRoute(onOpenBook = { navController.navigate("$BOOK_ROUTE/$it") })
             }
             composable(
@@ -214,9 +219,6 @@ fun MerkezApp() {
             composable(AI_ROUTE) {
                 AiSettingsScreen()
             }
-            composable(UPDATE_ROUTE) {
-                UpdateScreen()
-            }
             composable(
                 route = "$NOTE_ROUTE/{noteId}",
                 arguments = listOf(navArgument("noteId") { type = NavType.LongType }),
@@ -239,8 +241,8 @@ fun MerkezApp() {
 }
 
 private const val NOTES_ROUTE = "notes"
-private const val VOCAB_ROUTE = "vocab"
-private const val BOOKS_ROUTE = "books"
+private const val TODAY_ROUTE = "today"
+private const val TASKS_ROUTE = "tasks"
 private const val BOOK_ROUTE = "book"
 private const val SEARCH_ROUTE = "search"
 private const val AI_ROUTE = "ai"
@@ -249,21 +251,20 @@ private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
 private const val CURSOR_ROUTE = "cursor"
 private const val NOTE_ROUTE = "note"
-private const val UPDATE_ROUTE = "update"
 private const val ARTICLE_ROUTE = "article"
 
 @Composable
 private fun MoreScreen(
+    onOpenToday: () -> Unit,
+    onOpenTasks: () -> Unit,
     onOpenNotes: () -> Unit,
-    onOpenVocab: () -> Unit,
-    onOpenBooks: () -> Unit,
     onOpenSearch: () -> Unit,
+    onCheckUpdate: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
     onOpenAi: () -> Unit,
-    onOpenUpdates: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -273,28 +274,48 @@ private fun MoreScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(text = "Daha", style = MaterialTheme.typography.headlineMedium)
+
+        // Güncelleme en üstte: tıklayınca pencere açılıp hemen kontrol ediyor.
+        ListItem(
+            headlineContent = { Text("Güncelleme") },
+            supportingContent = { Text("Yeni sürümü kontrol et ve kur") },
+            modifier = Modifier.clickable(onClick = onCheckUpdate),
+        )
+
+        ListItem(
+            headlineContent = { Text("Bugün") },
+            supportingContent = { Text("Alışkanlıklar, ajanda, günün özeti") },
+            modifier = Modifier.clickable(onClick = onOpenToday),
+        )
+        ListItem(
+            headlineContent = { Text("Görevler") },
+            supportingContent = { Text("Listeler, alt görevler, tekrar") },
+            modifier = Modifier.clickable(onClick = onOpenTasks),
+        )
         ListItem(
             headlineContent = { Text("Notlar") },
             supportingContent = { Text("Renkli kartlar, listeler, fotoğraflar") },
             modifier = Modifier.clickable(onClick = onOpenNotes),
         )
         ListItem(
-            headlineContent = { Text("Kitaplık") },
-            supportingContent = {
-                Text("EPUB oku; kelimeleri renkli işaretle, mavi olanlar kelime çalışmasına düşer")
-            },
-            modifier = Modifier.clickable(onClick = onOpenBooks),
-        )
-        ListItem(
-            headlineContent = { Text("Kelime çalışması") },
-            supportingContent = { Text("400 kartlık İngilizce destesi") },
-            modifier = Modifier.clickable(onClick = onOpenVocab),
-        )
-        ListItem(
             headlineContent = { Text("Ara") },
             supportingContent = { Text("Notlar, makaleler, görevler — tek indeks") },
             modifier = Modifier.clickable(onClick = onOpenSearch),
         )
+
+        // Araçlar: ekranın üstüne binen, uygulamadan bağımsız çalışan şeyler.
+        Text(text = "Araçlar", style = MaterialTheme.typography.titleMedium)
+        ListItem(
+            headlineContent = { Text("Kenar hareketleri") },
+            supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
+            modifier = Modifier.clickable(onClick = onOpenGestures),
+        )
+        ListItem(
+            headlineContent = { Text("Tek elle imleç") },
+            supportingContent = { Text("Ulaşılamayan köşelere basmak için sanal imleç") },
+            modifier = Modifier.clickable(onClick = onOpenCursor),
+        )
+
         Text(text = "Ayarlar", style = MaterialTheme.typography.titleMedium)
         ListItem(
             headlineContent = { Text("İzinler") },
@@ -307,24 +328,9 @@ private fun MoreScreen(
             modifier = Modifier.clickable(onClick = onOpenSync),
         )
         ListItem(
-            headlineContent = { Text("Kenar hareketleri") },
-            supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
-            modifier = Modifier.clickable(onClick = onOpenGestures),
-        )
-        ListItem(
-            headlineContent = { Text("Tek elle imleç") },
-            supportingContent = { Text("Ulaşılamayan köşelere basmak için sanal imleç") },
-            modifier = Modifier.clickable(onClick = onOpenCursor),
-        )
-        ListItem(
             headlineContent = { Text("Yapay zekâ") },
             supportingContent = { Text("OpenAI anahtarı — kitaptan gelen kelimeleri doldurur") },
             modifier = Modifier.clickable(onClick = onOpenAi),
-        )
-        ListItem(
-            headlineContent = { Text("Güncellemeler") },
-            supportingContent = { Text("Yeni sürümü uygulama içinden indir ve kur") },
-            modifier = Modifier.clickable(onClick = onOpenUpdates),
         )
     }
 }
