@@ -1,6 +1,7 @@
 package com.ahmety.uygulama.ui.gestures
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,10 +9,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +46,7 @@ import kotlin.math.atan2
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.ahmety.uygulama.launcher.loadLaunchableApps
 import com.ahmety.uygulama.feature.gestures.GestureAction
 import com.ahmety.uygulama.feature.gestures.GestureFeedback
 import com.ahmety.uygulama.feature.gestures.GestureSettings
@@ -67,6 +73,7 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
     var down by remember { mutableStateOf(settings.swipeDownAction) }
     var inward by remember { mutableStateOf(settings.swipeInAction) }
     var longPress by remember { mutableStateOf(settings.longPressAction) }
+    var doubleTap by remember { mutableStateOf(settings.doubleTapAction) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -146,10 +153,21 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
         )
 
         Text("Jestlere atanan eylemler", style = MaterialTheme.typography.labelLarge)
-        ActionPicker("Yukarı kaydır", up) { up = it; settings.swipeUpAction = it }
-        ActionPicker("Aşağı kaydır", down) { down = it; settings.swipeDownAction = it }
-        ActionPicker("İçeri kaydır", inward) { inward = it; settings.swipeInAction = it }
-        ActionPicker("Uzun bas", longPress) { longPress = it; settings.longPressAction = it }
+        ActionPicker("Yukarı kaydır", up, GestureSettings.GESTURE_UP, settings) {
+            up = it; settings.swipeUpAction = it
+        }
+        ActionPicker("Aşağı kaydır", down, GestureSettings.GESTURE_DOWN, settings) {
+            down = it; settings.swipeDownAction = it
+        }
+        ActionPicker("İçeri kaydır", inward, GestureSettings.GESTURE_IN, settings) {
+            inward = it; settings.swipeInAction = it
+        }
+        ActionPicker("Uzun bas", longPress, GestureSettings.GESTURE_LONG, settings) {
+            longPress = it; settings.longPressAction = it
+        }
+        ActionPicker("Çift dokun", doubleTap, GestureSettings.GESTURE_DOUBLE, settings) {
+            doubleTap = it; settings.doubleTapAction = it
+        }
 
         Text("Boyut ve konum", style = MaterialTheme.typography.labelLarge)
         Stepper("Kalınlık", widthDp, 2..16, suffix = "dp") { widthDp = it; settings.widthDp = it }
@@ -315,33 +333,98 @@ internal fun ServiceCard(
     }
 }
 
+/**
+ * Bir jestin eylemi. "Uygulama aç" seçilirse hemen altında hangi uygulamanın
+ * açılacağı da seçiliyor; her jest kendi uygulamasını taşıyor.
+ */
 @Composable
 private fun ActionPicker(
     label: String,
     value: GestureAction,
+    gestureKey: String,
+    settings: GestureSettings,
     onChange: (GestureAction) -> Unit,
 ) {
+    val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-        Box {
-            OutlinedButton(onClick = { open = true }) { Text(value.label) }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                GestureAction.entries.forEach { action ->
-                    DropdownMenuItem(
-                        text = { Text(action.label) },
-                        onClick = {
-                            open = false
-                            onChange(action)
-                        },
-                    )
+    var picking by remember { mutableStateOf(false) }
+    var packageName by remember { mutableStateOf(settings.appFor(gestureKey)) }
+
+    val appLabel = remember(packageName) {
+        if (packageName.isBlank()) {
+            null
+        } else {
+            runCatching {
+                val manager = context.packageManager
+                manager.getApplicationLabel(manager.getApplicationInfo(packageName, 0)).toString()
+            }.getOrNull()
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Box {
+                OutlinedButton(onClick = { open = true }) { Text(value.label) }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    GestureAction.entries.forEach { action ->
+                        DropdownMenuItem(
+                            text = { Text(action.label) },
+                            onClick = {
+                                open = false
+                                onChange(action)
+                            },
+                        )
+                    }
                 }
             }
         }
+
+        if (value == GestureAction.OPEN_APP) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = { picking = true }) {
+                    Text(appLabel ?: "Uygulama seç")
+                }
+            }
+        }
+    }
+
+    if (picking) {
+        // Liste yalnızca kutu açılınca hazırlanıyor: paket sorgusu birkaç yüz
+        // uygulamada yavaş, ayar ekranını her açılışta bekletmesin.
+        val apps = remember { loadLaunchableApps(context) }
+        AlertDialog(
+            onDismissRequest = { picking = false },
+            title = { Text("Uygulama seç") },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                    items(apps) { app ->
+                        Text(
+                            text = app.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    settings.setAppFor(gestureKey, app.packageName)
+                                    packageName = app.packageName
+                                    picking = false
+                                }
+                                .padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { picking = false }) { Text("Vazgeç") }
+            },
+        )
     }
 }
 

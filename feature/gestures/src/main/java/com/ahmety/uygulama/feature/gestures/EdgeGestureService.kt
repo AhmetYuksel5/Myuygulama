@@ -2,6 +2,7 @@ package com.ahmety.uygulama.feature.gestures
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -126,9 +127,12 @@ class EdgeGestureService : AccessibilityService() {
         private var downX = 0f
         private var downY = 0f
         private var longPressFired = false
+
+        /** Son "kısa dokunuş" anı; ikincisi yeterince hızlı gelirse çift dokunuş. */
+        private var lastTapAt = 0L
         private val longPressRunnable = Runnable {
             longPressFired = true
-            perform(settings.longPressAction)
+            perform(settings.longPressAction, GestureSettings.GESTURE_LONG)
         }
 
         /**
@@ -181,14 +185,36 @@ class EdgeGestureService : AccessibilityService() {
                         atan2(abs(dy).toDouble(), abs(inward).toDouble()),
                     )
                     val moved = hypot(dx.toDouble(), dy.toDouble()) > threshold
+
+                    // Kaydırmayan dokunuş: ikincisi yeterince hızlı gelirse
+                    // çift dokunuş. Tek dokunuşun eylemi yok, bu yüzden
+                    // birincisini bekletmeye gerek kalmıyor — çift dokunuş
+                    // anında çalışıyor.
+                    if (!moved) {
+                        val now = event.eventTime
+                        if (now - lastTapAt in 1..DOUBLE_TAP_MS) {
+                            lastTapAt = 0L
+                            perform(settings.doubleTapAction, GestureSettings.GESTURE_DOUBLE)
+                        } else {
+                            lastTapAt = now
+                        }
+                        return true
+                    }
+                    lastTapAt = 0L
+
                     val action = when {
-                        !moved -> null
-                        angle <= settings.backAngleDegrees && inward > 0 -> settings.swipeInAction
-                        angle > settings.backAngleDegrees && dy < 0 -> settings.swipeUpAction
-                        angle > settings.backAngleDegrees && dy > 0 -> settings.swipeDownAction
+                        angle <= settings.backAngleDegrees && inward > 0 ->
+                            settings.swipeInAction to GestureSettings.GESTURE_IN
+
+                        angle > settings.backAngleDegrees && dy < 0 ->
+                            settings.swipeUpAction to GestureSettings.GESTURE_UP
+
+                        angle > settings.backAngleDegrees && dy > 0 ->
+                            settings.swipeDownAction to GestureSettings.GESTURE_DOWN
+
                         else -> null
                     }
-                    if (action != null) perform(action)
+                    if (action != null) perform(action.first, action.second)
                     return true
                 }
 
@@ -201,9 +227,10 @@ class EdgeGestureService : AccessibilityService() {
         }
     }
 
-    private fun perform(action: GestureAction) {
+    private fun perform(action: GestureAction, gestureKey: String) {
         if (action == GestureAction.NONE) return
         val ok = when (action) {
+            GestureAction.OPEN_APP -> openApp(gestureKey)
             GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
             GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
             GestureAction.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
@@ -220,9 +247,24 @@ class EdgeGestureService : AccessibilityService() {
         }
     }
 
+    /**
+     * Jeste atanan uygulamayı açar. Şerit erişilebilirlik katmanında olduğu
+     * için etkinliği yeni bir görevde başlatmak zorundayız.
+     */
+    private fun openApp(gestureKey: String): Boolean {
+        val packageName = settings.appFor(gestureKey)
+        if (packageName.isBlank()) return false
+        val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching { startActivity(intent) }.isSuccess
+    }
+
     companion object {
         private const val SWIPE_THRESHOLD_DP = 24f
         private const val LONG_PRESS_MS = 350L
+
+        /** İki dokunuş arasındaki en uzun süre; sistemin varsayılanıyla aynı. */
+        private const val DOUBLE_TAP_MS = 300L
 
         fun isRunning(context: Context): Boolean = GestureSettings(context).enabled
     }

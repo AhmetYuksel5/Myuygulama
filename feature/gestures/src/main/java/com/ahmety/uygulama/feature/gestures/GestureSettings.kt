@@ -16,6 +16,7 @@ enum class GestureAction(val label: String) {
     LOCK_SCREEN("Ekranı kilitle"),
     SCREENSHOT("Ekran görüntüsü"),
     POWER_DIALOG("Güç menüsü"),
+    OPEN_APP("Uygulama aç"),
 }
 
 /**
@@ -114,6 +115,22 @@ class GestureSettings(context: Context) {
         get() = actionOf(KEY_ACTION_LONG, GestureAction.HOME)
         set(value) = prefs.edit().putString(KEY_ACTION_LONG, value.name).apply()
 
+    /** Şeride arka arkaya iki dokunuş. Varsayılan olarak kapalı. */
+    var doubleTapAction: GestureAction
+        get() = actionOf(KEY_ACTION_DOUBLE, GestureAction.NONE)
+        set(value) = prefs.edit().putString(KEY_ACTION_DOUBLE, value.name).apply()
+
+    /**
+     * [GestureAction.OPEN_APP] seçildiğinde açılacak uygulamanın paket adı.
+     * Her jest kendi uygulamasını taşıyabilsin diye anahtar jest başına ayrı.
+     */
+    fun appFor(gesture: String): String =
+        prefs.getString(KEY_APP_PREFIX + gesture, null).orEmpty()
+
+    fun setAppFor(gesture: String, packageName: String) {
+        prefs.edit().putString(KEY_APP_PREFIX + gesture, packageName).apply()
+    }
+
     private fun actionOf(key: String, default: GestureAction): GestureAction =
         prefs.getString(key, null)?.let { name ->
             runCatching { GestureAction.valueOf(name) }.getOrNull()
@@ -138,6 +155,15 @@ class GestureSettings(context: Context) {
         private const val KEY_ACTION_DOWN = "action_down"
         private const val KEY_ACTION_IN = "action_in"
         private const val KEY_ACTION_LONG = "action_long"
+        private const val KEY_ACTION_DOUBLE = "action_double"
+        private const val KEY_APP_PREFIX = "app_for_"
+
+        // Jest adları: hangi jeste hangi uygulamanın atandığını ayırmak için.
+        const val GESTURE_UP = "up"
+        const val GESTURE_DOWN = "down"
+        const val GESTURE_IN = "in"
+        const val GESTURE_LONG = "long"
+        const val GESTURE_DOUBLE = "double"
 
         /** Yarı saydam beyaz: koyu ve açık arayüzlerde de seçilebiliyor. */
         private const val DEFAULT_COLOR = 0x66FFFFFF
