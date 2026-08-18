@@ -44,8 +44,11 @@ class NotesViewModel @Inject constructor(
     ) { notes, articles, archived, allHighlights ->
         // Kitaptaki kelime işaretlemeleri buraya düşmemeli: bir kitapta
         // yüzlerce kelime işaretlenebiliyor, liste kullanılmaz hale geliyordu.
+        // Başka uygulamalardan "kelimelere ekle" ile gelenler de kelime
+        // destesine ait; not defterinde ikinci kez görünmesinler.
+        val hiddenKinds = setOf(HighlightRef.KIND_BOOK, HighlightRef.KIND_SELECTION)
         val highlights = allHighlights.filter {
-            HighlightRef.kind(it.source) != HighlightRef.KIND_BOOK
+            HighlightRef.kind(it.source) !in hiddenKinds
         }
         // Sabitlenenler üstte; gerisi güncellenme sırasına göre geliyor.
         val sorted = notes.sortedByDescending { NoteStyle.decode(it.source).pinned }

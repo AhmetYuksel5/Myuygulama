@@ -23,6 +23,9 @@ object HighlightRef {
     const val KIND_BOOK = "book"
     const val KIND_ARTICLE = "article"
 
+    /** Başka bir uygulamada seçilip buraya gönderilen metin. */
+    const val KIND_SELECTION = "selection"
+
     fun encode(kind: String, sourceId: Long, color: HighlightColor): String =
         "$kind:$sourceId;color=${color.name}"
 

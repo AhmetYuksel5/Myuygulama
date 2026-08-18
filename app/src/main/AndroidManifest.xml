@@ -88,6 +88,32 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Herhangi bir uygulamada metin seçilince çıkan "Uygulama" seçeneği.
+            PROCESS_TEXT seçim menüsüne, SEND ise paylaş menüsüne düşer;
+            bazı uygulamalar (X gibi) kendi seçim menüsünü koyduğu için
+            ikisini birden tanımlıyoruz.
+        -->
+        <activity
+            android:name=".textaction.TextActionActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.ahmety.uygulama.textaction"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Merkez.Dialog">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
