@@ -250,6 +250,11 @@ fun BookReaderRoute(
             // sonuna düşmeli: sayfa çevirir gibi okunuyor.
             var landAtEnd by remember { mutableStateOf(false) }
 
+            // Bölüm değişimi ile listenin yeni içeriği ölçülmesi arasında
+            // canScrollBackward/Forward hâlâ eski değeri veriyor; peş peşe iki
+            // dokunuş bir bölümü atlıyordu.
+            var switching by remember { mutableStateOf(false) }
+
             // Kitap ilk açıldığında kaldığın paragrafa dön; ileri doğru bölüm
             // değiştirdiğinde metnin başından başla.
             LaunchedEffect(state.chapterIndex, book) {
@@ -271,11 +276,6 @@ fun BookReaderRoute(
                         viewModel.savePosition(index)
                     }
             }
-
-            // Bölüm değişimi ile listenin yeni içeriği ölçülmesi arasında
-            // canScrollBackward/Forward hâlâ eski değeri veriyor; peş peşe iki
-            // dokunuş bir bölümü atlıyordu.
-            var switching by remember { mutableStateOf(false) }
 
             fun turnPage(forward: Boolean) {
                 if (switching) return
