@@ -38,6 +38,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -1110,17 +1111,37 @@ private fun WordCard(
                         )
                     }
 
-                    if (word.confusions.isNotEmpty()) {
-                        Spacer(Modifier.height(10.dp))
-                        word.confusions.forEach { line ->
-                            LabeledBlock("Karıştırma", line)
-                        }
-                    }
-
                     if (word.collocations.isNotEmpty()) {
                         Spacer(Modifier.height(10.dp))
                         word.collocations.forEach { group ->
                             CollocationRow(group)
+                        }
+                    }
+
+                    // Karıştırma en altta ve çizginin altında: kelimenin
+                    // kendisiyle ilgili değil, ona benzeyen başka
+                    // kelimelerle ilgili. Karışmasın diye ayırıyoruz.
+                    if (word.confusions.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Karıştırma",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        word.confusions.forEach { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Start,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 4.dp),
+                            )
                         }
                     }
 

@@ -148,16 +148,24 @@ class OpenAiClient @Inject constructor(
         append("list amorphously or amorphousness, and never repeat the input. ")
         append("Empty array only if the root has no other descendants in English), ")
 
-        append("x (LOOK-ALIKES: 1-3 English words that LOOK like the input — ")
+        append("x (LOOK-ALIKES: 2-3 English words that LOOK like the input — ")
         append("similar spelling or shape — even when their meaning and origin are ")
         append("completely unrelated. The point is not to warn about a likely ")
         append("mix-up; it is to carve a sharp outline of the word in memory, the ")
         append("way \"zero\" and \"Nero\" define each other by contrast. So include ")
-        append("a look-alike even when confusing them is unlikely. Format each as ")
+        append("a look-alike even when confusing them is unlikely. ")
+        append("Search deliberately, in this order: words sharing the input's ")
+        append("first 3-4 letters; words sharing its ending; words that differ ")
+        append("by one or two letters; words with the same letter skeleton. ")
+        append("For \"discordant\" that search yields discard, descendant, ")
+        append("redundant. Never list a word that shares the input's root — ")
+        append("those belong in f, and a shared root is the opposite of what ")
+        append("this section is for. Format each as ")
         append("\"lookalike — Turkish meaning; fark\" where fark names the exact ")
         append("letters that differ, in Turkish. Example for amorphous: ")
         append("\"amorous — aşk dolu; onda ph yok: amorPHous / amorous\". ")
-        append("Empty array only if no English word resembles the input), ")
+        append("English has half a million words: an empty x almost always means ")
+        append("you did not search, not that nothing resembles the input), ")
 
         append("c (COLLOCATIONS grouped by grammatical pattern, like an Oxford ")
         append("Collocations Dictionary entry: array of objects with g and w. ")
@@ -176,7 +184,9 @@ class OpenAiClient @Inject constructor(
         append("article unless it belongs to the collocation. Give 2-4 groups). ")
 
         append("Never pad a section to reach a count: fewer good items beat filler, ")
-        append("and an empty array is better than a weak entry. ")
+        append("and an empty array is better than a weak entry. This does not ")
+        append("apply to x — a look-alike does not need to be a likely mix-up to ")
+        append("earn its place, so give x the 2-3 closest words you found. ")
         append("No markdown, no extra keys, no commentary.")
     }
 
