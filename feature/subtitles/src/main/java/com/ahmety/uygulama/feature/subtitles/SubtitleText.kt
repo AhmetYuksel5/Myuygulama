@@ -66,6 +66,102 @@ object SubtitleText {
     }
 
     /**
+     * Filmdeki kalıplar: öbek fiiller ve deyimler.
+     *
+     * Tek kelimelerden ayrı toplanıyorlar çünkü anlamları parçalarından
+     * çıkmıyor — "put up with"i bilmek "put", "up" ve "with"i bilmekle
+     * olmuyor. Filmde geçen ifadeler zaten kitaptakinden farklı.
+     *
+     * İki yol var: bilinen kalıp listesiyle eşleşme ve fiil + edat
+     * kalıbının kendisi. İkincisi listede olmayanları da yakalıyor.
+     */
+    fun phrases(srt: String): List<SubtitleWord> {
+        val all = lines(srt)
+        val counts = LinkedHashMap<String, Int>()
+        val contexts = HashMap<String, String>()
+
+        all.forEachIndexed { index, line ->
+            val sentence = listOfNotNull(
+                all.getOrNull(index - 1),
+                line,
+                all.getOrNull(index + 1),
+            ).joinToString(" ")
+            val tokens = WORD.findAll(line).map { it.value.lowercase() }.toList()
+
+            IDIOMS.forEach { idiom ->
+                if (line.contains(idiom, ignoreCase = true)) {
+                    counts[idiom] = (counts[idiom] ?: 0) + 1
+                    contexts.putIfAbsent(idiom, sentence)
+                }
+            }
+
+            tokens.forEachIndexed { position, token ->
+                if (token !in PARTICLES) return@forEachIndexed
+                val verb = tokens.getOrNull(position - 1) ?: return@forEachIndexed
+                if (verb.length < 3 || verb in PARTICLES || verb in STOP_BEFORE) {
+                    return@forEachIndexed
+                }
+                // Üç kelimelik olanlar ("put up with") ikiliyi de içeriyor;
+                // uzun olanı tercih ediyoruz.
+                val third = tokens.getOrNull(position + 1)
+                val phrase = if (third != null && third in SECOND_PARTICLES) {
+                    "$verb $token $third"
+                } else {
+                    "$verb $token"
+                }
+                counts[phrase] = (counts[phrase] ?: 0) + 1
+                contexts.putIfAbsent(phrase, sentence)
+            }
+        }
+
+        return counts
+            .filterValues { it >= MIN_PHRASE_COUNT }
+            .map { (phrase, count) ->
+                SubtitleWord(word = phrase, count = count, context = contexts[phrase].orEmpty())
+            }
+            .sortedByDescending { it.count }
+    }
+
+    /** Aynı kalıp en az bu kadar geçmeliyse listeye giriyor; tek seferlikler gürültü. */
+    private const val MIN_PHRASE_COUNT = 2
+
+    /** Öbek fiillerin ikinci parçası. */
+    private val PARTICLES = setOf(
+        "up", "out", "off", "down", "in", "on", "away", "back", "over",
+        "through", "around", "along", "apart", "aside", "ahead",
+    )
+
+    /** Üç kelimelik öbek fiillerin son parçası: "put up with", "look out for". */
+    private val SECOND_PARTICLES = setOf("with", "for", "to", "of", "on")
+
+    /** Fiil olamayacak, kalıp üretmeyecek kelimeler. */
+    private val STOP_BEFORE = setOf(
+        "the", "a", "an", "and", "but", "that", "this", "there", "here",
+        "was", "were", "been", "being", "his", "her", "its", "their", "our",
+        "your", "some", "any", "all", "not", "just", "right", "way", "one",
+    )
+
+    /**
+     * Filmlerde sık geçen, parçalarından anlaşılmayan kalıplar. Liste kısa
+     * ama seçici: her biri gerçekten deyim.
+     */
+    private val IDIOMS = listOf(
+        "on purpose", "for good", "no big deal", "big deal", "make sense",
+        "no way", "come on", "hold on", "hang on", "take care", "never mind",
+        "by the way", "at least", "as well", "in charge", "out of hand",
+        "keep an eye on", "make up your mind", "get rid of", "on my own",
+        "out of nowhere", "for a while", "in the first place", "at all costs",
+        "no matter what", "sooner or later", "in the middle of", "on the run",
+        "up to you", "what if", "as if", "let alone", "take it easy",
+        "give it a shot", "hang in there", "cut it out", "back off",
+        "settle down", "figure out", "the whole point", "on the line",
+        "out of the question", "in the long run", "for the record",
+        "beside the point", "call it a day", "get away with", "look forward to",
+        "run out of", "put up with", "come up with", "get along with",
+        "keep up with", "stand up for", "watch out for", "make up for",
+    )
+
+    /**
      * Bilmediğin kelimeleri seçer.
      *
      * [knownUpToRank] seviye sınavından geliyor: bu sıklık sırasına kadar olan

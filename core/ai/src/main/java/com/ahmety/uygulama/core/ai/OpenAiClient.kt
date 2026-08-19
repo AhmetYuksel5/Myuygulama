@@ -20,6 +20,8 @@ data class WordInfo(
     val definition: String,
     val examples: List<String>,
     val related: List<String>,
+    val synonyms: List<String>,
+    val antonyms: List<String>,
     val family: List<String>,
     val confusions: List<String>,
     /**
@@ -120,10 +122,11 @@ class OpenAiClient @Inject constructor(
         append("t (Turkish meanings, 1-3, comma separated), ")
         append("d (short English definition, max 12 words, no final period), ")
         append("e (array of exactly 3 natural example sentences using it, 6-16 words each), ")
-        append("r (RELATED: 5-6 words from the same semantic field — words that ")
-        append("naturally co-occur in the same topic, NOT a synonym list. ")
-        append("If a true synonym belongs there, include it here; no separate ")
-        append("synonyms section), ")
+        append("r (RELATED: 4-6 words from the same semantic field — words that ")
+        append("naturally co-occur in the same topic; not synonyms), ")
+        append("s (SYNONYMS: 0-4 true synonyms or near-synonyms), ")
+        append("a (ANTONYMS: 0-3 opposites; empty array if the word has no clear ")
+        append("opposite), ")
         append("f (WORD FAMILY: derivations of the same root with a part-of-speech ")
         append("tag in Turkish — f for fiil, i for isim, s for sıfat, z for zarf; ")
         append("format \"decision (i)\". Empty array if the word has no common ")
@@ -164,7 +167,7 @@ class OpenAiClient @Inject constructor(
         append("idiom, phrasal verb, inversion, ellipsis, tense — name it and explain), ")
         append("r (array of 0-4 idioms or phrasal verbs that appear in it, ")
         append("each as \"expression — Turkish meaning\"), ")
-        append("c, f, x (empty arrays). ")
+        append("c, f, x, s, a (empty arrays). ")
         append("No markdown, no extra keys, no commentary.")
     }
 
@@ -172,6 +175,8 @@ class OpenAiClient @Inject constructor(
         val examples = json.optJSONArray("e").toStringList()
         val related = json.optJSONArray("r").toStringList()
         val collocations = json.optJSONArray("c").toCollocations()
+        val synonyms = json.optJSONArray("s").toStringList()
+        val antonyms = json.optJSONArray("a").toStringList()
         val family = json.optJSONArray("f").toStringList()
         val confusions = json.optJSONArray("x").toStringList()
         val meaning = json.optString("t").trim()
@@ -185,6 +190,8 @@ class OpenAiClient @Inject constructor(
                 definition = json.optString("d").trim(),
                 examples = examples,
                 related = related,
+                synonyms = synonyms,
+                antonyms = antonyms,
                 family = family,
                 confusions = confusions,
                 collocations = collocations,

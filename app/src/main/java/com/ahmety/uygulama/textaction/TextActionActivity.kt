@@ -177,8 +177,15 @@ private fun TextActionDialog(
                 if (info.family.isNotEmpty()) {
                     LabeledLine(lead = "Aile", text = info.family.joinToString(" → "), dim = true)
                 }
-                if (info.related.isNotEmpty()) {
-                    RelatedChips(info.related)
+                if (info.synonyms.isNotEmpty() ||
+                    info.antonyms.isNotEmpty() ||
+                    info.related.isNotEmpty()
+                ) {
+                    WordChips(
+                        synonyms = info.synonyms,
+                        antonyms = info.antonyms,
+                        related = info.related,
+                    )
                 }
                 info.confusions.forEach { line ->
                     LabeledLine(lead = "Karıştırma", text = line, dim = true)
@@ -247,7 +254,13 @@ private fun LabeledLine(lead: String, text: String, dim: Boolean = false) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RelatedChips(words: List<String>) {
+private fun WordChips(
+    synonyms: List<String>,
+    antonyms: List<String>,
+    related: List<String>,
+) {
+    val neutral = MaterialTheme.colorScheme.surfaceVariant
+    val onNeutral = MaterialTheme.colorScheme.onSurfaceVariant
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -255,20 +268,22 @@ private fun RelatedChips(words: List<String>) {
             .fillMaxWidth()
             .padding(top = 12.dp),
     ) {
-        words.forEach { related ->
-            Box(
-                modifier = Modifier
-                    .background(CHIP_BLUE, RoundedCornerShape(50))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    text = related,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White,
-                )
-            }
-        }
+        synonyms.forEach { Chip(it, CHIP_BLUE, Color.White) }
+        antonyms.forEach { Chip(it, CHIP_RED, Color.White) }
+        related.forEach { Chip(it, neutral, onNeutral) }
+    }
+}
+
+@Composable
+private fun Chip(text: String, background: Color, content: Color) {
+    Box(
+        modifier = Modifier
+            .background(background, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(text = text, style = MaterialTheme.typography.labelMedium, color = content)
     }
 }
 
 private val CHIP_BLUE = Color(0xFF1565C0)
+private val CHIP_RED = Color(0xFFB3261E)

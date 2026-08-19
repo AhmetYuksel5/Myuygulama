@@ -98,7 +98,13 @@ class OpenSubtitlesClient @Inject constructor(
     suspend fun download(fileId: Long): SubtitleResult<String> = withContext(Dispatchers.IO) {
         when (val link = downloadLink(fileId, retry = true)) {
             is SubtitleResult.Failed -> link
-            is SubtitleResult.Ok -> request(Request.Builder().url(link.value).get(), auth = false)
+            is SubtitleResult.Ok -> request(
+                Request.Builder()
+                    .url(link.value)
+                    .header("User-Agent", USER_AGENT)
+                    .get(),
+                auth = false,
+            )
         }
     }
 

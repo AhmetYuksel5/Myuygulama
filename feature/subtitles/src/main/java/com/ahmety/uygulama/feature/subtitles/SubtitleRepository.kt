@@ -53,6 +53,15 @@ class SubtitleRepository @Inject constructor(
             is SubtitleResult.Failed -> return result
             is SubtitleResult.Ok -> result.value
         }
+        // İndirme "başarılı" dönüp elimize altyazı yerine boş gövde ya da bir
+        // hata sayfası geçebiliyor. Bunu burada yakalamazsak akış sessizce
+        // "seviyenin üstünde kelime bulunamadı" diye biter ve sebep görünmez.
+        if (SubtitleText.lines(englishText).size < MIN_LINES) {
+            return SubtitleResult.Failed(
+                "Altyazı indirildi ama içi okunamadı. Günlük indirme hakkın " +
+                    "dolmuş olabilir; Ayar'dan kullanıcı adı ve parolanı gir.",
+            )
+        }
         // Türkçe indirilemezse (kota, yok) sessizce boş geçiyoruz.
         val turkishText = turkish?.let {
             (client.download(it.fileId) as? SubtitleResult.Ok)?.value
@@ -85,13 +94,20 @@ class SubtitleRepository @Inject constructor(
             val seen = entryRepository.listByType(EntryType.HIGHLIGHT)
                 .map { it.title.trim().lowercase() }
                 .toSet()
-            SubtitleText.selectUnknown(
+            val words = SubtitleText.selectUnknown(
                 words = SubtitleText.words(pair.englishText),
                 frequencyRank = ranks,
                 knownUpToRank = threshold,
                 alreadySeen = seen,
                 limit = limit,
             )
+            // Filmdeki ifadeler tek tek kelimelerden farklı: "put up with"i
+            // üç kelimenin anlamından çıkaramıyorsun. Kalıpları ayrıca
+            // topluyoruz ve listenin başına koyuyoruz.
+            val phrases = SubtitleText.phrases(pair.englishText)
+                .filter { it.word.lowercase() !in seen }
+                .take(PHRASE_LIMIT)
+            phrases + words
         }
 
     /**
@@ -130,6 +146,15 @@ class SubtitleRepository @Inject constructor(
     private companion object {
         /** Seviye sınavına girilmemişse varsayılan bilinen sıklık aralığı. */
         const val DEFAULT_KNOWN_RANK = 2000
+
+        /** Bu kadar replik yoksa elimizdeki şey altyazı değildir. */
+        const val MIN_LINES = 20
+
+        /** Bir filmden alınacak en fazla kalıp sayısı. */
+        const val PHRASE_LIMIT = 15
+
+        /** Bir filmden alınacak en fazla kalıp sayısı. */
+        const val PHRASE_LIMIT = 15
 
     }
 }

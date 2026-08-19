@@ -5,7 +5,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -41,7 +40,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -65,7 +63,6 @@ import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.HighlightColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 /** Renklerin ekrandaki karşılığı. */
 @Composable
@@ -244,28 +241,13 @@ fun BookReaderRoute(
             val book = state.book!!
             val chapter = book.chapters.getOrNull(state.chapterIndex)
             val listState = rememberLazyListState()
-            val scope = rememberCoroutineScope()
-
-            // Geriye doğru bölüm değiştirince önceki bölümün başına değil
-            // sonuna düşmeli: sayfa çevirir gibi okunuyor.
-            var landAtEnd by remember { mutableStateOf(false) }
-
-            // Bölüm değişimi ile listenin yeni içeriği ölçülmesi arasında
-            // canScrollBackward/Forward hâlâ eski değeri veriyor; peş peşe iki
-            // dokunuş bir bölümü atlıyordu.
-            var switching by remember { mutableStateOf(false) }
 
             // Kitap ilk açıldığında kaldığın paragrafa dön; ileri doğru bölüm
             // değiştirdiğinde metnin başından başla.
             LaunchedEffect(state.chapterIndex, book) {
                 val last = (chapter?.paragraphs?.lastIndex ?: 0).coerceAtLeast(0)
-                val target = when {
-                    landAtEnd -> last
-                    else -> viewModel.lastParagraph()
-                }
-                landAtEnd = false
+                val target = viewModel.lastParagraph()
                 runCatching { listState.scrollToItem(target.coerceIn(0, last)) }
-                switching = false
             }
 
             // Nerede kaldığını sürekli değil, durulunca kaydediyoruz.
@@ -277,37 +259,11 @@ fun BookReaderRoute(
                     }
             }
 
-            fun turnPage(forward: Boolean) {
-                if (switching) return
-                scope.launch {
-                    val viewport = listState.layoutInfo.viewportSize.height.toFloat()
-                    val step = (viewport * 0.88f).coerceAtLeast(200f)
-                    if (forward) {
-                        if (listState.canScrollForward) {
-                            listState.animateScrollBy(step)
-                        } else if (state.chapterIndex < book.chapters.lastIndex) {
-                            switching = true
-                            viewModel.selectChapter(state.chapterIndex + 1)
-                        }
-                    } else {
-                        if (listState.canScrollBackward) {
-                            listState.animateScrollBy(-step)
-                        } else if (state.chapterIndex > 0) {
-                            switching = true
-                            landAtEnd = true
-                            viewModel.selectChapter(state.chapterIndex - 1)
-                        }
-                    }
-                }
-            }
-
-            /** Dokunulan yerin yatay oranına göre: geri / arayüz / ileri. */
-            fun handleZoneTap(fraction: Float) {
-                when {
-                    fraction < 0.25f -> turnPage(forward = false)
-                    fraction > 0.75f -> turnPage(forward = true)
-                    else -> chromeVisible = !chromeVisible
-                }
+            // Sayfa çevirme kaldırıldı: metin zaten kaydırılarak okunuyor,
+            // dokunma bölgeleri okurken yanlışlıkla tetikleniyordu. Dokunuş
+            // artık yalnızca okuma arayüzünü açıp kapatıyor.
+            fun handleZoneTap(@Suppress("UNUSED_PARAMETER") fraction: Float) {
+                chromeVisible = !chromeVisible
             }
 
             Box(
@@ -756,7 +712,11 @@ private fun ColorPickerDialog(
                                         Modifier
                                     },
                                 )
-                                .clickable { onPick(color, keepContext) },
+                                // Seçili renge tekrar basmak işareti kaldırıyor:
+                                // "Kaldır" düğmesini aramak gerekmiyor.
+                                .clickable {
+                                    if (color == current) onRemove() else onPick(color, keepContext)
+                                },
                         )
                     }
                 }

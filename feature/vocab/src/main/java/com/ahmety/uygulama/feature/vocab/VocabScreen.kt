@@ -104,13 +104,7 @@ fun VocabRoute(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = buildString {
-                    append("Bugün ${state.dueToday}")
-                    if (state.newToday < state.newLimit && state.backlog <= 0) {
-                        append(" · yeni ${state.newToday}/${state.newLimit}")
-                    }
-                    append(" · öğrendiğin ${state.knownCount}")
-                },
+                text = "Tekrar ${state.dueToday} · öğrendiğin ${state.knownCount}",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -123,13 +117,10 @@ fun VocabRoute(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
         ) {
-            ModeChip("Bugün (${state.dueToday})", state.mode == VocabMode.TODAY) {
+            ModeChip("Tümü", state.mode == VocabMode.ALL) { viewModel.setMode(VocabMode.ALL) }
+            ModeChip("Tekrar (${state.dueToday})", state.mode == VocabMode.TODAY) {
                 viewModel.setMode(VocabMode.TODAY)
             }
-            ModeChip(
-                label = "Tümü (${state.learningCount})",
-                selected = state.mode == VocabMode.ALL,
-            ) { viewModel.setMode(VocabMode.ALL) }
             ModeChip(
                 label = "Öğrendiklerim (${state.knownCount})",
                 selected = state.mode == VocabMode.KNOWN,
@@ -249,6 +240,10 @@ fun VocabRoute(
                 menuWord = null
                 editWord = word
             },
+            onRefresh = {
+                menuWord = null
+                viewModel.refresh(word)
+            },
             onMoreExamples = {
                 menuWord = null
                 viewModel.addMoreExamples(word)
@@ -279,6 +274,7 @@ private fun WordMenuDialog(
     word: VocabWord,
     aiReady: Boolean,
     onEdit: () -> Unit,
+    onRefresh: () -> Unit,
     onMoreExamples: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -294,6 +290,7 @@ private fun WordMenuDialog(
                 } else {
                     MenuRow("Kelimeyi düzenle", onEdit)
                     if (aiReady) {
+                        MenuRow("Bilgiyi yenile", onRefresh)
                         MenuRow("Örnek çoğalt", onMoreExamples)
                     }
                     MenuRow("Sil") { confirmDelete = true }
@@ -342,6 +339,8 @@ private fun WordEditDialog(
     var meaning by remember(word.word) { mutableStateOf(word.meaning) }
     var definition by remember(word.word) { mutableStateOf(word.definition) }
     var examples by remember(word.word) { mutableStateOf(word.examples.joinToString("\n")) }
+    var synonyms by remember(word.word) { mutableStateOf(word.synonyms.joinToString(", ")) }
+    var antonyms by remember(word.word) { mutableStateOf(word.antonyms.joinToString(", ")) }
     var family by remember(word.word) { mutableStateOf(word.family.joinToString(", ")) }
     var confusions by remember(word.word) { mutableStateOf(word.confusions.joinToString("\n")) }
     var collocations by remember(word.word) {
@@ -379,6 +378,18 @@ private fun WordEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
+                    value = synonyms,
+                    onValueChange = { synonyms = it },
+                    label = { Text("Eş anlamlılar (virgülle)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = antonyms,
+                    onValueChange = { antonyms = it },
+                    label = { Text("Zıt anlamlılar (virgülle)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
                     value = family,
                     onValueChange = { family = it },
                     label = { Text("Kelime ailesi (virgülle)") },
@@ -406,6 +417,10 @@ private fun WordEditDialog(
                             meaning = meaning.trim(),
                             definition = definition.trim(),
                             examples = examples.lines().map { it.trim() }.filter { it.isNotBlank() },
+                            synonyms = synonyms.split(',').map { it.trim() }
+                                .filter { it.isNotBlank() },
+                            antonyms = antonyms.split(',').map { it.trim() }
+                                .filter { it.isNotBlank() },
                             family = family.split(',').map { it.trim() }.filter { it.isNotBlank() },
                             confusions = confusions.lines().map { it.trim() }
                                 .filter { it.isNotBlank() },
@@ -474,8 +489,9 @@ private fun EmptyDeck(state: VocabUiState) {
     ) {
         Text(
             text = when (state.mode) {
-                VocabMode.TODAY -> "Bugünlük bitti."
-                VocabMode.ALL -> "Bu kaynakta çalışılacak kelime kalmadı."
+                VocabMode.TODAY -> "Bugün tekrar edilecek kelime yok."
+                VocabMode.ALL -> "Burada kelime yok. Kitapta ya da altyazıda " +
+                    "işaretledikçe dolar."
                 VocabMode.IGNORED -> "Önemsize atılmış kelime yok."
                 VocabMode.KNOWN -> "Henüz öğrendiğin kelime yok."
             },
@@ -799,10 +815,16 @@ private fun WordCard(
                         LabeledBlock("Aile", word.family.joinToString(" → "))
                     }
 
-                    if (word.related.isNotEmpty()) {
+                    if (word.synonyms.isNotEmpty() ||
+                        word.antonyms.isNotEmpty() ||
+                        word.related.isNotEmpty()
+                    ) {
                         Spacer(Modifier.height(8.dp))
-                        LabeledBlock("İlgili", "")
-                        RelatedChips(word.related)
+                        WordChips(
+                            synonyms = word.synonyms,
+                            antonyms = word.antonyms,
+                            related = word.related,
+                        )
                     }
 
                     if (word.confusions.isNotEmpty()) {
@@ -890,43 +912,54 @@ private fun NumberedLine(number: Int, text: String) {
 
 /** Eş/yakın anlamlı kelimeler mavi rozet içinde. */
 /**
- * Eş/yakın anlamlılar mavi rozette. Zıt anlamlılar aynı rozete girmiyor:
- * listelerin çoğunda bir zıt anlamlı var ve aynı renkte durunca yanlış
- * eşleme ezberleniyor. Onlar ayrı renkte ve "(zıt)" eki olmadan çiziliyor —
- * rengin kendisi zaten ayrımı söylüyor.
+ * Eş anlamlılar mavi, zıt anlamlılar kırmızı, aynı anlam alanından
+ * kelimeler nötr rozette. Renk ayrımı şart: aynı kutuda aynı renkte
+ * durunca zıt anlamlı, eş anlamlı gibi ezberleniyor.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RelatedChips(words: List<String>) {
-    val opposite = MaterialTheme.colorScheme.tertiary
-    val onOpposite = MaterialTheme.colorScheme.onTertiary
+private fun WordChips(
+    synonyms: List<String>,
+    antonyms: List<String>,
+    related: List<String>,
+) {
+    val neutral = MaterialTheme.colorScheme.surfaceVariant
+    val onNeutral = MaterialTheme.colorScheme.onSurfaceVariant
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        words.forEach { related ->
-            val isOpposite = related.contains("(zıt)", ignoreCase = true)
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = if (isOpposite) opposite else CHIP_BLUE,
-                        shape = RoundedCornerShape(50),
-                    )
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    text = related.replace("(zıt)", "", ignoreCase = true).trim(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isOpposite) onOpposite else Color.White,
-                )
-            }
-        }
+        synonyms.forEach { Chip(it, CHIP_BLUE, Color.White) }
+        antonyms.forEach { Chip(cleanOpposite(it), CHIP_RED, Color.White) }
+        related.forEach { Chip(it, neutral, onNeutral) }
     }
 }
 
+@Composable
+private fun Chip(text: String, background: Color, content: Color) {
+    Box(
+        modifier = Modifier
+            .background(background, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = content,
+        )
+    }
+}
+
+/** Eski kayıtlarda zıt anlamlılar "scarce (zıt)" diye işaretliydi; renk artık söylüyor. */
+private fun cleanOpposite(word: String): String =
+    word.replace("(zıt)", "", ignoreCase = true).trim()
+
 /** Açık ve koyu temada da beyaz yazıyı taşıyan bir mavi. */
 private val CHIP_BLUE = Color(0xFF1565C0)
+
+/** Zıt anlamlılar için; beyaz yazıyı her iki temada da taşıyor. */
+private val CHIP_RED = Color(0xFFB3261E)
 
 /**
  * Bir kullanım kalıbı: solda kalıbın adı, sağında o kalıptaki kelimeler.

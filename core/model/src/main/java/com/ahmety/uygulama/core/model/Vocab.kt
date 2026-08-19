@@ -13,12 +13,12 @@ data class VocabWord(
     /** Kısa İngilizce tanım. */
     val definition: String = "",
     val examples: List<String> = emptyList(),
-    /**
-     * Aynı anlam alanından kelimeler — aynı konuda doğal olarak birlikte
-     * geçenler. Eş anlamlı listesi değil; gerçekten eş anlamlı bir kelime
-     * varsa o da buraya giriyor.
-     */
+    /** Aynı anlam alanından kelimeler — aynı konuda doğal olarak geçenler. */
     val related: List<String> = emptyList(),
+    /** Eş anlamlılar; kartta mavi rozette. */
+    val synonyms: List<String> = emptyList(),
+    /** Zıt anlamlılar; kartta kırmızı rozette. */
+    val antonyms: List<String> = emptyList(),
     /**
      * Kelime ailesi: aynı kökten türeyenler, tür etiketiyle.
      * "decide (f)" → "decision (i)" → "decisive (s)". Yaygın türevi yoksa boş.

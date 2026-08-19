@@ -29,11 +29,14 @@ import javax.inject.Inject
  * filmi seçmeye yarıyor, kip ise öğrenme durumunu süzüyor.
  */
 enum class VocabMode(val label: String) {
-    /** Bugün vadesi gelenler ve günlük yeni kelimeler. */
-    TODAY("Bugün"),
-
-    /** Programdaki her şey — vadesi gelmemiş olanlar da. */
+    /**
+     * Varsayılan: öğrenmediğin her kelime. Yeni bir kitap ya da film
+     * eklendiğinde ilk görmek istediğin şey bu.
+     */
     ALL("Tümü"),
+
+    /** Vadesi gelen tekrarlar. Program çalışmaya başladıkça dolar. */
+    TODAY("Tekrar"),
 
     /** Aşağı atılan, şimdilik gerekmeyenler. */
     IGNORED("Önemsiz"),
@@ -143,7 +146,7 @@ class VocabViewModel @Inject constructor(
 
     private val prefs = VocabPrefs(context)
 
-    private val mode = MutableStateFlow(VocabMode.TODAY)
+    private val mode = MutableStateFlow(VocabMode.ALL)
 
     private val _swipeThreshold = MutableStateFlow(prefs.swipeThreshold)
     val swipeThreshold: StateFlow<Int> = _swipeThreshold
@@ -218,9 +221,17 @@ class VocabViewModel @Inject constructor(
 
         val deck = when (currentMode) {
             VocabMode.TODAY -> interleave(due, fresh.take(newAllowance))
-            VocabMode.ALL -> due + filtered.filter {
-                val plan = scheduled(it)
-                plan == null || (plan.status == VocabStatus.LEARNING && it !in due)
+            // Tümü: öğrendiğin ve önemsize attığın dışındaki her kelime.
+            // Vadesi gelenler başa geliyor ki tekrar aksamasın.
+            VocabMode.ALL -> {
+                val rest = filtered
+                    .filter { it !in due }
+                    .filter {
+                        val status = scheduled(it)?.status
+                        status != VocabStatus.KNOWN && status != VocabStatus.IGNORED
+                    }
+                    .sortedBy { it.word.lowercase() }
+                due + rest
             }
             VocabMode.IGNORED -> filtered.filter {
                 scheduled(it)?.status == VocabStatus.IGNORED
@@ -296,6 +307,30 @@ class VocabViewModel @Inject constructor(
      * "Tam anlayamadım" dediğin kelimede aynı anlamı başka cümlelerde
      * görmek işe yarıyor.
      */
+    /**
+     * Kelime bilgisini sıfırdan yeniden getirir.
+     *
+     * Eski kayıtlarda kelime ailesi, eş/zıt anlamlılar ve karıştırma
+     * bölümleri yok — o alanlar sonradan eklendi. Birleştirmek yerine
+     * baştan yazıyoruz ki eski, eksik veri kalmasın.
+     */
+    fun refresh(word: VocabWord) {
+        if (_enriching.value != null) return
+        _enriching.value = word.word
+        viewModelScope.launch {
+            when (val result = openAi.describeWord(word.word, word.context, word.isPassage)) {
+                is AiResult.Ok -> {
+                    repository.saveEnrichment(result.value)
+                    _aiMessage.value = null
+                    session.value = session.value.copy(refresh = session.value.refresh + 1)
+                }
+
+                is AiResult.Failed -> _aiMessage.value = result.reason
+            }
+            _enriching.value = null
+        }
+    }
+
     fun addMoreExamples(word: VocabWord) {
         if (_enriching.value != null) return
         _enriching.value = word.word
