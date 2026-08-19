@@ -56,6 +56,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -103,41 +104,28 @@ fun VocabRoute(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Başlık nerede olduğunu söylüyor; sayılar zaten çiplerde.
             Text(
-                text = "Tekrar ${state.dueToday} · öğrendiğin ${state.knownCount}",
+                text = when {
+                    state.filter.sourceName.isNotBlank() -> state.filter.sourceName
+                    state.filter.source != null -> state.filter.source.label
+                    else -> "Tüm kelimeler"
+                },
                 style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = { showSettings = !showSettings }) { Text("Ayar") }
         }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        ) {
-            ModeChip("Tümü", state.mode == VocabMode.ALL) { viewModel.setMode(VocabMode.ALL) }
-            ModeChip("Tekrar (${state.dueToday})", state.mode == VocabMode.TODAY) {
-                viewModel.setMode(VocabMode.TODAY)
-            }
-            ModeChip(
-                label = "Öğrendiklerim (${state.knownCount})",
-                selected = state.mode == VocabMode.KNOWN,
-            ) { viewModel.setMode(VocabMode.KNOWN) }
-            ModeChip(
-                label = "Önemsiz (${state.unsureCount})",
-                selected = state.mode == VocabMode.IGNORED,
-            ) { viewModel.setMode(VocabMode.IGNORED) }
-        }
-
-        // Kaynak süzgeci yalnızca kitaptan/filmden gelen kelime varken.
+        // Kaynak asıl kapsam, bu yüzden üstte: bir kitap seçince alttaki
+        // bölmeler ve sayılar o kitabın içinde çalışıyor.
         if (state.bookCount > 0 || state.subtitleCount > 0 || state.selectionCount > 0) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp)
                     .horizontalScroll(rememberScrollState()),
             ) {
                 val filter = state.filter
@@ -172,6 +160,33 @@ fun VocabRoute(
                     }
                 }
             }
+        }
+
+        // Bölmeler seçili kaynağın içinde; sayılar da ona göre.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            ModeChip("Tümü (${state.totalCount})", state.mode == VocabMode.ALL) {
+                viewModel.setMode(VocabMode.ALL)
+            }
+            ModeChip("Yeni (${state.newCount})", state.mode == VocabMode.NEW) {
+                viewModel.setMode(VocabMode.NEW)
+            }
+            ModeChip("Tekrar (${state.dueToday})", state.mode == VocabMode.TODAY) {
+                viewModel.setMode(VocabMode.TODAY)
+            }
+            ModeChip(
+                label = "Öğrendiklerim (${state.knownCount})",
+                selected = state.mode == VocabMode.KNOWN,
+            ) { viewModel.setMode(VocabMode.KNOWN) }
+            ModeChip(
+                label = "Önemsiz (${state.unsureCount})",
+                selected = state.mode == VocabMode.IGNORED,
+            ) { viewModel.setMode(VocabMode.IGNORED) }
         }
 
         Box(
@@ -498,6 +513,7 @@ private fun EmptyDeck(state: VocabUiState) {
         Text(
             text = when (state.mode) {
                 VocabMode.TODAY -> "Bugün tekrar edilecek kelime yok."
+                VocabMode.NEW -> "Karar verilmemiş kelime kalmadı."
                 VocabMode.ALL -> "Burada kelime yok. Kitapta ya da altyazıda " +
                     "işaretledikçe dolar."
                 VocabMode.IGNORED -> "Önemsize atılmış kelime yok."

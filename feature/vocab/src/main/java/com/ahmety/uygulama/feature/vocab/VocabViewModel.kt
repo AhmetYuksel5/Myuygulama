@@ -35,6 +35,9 @@ enum class VocabMode(val label: String) {
      */
     ALL("Tümü"),
 
+    /** Hiç karar vermediklerin. */
+    NEW("Yeni"),
+
     /** Vadesi gelen tekrarlar. Program çalışmaya başladıkça dolar. */
     TODAY("Tekrar"),
 
@@ -60,6 +63,10 @@ data class VocabUiState(
     val bookCount: Int = 0,
     val subtitleCount: Int = 0,
     val selectionCount: Int = 0,
+    /** Seçili kaynakta hiç karar verilmemiş kelime sayısı. */
+    val newCount: Int = 0,
+    /** Seçili kaynaktaki toplam kelime sayısı. */
+    val totalCount: Int = 0,
     /** Bugün vadesi gelen kelime sayısı (kuyruk sınırından önce). */
     val dueToday: Int = 0,
     /** Bugün eklenen yeni kelime sayısı ve günlük sınır. */
@@ -161,14 +168,9 @@ class VocabViewModel @Inject constructor(
         session,
     ) { progress, currentMode, bookWords, sessionState ->
         val words = repository.applyEnrichment(bookWords)
-        val known = progress.count { it.status == VocabStatus.KNOWN.name }
-        val learning = progress.count {
-            it.status == VocabStatus.LEARNING.name || it.status == VocabStatus.UNSURE.name
-        }
-        val ignored = progress.count { it.status == VocabStatus.IGNORED.name }
 
-        // Kaynak süzgeci önce: "şu kitaptan" ya da "şu filmden" çalışmak
-        // istediğinde deste ona iniyor.
+        // Kaynak asıl kapsam: bir kitap seçildiğinde bütün sayaçlar ve
+        // bölmeler o kitabın içinde çalışıyor. Kaynak seçilmemişse her şey.
         val filtered = words.filter { word ->
             val filter = sessionState.filter
             when {
@@ -179,6 +181,15 @@ class VocabViewModel @Inject constructor(
         }
 
         val schedules = progress.associateBy({ it.word }, { it.toSchedule() })
+
+        // Sayaçlar seçili kaynağın içinden: kitap seçiliyken "öğrendiklerim"
+        // bütün kelimelerin toplamını gösterirse seçim işe yaramıyor gibi
+        // duruyor.
+        fun statusOf(word: VocabWord) = schedules[word.word]?.status
+        val known = filtered.count { statusOf(it) == VocabStatus.KNOWN }
+        val learning = filtered.count { statusOf(it) == VocabStatus.LEARNING }
+        val ignored = filtered.count { statusOf(it) == VocabStatus.IGNORED }
+        val untouched = filtered.count { statusOf(it) == null }
         val nowMillis = repository.nowMillis()
         val dayStart = startOfDay(nowMillis, repository.zoneOffsetMillis(nowMillis))
         val endOfToday = dayStart + DAY_MILLIS
@@ -233,6 +244,10 @@ class VocabViewModel @Inject constructor(
                     .sortedBy { it.word.lowercase() }
                 due + rest
             }
+            VocabMode.NEW -> filtered
+                .filter { scheduled(it) == null }
+                .sortedBy { it.word.lowercase() }
+
             VocabMode.IGNORED -> filtered.filter {
                 scheduled(it)?.status == VocabStatus.IGNORED
             }.sortedBy { it.word.lowercase() }
@@ -256,6 +271,8 @@ class VocabViewModel @Inject constructor(
             knownCount = known,
             learningCount = learning,
             unsureCount = ignored,
+            newCount = untouched,
+            totalCount = filtered.size,
             bookCount = bookWords.count { it.source == VocabSource.BOOK },
             subtitleCount = bookWords.count { it.source == VocabSource.SUBTITLE },
             selectionCount = bookWords.count { it.source == VocabSource.SELECTION },
