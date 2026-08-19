@@ -174,8 +174,11 @@ private fun TextActionDialog(
                 info.examples.forEachIndexed { index, example ->
                     LabeledLine(lead = "${index + 1}.", text = example)
                 }
+                if (info.root.isNotBlank()) {
+                    LabeledLine(lead = "Kök", text = info.root, dim = true)
+                }
                 if (info.family.isNotEmpty()) {
-                    LabeledLine(lead = "Aile", text = info.family.joinToString(" → "), dim = true)
+                    LabeledLine(lead = "Aile", text = info.family.joinToString(" · "), dim = true)
                 }
                 if (info.synonyms.isNotEmpty() ||
                     info.antonyms.isNotEmpty() ||

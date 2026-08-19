@@ -341,6 +341,7 @@ private fun WordEditDialog(
     var examples by remember(word.word) { mutableStateOf(word.examples.joinToString("\n")) }
     var synonyms by remember(word.word) { mutableStateOf(word.synonyms.joinToString(", ")) }
     var antonyms by remember(word.word) { mutableStateOf(word.antonyms.joinToString(", ")) }
+    var root by remember(word.word) { mutableStateOf(word.root) }
     var family by remember(word.word) { mutableStateOf(word.family.joinToString(", ")) }
     var confusions by remember(word.word) { mutableStateOf(word.confusions.joinToString("\n")) }
     var collocations by remember(word.word) {
@@ -390,9 +391,15 @@ private fun WordEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
+                    value = root,
+                    onValueChange = { root = it },
+                    label = { Text("Kök") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
                     value = family,
                     onValueChange = { family = it },
-                    label = { Text("Kelime ailesi (virgülle)") },
+                    label = { Text("Kökendaş kelimeler (virgülle)") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -421,6 +428,7 @@ private fun WordEditDialog(
                                 .filter { it.isNotBlank() },
                             antonyms = antonyms.split(',').map { it.trim() }
                                 .filter { it.isNotBlank() },
+                            root = root.trim(),
                             family = family.split(',').map { it.trim() }.filter { it.isNotBlank() },
                             confusions = confusions.lines().map { it.trim() }
                                 .filter { it.isNotBlank() },
@@ -810,9 +818,16 @@ private fun WordCard(
                         }
                     }
 
-                    if (word.family.isNotEmpty()) {
+                    if (word.root.isNotBlank()) {
                         Spacer(Modifier.height(10.dp))
-                        LabeledBlock("Aile", word.family.joinToString(" → "))
+                        LabeledBlock("Kök", word.root)
+                    }
+
+                    if (word.family.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        // Kökendaşlar arasında yön oku yanlış olurdu: biri
+                        // ötekinden türemiyor, hepsi aynı kökten geliyor.
+                        LabeledBlock("Aile", word.family.joinToString(" · "))
                     }
 
                     if (word.synonyms.isNotEmpty() ||

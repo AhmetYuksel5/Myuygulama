@@ -22,6 +22,8 @@ data class WordInfo(
     val related: List<String>,
     val synonyms: List<String>,
     val antonyms: List<String>,
+    /** Kelimenin kökeni: "morph- (Yun. morphē = şekil)". */
+    val root: String,
     val family: List<String>,
     val confusions: List<String>,
     /**
@@ -115,37 +117,64 @@ class OpenAiClient @Inject constructor(
 
     /** Tek kelime ya da öbek için sözlük maddesi. */
     private fun wordInstruction(): String = buildString {
-        append("You are a bilingual English-Turkish lexicographer. ")
-        append("The input may be a single word OR a multi-word phrase taken ")
-        append("from a book; treat it as one unit. ")
+        append("You are a bilingual English-Turkish lexicographer writing a study ")
+        append("card for a Turkish learner of English. ")
+        append("The input may be a single word OR a multi-word phrase; treat it as ")
+        append("one unit. First decide the input's own part of speech — the ")
+        append("collocation labels depend on it. ")
         append("Return STRICT JSON with keys: ")
+
         append("t (Turkish meanings, 1-3, comma separated), ")
         append("d (short English definition, max 12 words, no final period), ")
-        append("e (array of exactly 3 natural example sentences using it, 6-16 words each), ")
+        append("e (array of exactly 3 natural example sentences using it, ")
+        append("6-16 words each), ")
+
         append("r (RELATED: 4-6 words from the same semantic field — words that ")
-        append("naturally co-occur in the same topic; not synonyms), ")
+        append("naturally co-occur in the same topic. Not synonyms, not derivations), ")
         append("s (SYNONYMS: 0-4 true synonyms or near-synonyms), ")
-        append("a (ANTONYMS: 0-3 opposites; empty array if the word has no clear ")
-        append("opposite), ")
-        append("f (WORD FAMILY: derivations of the same root with a part-of-speech ")
-        append("tag in Turkish — f for fiil, i for isim, s for sıfat, z for zarf; ")
-        append("format \"decision (i)\". Empty array if the word has no common ")
-        append("derivations), ")
-        append("x (DON'T CONFUSE: only if there is a word Turkish learners commonly ")
-        append("confuse with this one — false friend, similar spelling, or close ")
-        append("meaning with different usage. Format \"word — tek cümlelik fark\" ")
-        append("in Turkish. Empty array if there is no such word), ")
-        append("c (collocations grouped by grammatical pattern, like an Oxford ")
+        append("a (ANTONYMS: 0-3 opposites; empty array if there is no clear opposite), ")
+
+        append("k (ROOT: the etymological root the word is built on, with its ")
+        append("language and meaning, in exactly this shape: ")
+        append("\"morph- (Yun. morphē = şekil)\". Use Turkish language ")
+        append("abbreviations: Lat., Yun., Fr., Alm., Ar., İng. Empty string only ")
+        append("if the word has no identifiable root), ")
+
+        append("f (WORD FAMILY: 4-8 OTHER English words built on that SAME root, ")
+        append("however far their meanings have drifted. For \"amorphous\" these ")
+        append("would be morph, morphology, morpheme, metamorphosis, polymorphic, ")
+        append("anthropomorphic. These are cognates that share the root — NOT ")
+        append("inflections or mechanical derivations of the input itself: do not ")
+        append("list amorphously or amorphousness, and never repeat the input. ")
+        append("Empty array only if the root has no other descendants in English), ")
+
+        append("x (LOOK-ALIKES: 1-3 English words that LOOK like the input — ")
+        append("similar spelling or shape — even when their meaning and origin are ")
+        append("completely unrelated. The point is not to warn about a likely ")
+        append("mix-up; it is to carve a sharp outline of the word in memory, the ")
+        append("way \"zero\" and \"Nero\" define each other by contrast. So include ")
+        append("a look-alike even when confusing them is unlikely. Format each as ")
+        append("\"lookalike — Turkish meaning; fark\" where fark names the exact ")
+        append("letters that differ, in Turkish. Example for amorphous: ")
+        append("\"amorous — aşk dolu; onda ph yok: amorPHous / amorous\". ")
+        append("Empty array only if no English word resembles the input), ")
+
+        append("c (COLLOCATIONS grouped by grammatical pattern, like an Oxford ")
         append("Collocations Dictionary entry: array of objects with g and w. ")
-        append("g is the pattern label in Turkish, chosen from exactly these: ")
-        append("\"fiil +\" (verbs used with this noun), \"sıfat +\" (adjectives used ")
-        append("with this noun), \"zarf +\" (adverbs used with this adjective or verb), ")
-        append("\"+ isim\" (nouns this adjective or verb typically goes with), ")
-        append("\"+ edat\" (prepositions), \"kalıp\" (fixed expressions). ")
-        append("w is an array of 3-6 collocates, English only, no translation, ")
-        append("no article unless it is part of the collocation. ")
-        append("Give 2-4 groups, only patterns that genuinely apply to this word's ")
-        append("part of speech). ")
+        append("Choose g by the INPUT's own part of speech: ")
+        append("if the input is a NOUN use \"fiil +\" (verbs that take it as ")
+        append("object), \"sıfat +\" (adjectives that modify it), ")
+        append("\"+ edat\" (prepositions after it); ")
+        append("if the input is a VERB use \"+ isim\" (its typical objects), ")
+        append("\"zarf +\" (adverbs that modify it), \"+ edat\"; ")
+        append("if the input is an ADJECTIVE use \"+ isim\" (nouns it modifies), ")
+        append("\"zarf +\" (adverbs that modify it), \"+ edat\". ")
+        append("\"kalıp\" (fixed expressions) is allowed for any part of speech. ")
+        append("Never label a group \"sıfat +\" when the input is itself an ")
+        append("adjective, and never \"fiil +\" when the input is itself a verb. ")
+        append("w is an array of 3-6 collocates, English only, no translation, no ")
+        append("article unless it belongs to the collocation. Give 2-4 groups). ")
+
         append("Never pad a section to reach a count: fewer good items beat filler, ")
         append("and an empty array is better than a weak entry. ")
         append("No markdown, no extra keys, no commentary.")
@@ -167,7 +196,7 @@ class OpenAiClient @Inject constructor(
         append("idiom, phrasal verb, inversion, ellipsis, tense — name it and explain), ")
         append("r (array of 0-4 idioms or phrasal verbs that appear in it, ")
         append("each as \"expression — Turkish meaning\"), ")
-        append("c, f, x, s, a (empty arrays). ")
+        append("c, f, x, s, a (empty arrays), k (empty string). ")
         append("No markdown, no extra keys, no commentary.")
     }
 
@@ -177,6 +206,7 @@ class OpenAiClient @Inject constructor(
         val collocations = json.optJSONArray("c").toCollocations()
         val synonyms = json.optJSONArray("s").toStringList()
         val antonyms = json.optJSONArray("a").toStringList()
+        val root = json.optString("k").trim()
         val family = json.optJSONArray("f").toStringList()
         val confusions = json.optJSONArray("x").toStringList()
         val meaning = json.optString("t").trim()
@@ -192,6 +222,7 @@ class OpenAiClient @Inject constructor(
                 related = related,
                 synonyms = synonyms,
                 antonyms = antonyms,
+                root = root,
                 family = family,
                 confusions = confusions,
                 collocations = collocations,

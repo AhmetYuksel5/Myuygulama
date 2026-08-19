@@ -20,14 +20,21 @@ data class VocabWord(
     /** Zıt anlamlılar; kartta kırmızı rozette. */
     val antonyms: List<String> = emptyList(),
     /**
-     * Kelime ailesi: aynı kökten türeyenler, tür etiketiyle.
-     * "decide (f)" → "decision (i)" → "decisive (s)". Yaygın türevi yoksa boş.
+     * Kelimenin kökeni: "morph- (Yun. morphē = şekil)". Asıl öğrenilecek şey
+     * bu; bir kökü bilmek ona bağlı onlarca kelimeyi açıyor.
+     */
+    val root: String = "",
+    /**
+     * Kökendaş kelimeler: aynı kökten gelen **başka** İngilizce kelimeler,
+     * anlamları birbirinden uzaklaşmış olsa bile — morph, morphology,
+     * metamorphosis. Kelimenin kendi çekimleri değil.
      */
     val family: List<String> = emptyList(),
     /**
-     * Karıştırılan kelimeler: yalancı eş değerler, benzer yazılışlar ya da
-     * anlamı yakın ama kullanımı farklı olanlar. Her satır
-     * "kelime — tek cümlelik fark" biçiminde. Yoksa boş.
+     * Şekilce benzeyen kelimeler — anlam ve köken olarak alakasız olsalar da.
+     * Amaç karışıklığı önlemek değil, kelimeyi zihinde keskin sınırlarla
+     * ayırmak: "zero" ile "Nero" birbirini tanımlar. Her satır
+     * "kelime — anlamı; fark" biçiminde.
      */
     val confusions: List<String> = emptyList(),
     /**
