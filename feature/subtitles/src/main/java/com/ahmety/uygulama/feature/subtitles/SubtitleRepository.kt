@@ -152,9 +152,5 @@ class SubtitleRepository @Inject constructor(
 
         /** Bir filmden alınacak en fazla kalıp sayısı. */
         const val PHRASE_LIMIT = 15
-
-        /** Bir filmden alınacak en fazla kalıp sayısı. */
-        const val PHRASE_LIMIT = 15
-
     }
 }

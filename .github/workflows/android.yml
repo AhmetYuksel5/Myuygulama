@@ -32,10 +32,21 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Debug APK derle
-        run: ./gradlew --no-daemon --stacktrace assembleDebug
+        run: ./gradlew --no-daemon assembleDebug 2>&1 | tee derleme.log
 
       - name: Birim testleri
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee -a derleme.log
+
+      # Kırılınca derleyici hatalarını log'un en sonuna yazıyoruz. Gradle'ın
+      # yığın izi yüzlerce satır sürüyor ve asıl "e:" satırları ortada kalıyor;
+      # sebebi bulmak için bütün log'u taramak gerekiyordu.
+      - name: Hataları özetle
+        if: failure()
+        run: |
+          echo "===== DERLEME HATALARI ====="
+          grep -E "^e: |^w: .*error|FAILED$|^\s+> " derleme.log | head -60 || true
+          echo "===== TEST HATALARI ====="
+          grep -E "FAILED|AssertionError|tests completed" derleme.log | head -40 || true
 
       - name: APK'yı yükle
         uses: actions/upload-artifact@v4
