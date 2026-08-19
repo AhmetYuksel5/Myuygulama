@@ -778,10 +778,11 @@ private fun EmptyDeck(state: VocabUiState) {
         if (state.mode == VocabMode.TODAY) {
             Text(
                 text = when {
-                    state.backlog > 0 ->
-                        "Biriken ${state.backlog} kelime var; yeni kelime, yığın erirken bekliyor."
                     state.nextDueInDays != null ->
                         "Sıradaki tekrar ${state.nextDueInDays} gün sonra."
+                    state.newCount > 0 ->
+                        "Tekrar, çalıştığın kelimelerden oluşuyor. " +
+                            "\"Yeni\" bölmesinde ${state.newCount} kelime bekliyor."
                     else -> "Yeni kelime eklemek için kitapta ya da altyazıda işaretle."
                 },
                 style = MaterialTheme.typography.bodyMedium,

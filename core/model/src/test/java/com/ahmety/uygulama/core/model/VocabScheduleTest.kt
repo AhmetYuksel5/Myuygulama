@@ -72,6 +72,24 @@ class VocabScheduleTest {
     }
 
     @Test
+    fun `hic calisilmamis kelime gecilince programa girmiyor`() {
+        // "Bakmadığım kelimenin tekrarı olmaz": sağa atmak kelimeyi yeni
+        // bırakıyor, ertesi güne tekrar diye yazmıyor.
+        val state = nextSchedule(schedule(), VocabDecision.POSTPONE, now, dayStart = today)
+        assertEquals(VocabStatus.NEW, state.status)
+        assertNull(state.dueAt)
+        assertEquals(0, state.box)
+    }
+
+    @Test
+    fun `calisilmis kelime gecilince yarina kaliyor`() {
+        var state = nextSchedule(schedule(), VocabDecision.STUDIED, now, dayStart = today)
+        state = nextSchedule(state, VocabDecision.POSTPONE, now, dayStart = today)
+        assertEquals(VocabStatus.LEARNING, state.status)
+        assertEquals(today + day, state.dueAt)
+    }
+
+    @Test
     fun `calismak gec sayacini sifirlar`() {
         var state = nextSchedule(schedule(), VocabDecision.POSTPONE, now, dayStart = today)
         assertEquals(1, state.postponeCount)

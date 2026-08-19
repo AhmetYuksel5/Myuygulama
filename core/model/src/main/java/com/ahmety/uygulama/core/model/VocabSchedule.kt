@@ -77,19 +77,30 @@ fun nextSchedule(
         )
 
         VocabDecision.POSTPONE -> {
-            // Ertelemek kademeyi tüketmemeli: yorgun bir akşam bütün destenin
-            // aralığı bozulmasın. Ama üst üste üçüncü geçiş, kelimenin
-            // oturmadığını söylüyor — Leitner'in "yanlışta ilk kutuya in"
-            // kuralı orada devreye giriyor.
-            val count = current.postponeCount + 1
-            val demoted = count >= POSTPONE_LIMIT
-            current.copy(
-                status = VocabStatus.LEARNING,
-                box = if (demoted) 1 else maxOf(current.box, 1),
-                postponeCount = if (demoted) 0 else count,
-                lapseCount = current.lapseCount + if (demoted) 1 else 0,
-                dueAt = dayStart + DAY_MILLIS,
-            )
+            // Hiç çalışılmamış kelimeyi geçmek onu tekrar programına sokmaz.
+            // Tekrar, çalışılmış bir şeyin üstüne gelir; bakmadığın kelimenin
+            // "tekrarı" olmaz — o hâlâ yeni kelimedir.
+            if (current.lastReviewedAt == null) {
+                current.copy(
+                    status = VocabStatus.NEW,
+                    dueAt = null,
+                    postponeCount = current.postponeCount + 1,
+                )
+            } else {
+                // Ertelemek kademeyi tüketmemeli: yorgun bir akşam bütün
+                // destenin aralığı bozulmasın. Ama üst üste üçüncü geçiş,
+                // kelimenin oturmadığını söylüyor — Leitner'in "yanlışta ilk
+                // kutuya in" kuralı orada devreye giriyor.
+                val count = current.postponeCount + 1
+                val demoted = count >= POSTPONE_LIMIT
+                current.copy(
+                    status = VocabStatus.LEARNING,
+                    box = if (demoted) 1 else maxOf(current.box, 1),
+                    postponeCount = if (demoted) 0 else count,
+                    lapseCount = current.lapseCount + if (demoted) 1 else 0,
+                    dueAt = dayStart + DAY_MILLIS,
+                )
+            }
         }
 
         VocabDecision.STUDIED -> {

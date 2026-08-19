@@ -102,11 +102,6 @@ data class VocabUiState(
     val list: List<VocabListItem> = emptyList(),
     /** Bugün vadesi gelen kelime sayısı (kuyruk sınırından önce). */
     val dueToday: Int = 0,
-    /** Bugün eklenen yeni kelime sayısı ve günlük sınır. */
-    val newToday: Int = 0,
-    val newLimit: Int = DAILY_NEW_LIMIT,
-    /** Vadesi bir günden fazla geçmiş kelime sayısı. */
-    val backlog: Int = 0,
     /** Sonraki tekrarın kaç gün sonra olduğu; deste bitince gösteriliyor. */
     val nextDueInDays: Int? = null,
     /** Süzgeç listesi için: elindeki kitap ve film adları. */
@@ -231,14 +226,23 @@ class VocabViewModel @Inject constructor(
         // bütün kelimelerin toplamını gösterirse seçim işe yaramıyor gibi
         // duruyor.
         fun statusOf(word: VocabWord) = schedules[word.word]?.status
+
+        // "Yeni" = hiç çalışılmamış. Sağa atıp geçtiğin kelime de burada
+        // kalıyor: geçmek bir çalışma değil, sadece "şimdi değil".
+        fun untouched(word: VocabWord): Boolean {
+            val plan = schedules[word.word] ?: return true
+            return plan.lastReviewedAt == null &&
+                plan.status != VocabStatus.KNOWN &&
+                plan.status != VocabStatus.IGNORED
+        }
+
         val known = filtered.count { statusOf(it) == VocabStatus.KNOWN }
         val learning = filtered.count { statusOf(it) == VocabStatus.LEARNING }
         val ignored = filtered.count { statusOf(it) == VocabStatus.IGNORED }
-        val untouched = filtered.count { statusOf(it) == null }
+        val untouchedCount = filtered.count { untouched(it) }
         val nowMillis = repository.nowMillis()
         val dayStart = startOfDay(nowMillis, repository.zoneOffsetMillis(nowMillis))
         val endOfToday = dayStart + DAY_MILLIS
-        val introducedToday = progress.count { (it.introducedAt ?: 0L) >= dayStart }
 
         // Programdaki kelimeler: vadesi gelmiş olanlar en çok bekleyenden
         // başlayarak, sonra kademesi düşük olanlar. Karıştırma yok —
@@ -249,6 +253,8 @@ class VocabViewModel @Inject constructor(
                 val plan = scheduled(word)
                 plan != null &&
                     plan.status == VocabStatus.LEARNING &&
+                    // Çalışılmamış kelimenin tekrarı olmaz.
+                    plan.lastReviewedAt != null &&
                     plan.dueAt != null &&
                     plan.dueAt!! <= endOfToday
             }
@@ -260,23 +266,16 @@ class VocabViewModel @Inject constructor(
                 ),
             )
 
-        val backlog = due.count { (scheduled(it)?.dueAt ?: 0L) < dayStart }
-
-        // Henüz programa girmemiş kelimeler. Sıra sabit, rastgele değil.
+        // Henüz çalışılmamış kelimeler. Sıra sabit, rastgele değil.
         val fresh = filtered
-            .filter { scheduled(it) == null }
+            .filter { untouched(it) }
             .sortedBy { it.word.lowercase() }
 
-        // Birikme varken yeni kelime vermiyoruz; yığın erimeden üstüne
-        // eklemek kullanıcıyı kaçırıyor.
-        val newAllowance = if (backlog > BACKLOG_PAUSE) {
-            0
-        } else {
-            (DAILY_NEW_LIMIT - introducedToday).coerceAtLeast(0)
-        }
-
         val deck = when (currentMode) {
-            VocabMode.TODAY -> interleave(due, fresh.take(newAllowance))
+            // Tekrar yalnızca çalıştığın kelimelerden oluşuyor. Eskiden araya
+            // yeni kelime serpiştiriyorduk; "bakmadığım kelimenin tekrarı
+            // olmaz" — yenilerin yeri "Yeni" bölmesi.
+            VocabMode.TODAY -> due
             // Tümü: öğrendiğin ve önemsize attığın dışındaki her kelime.
             // Vadesi gelenler başa geliyor ki tekrar aksamasın.
             VocabMode.ALL -> {
@@ -289,9 +288,7 @@ class VocabViewModel @Inject constructor(
                     .sortedBy { it.word.lowercase() }
                 due + rest
             }
-            VocabMode.NEW -> filtered
-                .filter { scheduled(it) == null }
-                .sortedBy { it.word.lowercase() }
+            VocabMode.NEW -> fresh
 
             VocabMode.IGNORED -> filtered.filter {
                 scheduled(it)?.status == VocabStatus.IGNORED
@@ -316,7 +313,7 @@ class VocabViewModel @Inject constructor(
             knownCount = known,
             learningCount = learning,
             unsureCount = ignored,
-            newCount = untouched,
+            newCount = untouchedCount,
             totalCount = filtered.size,
             redCount = scoped.count { it.isPassage },
             blueCount = scoped.count { !it.isPassage },
@@ -336,8 +333,6 @@ class VocabViewModel @Inject constructor(
                 .sortedBy { it.second.lowercase() },
             filter = sessionState.filter,
             dueToday = due.size,
-            newToday = introducedToday,
-            backlog = backlog,
             nextDueInDays = nextDue,
             loaded = true,
             turn = sessionState.turn,
@@ -476,7 +471,6 @@ class VocabViewModel @Inject constructor(
     }
 }
 
-/** Günlük yeni kelime sınırı. Sınırsız yeni kelime, günler sonra taşıyamayacağın bir tekrar yükü demek. */
 /**
  * Aynı kalıptaki collocation'ları tek grupta topluyor: "örnek çoğalt" ikinci
  * kez çağrıldığında "fiil +" iki ayrı blok olarak görünmemeli.
@@ -493,30 +487,4 @@ private fun mergeCollocations(
     return byPattern.map { (pattern, words) -> Collocation(pattern, words) }
 }
 
-private const val DAILY_NEW_LIMIT = 8
-
-/** Bu kadar kelime birikmişse yeni kelime verilmiyor; önce yığın erisin. */
-private const val BACKLOG_PAUSE = 40
-
 private const val DAY_MILLIS = 86_400_000L
-
-/**
- * Tekrarların arasına yeni kelimeleri serpiştirir: üst üste sekiz yeni kelime
- * yorucu, hepsini sona atmak da sıkıcı.
- */
-private fun interleave(due: List<VocabWord>, fresh: List<VocabWord>): List<VocabWord> {
-    if (fresh.isEmpty()) return due
-    if (due.isEmpty()) return fresh
-    val step = (due.size / (fresh.size + 1)).coerceAtLeast(1)
-    val result = mutableListOf<VocabWord>()
-    var nextFresh = 0
-    due.forEachIndexed { index, word ->
-        result += word
-        if (nextFresh < fresh.size && (index + 1) % step == 0) {
-            result += fresh[nextFresh++]
-        }
-    }
-    while (nextFresh < fresh.size) result += fresh[nextFresh++]
-    return result
-}
-
