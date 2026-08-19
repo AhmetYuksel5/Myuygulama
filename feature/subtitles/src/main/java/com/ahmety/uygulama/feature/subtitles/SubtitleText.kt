@@ -9,6 +9,22 @@ data class SubtitleWord(
 )
 
 /**
+ * Listeye önerilen bir şey: ya bir kelime ya da anlaşılması zor bir cümle.
+ *
+ * İkisi tek listede duruyor çünkü kullanıcı ikisini birlikte gözden geçirip
+ * istemediğini çıkarıyor. Kaydedilirken kelime maviye, cümle kırmızıya
+ * gidiyor — kitapta da ayrım bu.
+ */
+data class SubtitlePick(
+    val text: String,
+    val context: String,
+    val count: Int,
+    /** 0-100. Kullanıcının verdiği eşiğin üstünde olanlar seçiliyor. */
+    val difficulty: Int,
+    val sentence: Boolean,
+)
+
+/**
  * SRT çözümleme ve kelime çıkarma.
  *
  * SRT biçimi: sıra numarası, zaman satırı, bir ya da birkaç metin satırı,
@@ -66,7 +82,7 @@ object SubtitleText {
      * Satırdaki kelimeler. Harfle başlayan, harf/kesme/tire ile süren
      * diziler. Rakam ve noktalama kelime değil.
      */
-    private fun tokens(line: String): List<String> {
+    fun tokensOf(line: String): List<String> {
         val found = ArrayList<String>()
         var index = 0
         while (index < line.length) {
@@ -118,7 +134,7 @@ object SubtitleText {
                 line,
                 all.getOrNull(index + 1),
             ).joinToString(" ")
-            tokens(line).forEach { raw ->
+            tokensOf(line).forEach { raw ->
                 if (raw.contains('\'')) return@forEach
                 val word = raw.lowercase().trim('-')
                 if (word.length < 3) return@forEach
@@ -132,125 +148,140 @@ object SubtitleText {
     }
 
     /**
-     * Filmdeki kalıplar: öbek fiiller ve deyimler.
+     * Altyazıyı cümlelere böler.
      *
-     * Tek kelimelerden ayrı toplanıyorlar çünkü anlamları parçalarından
-     * çıkmıyor — "put up with"i bilmek "put", "up" ve "with"i bilmekle
-     * olmuyor. Filmde geçen ifadeler zaten kitaptakinden farklı.
-     *
-     * İki yol var: bilinen kalıp listesiyle eşleşme ve fiil + edat
-     * kalıbının kendisi. İkincisi listede olmayanları da yakalıyor.
+     * Altyazı satırı cümle değil: bir cümle iki üç repliğe bölünüyor,
+     * bazen tek replikte iki cümle oluyor. Nokta/soru/ünlem görene kadar
+     * satırları birleştiriyoruz ki zorluk ölçüsü gerçek bir cümleye baksın.
      */
-    fun phrases(srt: String): List<SubtitleWord> {
-        val all = lines(srt)
-        val counts = LinkedHashMap<String, Int>()
-        val contexts = HashMap<String, String>()
-
-        all.forEachIndexed { index, line ->
-            val sentence = listOfNotNull(
-                all.getOrNull(index - 1),
-                line,
-                all.getOrNull(index + 1),
-            ).joinToString(" ")
-            val tokens = tokens(line).map { it.lowercase() }
-
-            IDIOMS.forEach { idiom ->
-                if (line.contains(idiom, ignoreCase = true)) {
-                    counts[idiom] = (counts[idiom] ?: 0) + 1
-                    contexts.putIfAbsent(idiom, sentence)
-                }
+    fun sentences(srt: String): List<String> {
+        val out = mutableListOf<String>()
+        val current = StringBuilder()
+        lines(srt).forEach { line ->
+            if (current.isNotEmpty()) current.append(' ')
+            current.append(line)
+            if (line.endsWith('.') || line.endsWith('?') || line.endsWith('!')) {
+                out += current.toString().trim()
+                current.clear()
             }
+            // Cümle bitmeden çok uzarsa (nokta düşmüş altyazılar) kesiyoruz.
+            if (current.length > MAX_SENTENCE_CHARS) {
+                out += current.toString().trim()
+                current.clear()
+            }
+        }
+        if (current.isNotBlank()) out += current.toString().trim()
+        return out.filter { it.isNotBlank() }
+    }
 
-            tokens.forEachIndexed { position, token ->
-                if (token !in PARTICLES) return@forEachIndexed
-                val verb = tokens.getOrNull(position - 1) ?: return@forEachIndexed
-                if (verb.length < 3 || verb in PARTICLES || verb in STOP_BEFORE) {
-                    return@forEachIndexed
-                }
-                // Üç kelimelik olanlar ("put up with") ikiliyi de içeriyor;
-                // uzun olanı tercih ediyoruz.
-                val third = tokens.getOrNull(position + 1)
-                val phrase = if (third != null && third in SECOND_PARTICLES) {
-                    "$verb $token $third"
+    /**
+     * Filmdeki özel adlar.
+     *
+     * "Janice" bilinmeyen bir kelime değil, bir kişi. Altyazıda özel ad her
+     * geçtiğinde büyük harfle başlıyor ve hiçbir zaman küçük harfle
+     * geçmiyor; sıradan kelimeler ise satır başında büyük, satır ortasında
+     * küçük görünüyor. Ayrım buradan çıkıyor. Yalnız satır başında görülen
+     * kelimeye karar veremiyoruz, onu özel ad saymıyoruz.
+     */
+    fun properNouns(srt: String): Set<String> {
+        val capitalized = HashMap<String, Int>()
+        val lowercase = HashMap<String, Int>()
+        val midSentence = HashMap<String, Int>()
+
+        lines(srt).forEach { line ->
+            tokensOf(line).forEachIndexed { index, raw ->
+                val key = raw.lowercase()
+                if (raw.first().isUpperCase()) {
+                    capitalized[key] = (capitalized[key] ?: 0) + 1
+                    if (index > 0) midSentence[key] = (midSentence[key] ?: 0) + 1
                 } else {
-                    "$verb $token"
+                    lowercase[key] = (lowercase[key] ?: 0) + 1
                 }
-                counts[phrase] = (counts[phrase] ?: 0) + 1
-                contexts.putIfAbsent(phrase, sentence)
             }
         }
 
-        return counts
-            .filterValues { it >= MIN_PHRASE_COUNT }
-            .map { (phrase, count) ->
-                SubtitleWord(word = phrase, count = count, context = contexts[phrase].orEmpty())
-            }
-            .sortedByDescending { it.count }
+        return capitalized.keys
+            .filter { lowercase[it] == null }
+            .filter { (midSentence[it] ?: 0) > 0 }
+            .toSet()
     }
 
-    /** Aynı kalıp en az bu kadar geçmeliyse listeye giriyor; tek seferlikler gürültü. */
-    private const val MIN_PHRASE_COUNT = 2
-
-    /** Öbek fiillerin ikinci parçası. */
-    private val PARTICLES = setOf(
-        "up", "out", "off", "down", "in", "on", "away", "back", "over",
-        "through", "around", "along", "apart", "aside", "ahead",
-    )
-
-    /** Üç kelimelik öbek fiillerin son parçası: "put up with", "look out for". */
-    private val SECOND_PARTICLES = setOf("with", "for", "to", "of", "on")
-
-    /** Fiil olamayacak, kalıp üretmeyecek kelimeler. */
-    private val STOP_BEFORE = setOf(
-        "the", "a", "an", "and", "but", "that", "this", "there", "here",
-        "was", "were", "been", "being", "his", "her", "its", "their", "our",
-        "your", "some", "any", "all", "not", "just", "right", "way", "one",
-    )
+    /** Noktası düşmüş altyazılarda cümlenin sonsuza uzamasını engelliyor. */
+    private const val MAX_SENTENCE_CHARS = 220
 
     /**
-     * Filmlerde sık geçen, parçalarından anlaşılmayan kalıplar. Liste kısa
-     * ama seçici: her biri gerçekten deyim.
-     */
-    private val IDIOMS = listOf(
-        "on purpose", "for good", "no big deal", "big deal", "make sense",
-        "no way", "come on", "hold on", "hang on", "take care", "never mind",
-        "by the way", "at least", "as well", "in charge", "out of hand",
-        "keep an eye on", "make up your mind", "get rid of", "on my own",
-        "out of nowhere", "for a while", "in the first place", "at all costs",
-        "no matter what", "sooner or later", "in the middle of", "on the run",
-        "up to you", "what if", "as if", "let alone", "take it easy",
-        "give it a shot", "hang in there", "cut it out", "back off",
-        "settle down", "figure out", "the whole point", "on the line",
-        "out of the question", "in the long run", "for the record",
-        "beside the point", "call it a day", "get away with", "look forward to",
-        "run out of", "put up with", "come up with", "get along with",
-        "keep up with", "stand up for", "watch out for", "make up for",
-    )
-
-    /**
-     * Bilmediğin kelimeleri seçer.
+     * Zorluk eşiğini geçen kelimeler.
      *
-     * [knownUpToRank] seviye sınavından geliyor: bu sıklık sırasına kadar olan
-     * kelimeleri zaten biliyorsun, onları çıkarmanın anlamı yok. Sıralamada
-     * olmayan kelimeler (çok nadir) en sona değil en başa geliyor — filmi
-     * anlamanı asıl onlar engelliyor.
+     * Üç elek var. Özel adlar çıkıyor (film karakterinin adını öğrenmek
+     * kelime öğrenmek değil). Çekimler köke iniyor, yani "lions" bilinen
+     * "lion" sayılıyor. Kalanlar zorluk puanına göre eleniyor.
      *
-     * [alreadySeen] daha önce işaretlediğin ya da öğrendiğin kelimeler.
+     * Sıralama sıklığa değil zorluğa göre: bir kelimenin filmde dört kez
+     * geçmesi onu zor yapmıyor, yalnızca sık yapıyor. Eşit zorlukta olanlar
+     * arasında çok geçen öne alınıyor — onu duyma ihtimalin yüksek.
      */
-    fun selectUnknown(
+    fun selectWords(
         words: List<SubtitleWord>,
-        frequencyRank: Map<String, Int>,
-        knownUpToRank: Int,
+        ranks: Map<String, Int>,
+        properNouns: Set<String>,
+        minDifficulty: Int,
         alreadySeen: Set<String>,
         limit: Int,
-    ): List<SubtitleWord> = words
+    ): List<SubtitlePick> = words
         .asSequence()
+        .filter { it.word !in properNouns }
         .filter { it.word !in alreadySeen }
-        .filter { (frequencyRank[it.word] ?: Int.MAX_VALUE) > knownUpToRank }
+        .filter { it.word.length >= 3 }
+        .map { it to SubtitleDifficulty.ofRank(SubtitleDifficulty.rankOf(it.word, ranks)) }
+        .filter { (_, difficulty) -> difficulty >= minDifficulty }
         .sortedWith(
-            compareByDescending<SubtitleWord> { it.count }
-                .thenByDescending { frequencyRank[it.word] ?: Int.MAX_VALUE },
+            compareByDescending<Pair<SubtitleWord, Int>> { it.second }
+                .thenByDescending { it.first.count },
         )
         .take(limit)
+        .map { (word, difficulty) ->
+            SubtitlePick(
+                text = word.word,
+                context = word.context,
+                count = word.count,
+                difficulty = difficulty,
+                sentence = false,
+            )
+        }
         .toList()
+
+    /**
+     * Zorluk eşiğini geçen cümleler.
+     *
+     * Kalıp listesi yerine bu var: filmde seni durduran şey çoğu zaman tek
+     * bir kelime değil, kelimeleri bildiğin hâlde çözemediğin bir cümle.
+     */
+    fun selectSentences(
+        srt: String,
+        ranks: Map<String, Int>,
+        minDifficulty: Int,
+        alreadySeen: Set<String>,
+        limit: Int,
+    ): List<SubtitlePick> = sentences(srt)
+        .asSequence()
+        .filter { it.length in MIN_SENTENCE_CHARS..MAX_SENTENCE_CHARS }
+        .distinctBy { it.lowercase() }
+        .filter { it.lowercase() !in alreadySeen }
+        .map { it to SubtitleDifficulty.ofSentence(it, ranks) }
+        .filter { (_, difficulty) -> difficulty >= minDifficulty }
+        .sortedByDescending { it.second }
+        .take(limit)
+        .map { (sentence, difficulty) ->
+            SubtitlePick(
+                text = sentence,
+                context = sentence,
+                count = 1,
+                difficulty = difficulty,
+                sentence = true,
+            )
+        }
+        .toList()
+
+    /** Bundan kısa bir "cümle" zaten bir cümle değil. */
+    private const val MIN_SENTENCE_CHARS = 25
 }

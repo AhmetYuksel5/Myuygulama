@@ -30,6 +30,9 @@ class BookShelfViewModel @Inject constructor(
     private val _state = MutableStateFlow(BookShelfUiState())
     val state: StateFlow<BookShelfUiState> = _state.asStateFlow()
 
+    /** Kayıt bir film altyazısı mı: kitaplıkta ayrı etiket ve süzgeç için. */
+    fun isFilm(entry: Entry): Boolean = repository.isFilm(entry)
+
     val books: StateFlow<List<Entry>> = repository.observeBooks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

@@ -751,16 +751,27 @@ private fun WordRow(
             // hizalı duruyor, "aynı satırda" gerçekten bir sütun oluyor.
             Column(
                 horizontalAlignment = Alignment.End,
-                modifier = Modifier.width(104.dp),
+                modifier = Modifier.width(116.dp),
             ) {
+                // Önce nereden geldiği (Filmden / Kitaptan), sonra o filmin
+                // ya da kitabın adı, en altta durumu.
                 Text(
-                    text = word.sourceName.ifBlank { word.source.label },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = word.source.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.End,
                 )
+                if (word.sourceName.isNotBlank()) {
+                    Text(
+                        text = word.sourceName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End,
+                    )
+                }
                 val status = statusLabel(item.status)
                 if (status != null) {
                     Text(

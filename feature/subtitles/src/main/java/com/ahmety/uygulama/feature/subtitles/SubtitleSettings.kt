@@ -46,6 +46,14 @@ class SubtitleSettings @Inject constructor(
         get() = prefs.getString(KEY_BASE, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_BASE
         set(value) = prefs.edit().putString(KEY_BASE, value.trim()).apply()
 
+    /**
+     * Zorluk eşiği, 0-100. Bu puanın üstündeki kelime ve cümleler
+     * çıkarılıyor. Varsayılan 60: orta seviyenin biraz üstü.
+     */
+    var difficulty: Int
+        get() = prefs.getInt(KEY_DIFFICULTY, 60).coerceIn(0, 100)
+        set(value) = prefs.edit().putInt(KEY_DIFFICULTY, value.coerceIn(0, 100)).apply()
+
     val configured: Boolean get() = apiKey.isNotBlank()
 
     fun maskedKey(): String {
@@ -55,7 +63,10 @@ class SubtitleSettings @Inject constructor(
     }
 
     fun clear() {
+        // Zorluk eşiği hesapla ilgili değil; anahtarı silmek onu sıfırlamasın.
+        val keep = difficulty
         prefs.edit().clear().apply()
+        difficulty = keep
     }
 
     private companion object {
@@ -65,6 +76,7 @@ class SubtitleSettings @Inject constructor(
         const val KEY_PASS = "password"
         const val KEY_TOKEN = "token"
         const val KEY_BASE = "base_url"
+        const val KEY_DIFFICULTY = "difficulty"
         const val DEFAULT_BASE = "https://api.opensubtitles.com"
     }
 }

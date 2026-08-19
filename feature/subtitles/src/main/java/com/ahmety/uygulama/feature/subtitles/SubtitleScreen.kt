@@ -12,6 +12,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Slider
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -24,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -86,14 +90,32 @@ fun SubtitleRoute(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        // Zorluk eşiği. Altyazı indirildikten sonra da oynatılabiliyor:
+        // kaydırıp bırakınca liste yeni eşikle yeniden kuruluyor, yeniden
+        // indirme yok.
+        Column {
+            Text(
+                text = "Zorluk eşiği: ${state.difficulty}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Slider(
+                value = state.difficulty.toFloat(),
+                onValueChange = { viewModel.onDifficultyChange(it.toInt()) },
+                onValueChangeFinished = viewModel::applyDifficulty,
+                valueRange = 0f..100f,
+                enabled = !state.busy,
+            )
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 enabled = state.configured && state.query.isNotBlank() && !state.busy,
                 onClick = viewModel::prepare,
             ) { Text(if (state.busy) "Hazırlanıyor…" else "Altyazıları getir") }
-            if (state.words.isNotEmpty()) {
+            val chosen = state.picks.count { it.text in state.chosen }
+            if (chosen > 0) {
                 TextButton(enabled = !state.busy, onClick = viewModel::save) {
-                    Text("${state.words.size} kelimeyi ekle")
+                    Text("$chosen maddeyi ekle")
                 }
             }
         }
@@ -157,31 +179,15 @@ fun SubtitleRoute(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            items(state.words, key = { it.word }) { word ->
-                Column {
-                    Row {
-                        Text(
-                            text = word.word,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                        Text(
-                            text = "${word.count}×",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (word.context.isNotBlank()) {
-                        Text(
-                            text = word.context,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+            items(state.picks, key = { it.text }) { pick ->
+                PickRow(
+                    pick = pick,
+                    checked = pick.text in state.chosen,
+                    onToggle = { viewModel.toggle(pick) },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             }
         }
     }
@@ -200,5 +206,62 @@ fun SubtitleRoute(
                 ) { Text("Kapat") }
             },
         )
+    }
+}
+
+/**
+ * Listedeki bir madde: kelime ya da zor cümle.
+ *
+ * İşaret kutusu şart: "hepsini ekle"den başka seçenek olmayınca istemediğin
+ * kelimeyi çıkarmanın yolu kalmıyordu. Hepsi seçili başlıyor, çıkarmak sana
+ * kalıyor.
+ */
+@Composable
+private fun PickRow(
+    pick: SubtitlePick,
+    checked: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = { onToggle() })
+        Column(modifier = Modifier.padding(top = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = pick.text,
+                    style = if (pick.sentence) {
+                        MaterialTheme.typography.bodyMedium
+                    } else {
+                        MaterialTheme.typography.bodyLarge
+                    },
+                    fontWeight = if (pick.sentence) FontWeight.Normal else FontWeight.SemiBold,
+                    fontStyle = if (pick.sentence) FontStyle.Italic else FontStyle.Normal,
+                    modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
+                )
+                // Zorluk puanı görünsün: eşiği neye göre kaydıracağını
+                // ancak sayıyı görerek anlarsın.
+                Text(
+                    text = "${pick.difficulty}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (!pick.sentence && pick.count > 1) {
+                    Text(
+                        text = "  ${pick.count}×",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (!pick.sentence && pick.context.isNotBlank()) {
+                Text(
+                    text = pick.context,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

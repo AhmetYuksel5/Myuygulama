@@ -1,6 +1,7 @@
 package com.ahmety.uygulama.feature.subtitles
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,46 +37,95 @@ class SubtitleTextTest {
     }
 
     @Test
-    fun `bilinen siklik araligi eleniyor`() {
-        val words = SubtitleText.words(srt)
-        val ranks = mapOf("the" to 3, "harvest" to 4200, "abundant" to 8100, "village" to 2600)
-        val picked = SubtitleText.selectUnknown(
-            words = words,
-            frequencyRank = ranks,
-            knownUpToRank = 3000,
-            alreadySeen = emptySet(),
-            limit = 10,
-        ).map { it.word }
-        assertTrue("the" !in picked)
-        assertTrue("village" !in picked)
-        assertTrue("abundant" in picked)
-        assertTrue("harvest" in picked)
+    fun `cekimler kokune inip bilinen kelime sayiliyor`() {
+        // "lions" listede yok ama "lion" var: bilinen bir kelimeyi
+        // "çok nadir" diye listeye sokmamalı.
+        val ranks = mapOf("lion" to 1500, "owe" to 900, "straighten" to 3800)
+        assertEquals(1500, SubtitleDifficulty.rankOf("lions", ranks))
+        assertEquals(900, SubtitleDifficulty.rankOf("owes", ranks))
+        assertEquals(3800, SubtitleDifficulty.rankOf("straightened", ranks))
+        // Listede hiç karşılığı olmayan kelime en zor sayılıyor.
+        assertNull(SubtitleDifficulty.rankOf("amorphous", ranks))
     }
 
     @Test
-    fun `obek fiiller ve deyimler cikariliyor`() {
+    fun `ozel adlar eleniyor`() {
         val srt = """
             1
             00:00:01,000 --> 00:00:03,000
-            I can't put up with this any more.
+            I set up Janice in an apartment.
 
             2
             00:00:04,000 --> 00:00:06,000
-            You have to put up with it, by the way.
+            Janice can do what she wants.
 
             3
             00:00:07,000 --> 00:00:09,000
-            By the way, he ran out of time.
+            The apartment was empty.
         """.trimIndent()
 
-        val found = SubtitleText.phrases(srt).map { it.word }
-        // İki kez geçenler alınıyor; tek seferlikler gürültü sayılıyor.
-        assertTrue("put up with" in found)
-        assertTrue("by the way" in found)
-        assertTrue("ran out of" !in found)
-        // Bağlam komşu repliklerle birlikte geliyor.
-        val phrase = SubtitleText.phrases(srt).first { it.word == "put up with" }
-        assertTrue(phrase.context.isNotBlank())
+        val names = SubtitleText.properNouns(srt)
+        assertTrue("janice" in names)
+        // "The" satır başında büyük ama başka yerde küçük geçiyor: özel ad değil.
+        assertTrue("the" !in names)
+        assertTrue("apartment" !in names)
+    }
+
+    @Test
+    fun `zorluk esigini gecmeyen kelime alinmiyor`() {
+        val words = listOf(
+            SubtitleWord("lions", 4, "throw him to the lions"),
+            SubtitleWord("amorphous", 1, "an amorphous shape"),
+        )
+        val ranks = mapOf("lion" to 1500)
+        val picked = SubtitleText.selectWords(
+            words = words,
+            ranks = ranks,
+            properNouns = emptySet(),
+            minDifficulty = 60,
+            alreadySeen = emptySet(),
+            limit = 10,
+        ).map { it.text }
+        // "lions" -> "lion" (1500. sıra) eşiğin altında; dört kez geçmesi
+        // onu zor yapmıyor.
+        assertTrue("lions" !in picked)
+        assertTrue("amorphous" in picked)
+    }
+
+    @Test
+    fun `cumleler birlestiriliyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            I had to straighten out
+
+            2
+            00:00:04,000 --> 00:00:06,000
+            her boss at the diner.
+
+            3
+            00:00:07,000 --> 00:00:09,000
+            Let's go.
+        """.trimIndent()
+
+        val sentences = SubtitleText.sentences(srt)
+        assertEquals("I had to straighten out her boss at the diner.", sentences.first())
+        assertEquals(2, sentences.size)
+    }
+
+    @Test
+    fun `zor cumle kolay cumleden yuksek puan aliyor`() {
+        val ranks = mapOf(
+            "come" to 40, "here" to 60, "now" to 30,
+            "although" to 1200, "insisted" to 4500, "arrangement" to 5200,
+        )
+        val easy = SubtitleDifficulty.ofSentence("Come here now.", ranks)
+        val hard = SubtitleDifficulty.ofSentence(
+            "Although he insisted, the arrangement they had come up with " +
+                "was, in the long run, beside the point.",
+            ranks,
+        )
+        assertTrue("$easy < $hard", easy < hard)
     }
 
     @Test

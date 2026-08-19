@@ -15,7 +15,11 @@ data class SubtitleUiState(
     val busy: Boolean = false,
     val step: String = "",
     val pair: SubtitlePair? = null,
-    val words: List<SubtitleWord> = emptyList(),
+    val picks: List<SubtitlePick> = emptyList(),
+    /** Eklenecek olanlar. Baştan hepsi seçili; istemediğini çıkarıyorsun. */
+    val chosen: Set<String> = emptySet(),
+    /** Zorluk eşiği, 0-100. */
+    val difficulty: Int = 60,
     val message: String? = null,
     val failed: Boolean = false,
     val configured: Boolean = false,
@@ -27,7 +31,9 @@ class SubtitleViewModel @Inject constructor(
     private val settings: SubtitleSettings,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(SubtitleUiState(configured = settings.configured))
+    private val _state = MutableStateFlow(
+        SubtitleUiState(configured = settings.configured, difficulty = settings.difficulty),
+    )
     val state: StateFlow<SubtitleUiState> = _state.asStateFlow()
 
     /** Ayar kutusu kapanınca anahtarın girilip girilmediğini yeniden okuyoruz. */
@@ -43,6 +49,29 @@ class SubtitleViewModel @Inject constructor(
         _state.value = _state.value.copy(year = value.filter { it.isDigit() }.take(4))
     }
 
+    /**
+     * Zorluk eşiği. Altyazı zaten indirilmişse yeniden indirmeden listeyi
+     * yeni eşikle kuruyoruz — kaydırıcıyı deneyerek ayarlayabilesin.
+     */
+    fun onDifficultyChange(value: Int) {
+        settings.difficulty = value
+        _state.value = _state.value.copy(difficulty = value)
+    }
+
+    fun applyDifficulty() {
+        val pair = _state.value.pair ?: return
+        if (_state.value.busy) return
+        viewModelScope.launch { extract(pair) }
+    }
+
+    /** Listeden çıkar / geri al. */
+    fun toggle(pick: SubtitlePick) {
+        val current = _state.value.chosen
+        _state.value = _state.value.copy(
+            chosen = if (pick.text in current) current - pick.text else current + pick.text,
+        )
+    }
+
     fun prepare() {
         val current = _state.value
         if (current.busy || current.query.isBlank()) return
@@ -51,7 +80,8 @@ class SubtitleViewModel @Inject constructor(
             step = "Altyazılar aranıyor…",
             message = null,
             failed = false,
-            words = emptyList(),
+            picks = emptyList(),
+            chosen = emptySet(),
             pair = null,
         )
         viewModelScope.launch {
@@ -71,46 +101,60 @@ class SubtitleViewModel @Inject constructor(
                 )
 
                 is SubtitleResult.Ok -> {
-                    _state.value = _state.value.copy(
-                        pair = result.value,
-                        step = "Bilmediğin kelimeler çıkarılıyor…",
-                    )
-                    // Kelime çıkarma patlarsa bunu "kelime bulunamadı" diye
-                    // göstermek yanıltıyordu: sebebi olduğu gibi yazıyoruz.
-                    val extracted = runCatching {
-                        repository.extractWords(result.value, WORD_LIMIT)
-                    }
-                    val words = extracted.getOrDefault(emptyList())
-                    val failure = extracted.exceptionOrNull()
-                    _state.value = _state.value.copy(
-                        busy = false,
-                        step = "",
-                        words = words,
-                        message = when {
-                            failure != null -> "Kelimeler çıkarılamadı: ${describe(failure)}"
-                            words.isEmpty() ->
-                                "Seviyenin üstünde kelime bulunamadı — bu filmi rahat izlersin."
-                            else -> null
-                        },
-                        failed = failure != null,
-                    )
+                    _state.value = _state.value.copy(pair = result.value)
+                    extract(result.value)
                 }
             }
         }
     }
 
+    /**
+     * Altyazıdan seçimi kurar. İndirmeden bağımsız: eşik değişince yeniden
+     * çağrılıyor.
+     */
+    private suspend fun extract(pair: SubtitlePair) {
+        _state.value = _state.value.copy(busy = true, step = "Zor kelime ve cümleler seçiliyor…")
+        // Çıkarma patlarsa bunu "bir şey bulunamadı" diye göstermek
+        // yanıltıyordu: sebebi olduğu gibi yazıyoruz.
+        val extracted = runCatching {
+            repository.extract(
+                pair = pair,
+                minDifficulty = _state.value.difficulty,
+                wordLimit = WORD_LIMIT,
+                sentenceLimit = SENTENCE_LIMIT,
+            )
+        }
+        val picks = extracted.getOrDefault(emptyList())
+        val failure = extracted.exceptionOrNull()
+        _state.value = _state.value.copy(
+            busy = false,
+            step = "",
+            picks = picks,
+            chosen = picks.map { it.text }.toSet(),
+            message = when {
+                failure != null -> "Seçim yapılamadı: ${describe(failure)}"
+                picks.isEmpty() ->
+                    "Bu eşikte bir şey çıkmadı. Zorluğu düşürüp yeniden dene."
+                else -> null
+            },
+            failed = failure != null,
+        )
+    }
+
     fun save() {
         val current = _state.value
         val pair = current.pair ?: return
-        if (current.busy || current.words.isEmpty()) return
-        _state.value = current.copy(busy = true, step = "Kelimeler ekleniyor…")
+        val picks = current.picks.filter { it.text in current.chosen }
+        if (current.busy || picks.isEmpty()) return
+        _state.value = current.copy(busy = true, step = "Ekleniyor…")
         viewModelScope.launch {
-            val count = runCatching { repository.save(pair, current.words) }.getOrElse { 0 }
+            val count = runCatching { repository.save(pair, picks) }.getOrElse { 0 }
             _state.value = _state.value.copy(
                 busy = false,
                 step = "",
-                words = emptyList(),
-                message = "$count kelime eklendi. Kelimeler sekmesinde bu filmden çalışabilirsin.",
+                picks = emptyList(),
+                chosen = emptySet(),
+                message = "$count madde eklendi. Film artık Kitaplık'ta da okunabilir.",
                 failed = false,
             )
         }
@@ -142,5 +186,8 @@ class SubtitleViewModel @Inject constructor(
          * üç yüz kelime düşerdi ve tekrar programı boğulurdu.
          */
         const val WORD_LIMIT = 40
+
+        /** Bir filmden alınacak en fazla zor cümle. */
+        const val SENTENCE_LIMIT = 15
     }
 }

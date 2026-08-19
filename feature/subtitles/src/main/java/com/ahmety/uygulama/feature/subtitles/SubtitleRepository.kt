@@ -4,6 +4,7 @@ import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
+import com.ahmety.uygulama.feature.ebook.BookRepository
 import com.ahmety.uygulama.feature.vocab.LevelTestStore
 import com.ahmety.uygulama.feature.vocab.estimateLevel
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,7 @@ class SubtitleRepository @Inject constructor(
     private val client: OpenSubtitlesClient,
     private val entryRepository: EntryRepository,
     private val levelTest: LevelTestStore,
+    private val bookRepository: BookRepository,
 ) {
 
     /**
@@ -80,77 +82,90 @@ class SubtitleRepository @Inject constructor(
     }
 
     /**
-     * Seviyene göre bilmediğin kelimeleri çıkarır.
+     * Zorluk eşiğini geçen kelimeleri ve cümleleri çıkarır.
      *
-     * Eşik seviye sınavından geliyor. Sınava hiç girmediysen makul bir
-     * varsayımla (ilk 2000 kelime) çalışıyoruz — yoksa "the, and, you" gibi
-     * kelimeleri de çıkarırdı.
+     * Eşik kullanıcıdan geliyor (0-100). Seviye sınavına girdiysen, bildiğin
+     * kelimeler ayrıca eleniyor: sınav "şu sıklığa kadarını biliyorum"
+     * diyorsa o aralık eşiğin altında sayılmasa bile listeye girmiyor.
      */
-    suspend fun extractWords(pair: SubtitlePair, limit: Int): List<SubtitleWord> =
-        withContext(Dispatchers.IO) {
-            val ranks = levelTest.words().withIndex().associate { (index, word) -> word to index + 1 }
-            val estimate = estimateLevel(levelTest.answers, ranks.size.coerceAtLeast(1))
-            val threshold = estimate.knownUpToRank.takeIf { it > 0 } ?: DEFAULT_KNOWN_RANK
-            val seen = entryRepository.listByType(EntryType.HIGHLIGHT)
-                .map { it.title.trim().lowercase() }
-                .toSet()
-            val words = SubtitleText.selectUnknown(
-                words = SubtitleText.words(pair.englishText),
-                frequencyRank = ranks,
-                knownUpToRank = threshold,
-                alreadySeen = seen,
-                limit = limit,
-            )
-            // Filmdeki ifadeler tek tek kelimelerden farklı: "put up with"i
-            // üç kelimenin anlamından çıkaramıyorsun. Kalıpları ayrıca
-            // topluyoruz ve listenin başına koyuyoruz.
-            val phrases = SubtitleText.phrases(pair.englishText)
-                .filter { it.word.lowercase() !in seen }
-                .take(PHRASE_LIMIT)
-            phrases + words
+    suspend fun extract(
+        pair: SubtitlePair,
+        minDifficulty: Int,
+        wordLimit: Int,
+        sentenceLimit: Int,
+    ): List<SubtitlePick> = withContext(Dispatchers.IO) {
+        val ranks = levelTest.words().withIndex().associate { (index, word) -> word to index + 1 }
+        val estimate = estimateLevel(levelTest.answers, ranks.size.coerceAtLeast(1))
+        val knownUpToRank = estimate.knownUpToRank
+
+        val seen = entryRepository.listByType(EntryType.HIGHLIGHT)
+            .map { it.title.trim().lowercase() }
+            .toSet()
+
+        // Sınavdan gelen "bunları biliyorum" aralığı zorluk eşiğinden
+        // bağımsız: eşik düşük olsa bile bildiğin kelimeyi göstermenin
+        // anlamı yok.
+        val known = if (knownUpToRank > 0) {
+            ranks.filterValues { it <= knownUpToRank }.keys
+        } else {
+            emptySet()
         }
 
+        val properNouns = SubtitleText.properNouns(pair.englishText)
+        val words = SubtitleText.selectWords(
+            words = SubtitleText.words(pair.englishText),
+            ranks = ranks,
+            properNouns = properNouns,
+            minDifficulty = minDifficulty,
+            alreadySeen = seen + known,
+            limit = wordLimit,
+        )
+        val sentences = SubtitleText.selectSentences(
+            srt = pair.englishText,
+            ranks = ranks,
+            minDifficulty = minDifficulty,
+            alreadySeen = seen,
+            limit = sentenceLimit,
+        )
+        // Cümleler başta: filmde seni asıl durduran onlar.
+        sentences + words
+    }
+
     /**
-     * Seçilen kelimeleri kelime destesine aktarır.
+     * Seçilenleri kelime destesine aktarır.
      *
-     * Film, kitaplarla aynı biçimde bir kayıt olarak açılıyor; böylece kelime
-     * listesinde "şu filmden" diye süzülebiliyor.
+     * Film, kitaplarla aynı biçimde okunabilir bir belge olarak kaydediliyor:
+     * altyazıyı kitap gibi okuyup kendin de işaretleyebilesin diye. Kelime
+     * maviye, anlaşılması zor cümle kırmızıya gidiyor.
      */
-    suspend fun save(pair: SubtitlePair, words: List<SubtitleWord>): Int {
-        if (words.isEmpty()) return 0
+    suspend fun save(pair: SubtitlePair, picks: List<SubtitlePick>): Int {
+        if (picks.isEmpty()) return 0
         val title = buildString {
             append(pair.movie)
             if (pair.year > 0) append(" (").append(pair.year).append(")")
         }
-        val movieId = entryRepository.createEntry(
-            type = EntryType.DOCUMENT,
+        val movieId = bookRepository.importFilm(
             title = title,
-            body = pair.english.release,
-            source = HighlightRef.SUBTITLE_SOURCE_MARKER,
+            release = pair.english.release,
+            sentences = SubtitleText.sentences(pair.englishText),
         )
-        words.forEach { word ->
+        picks.forEach { pick ->
             entryRepository.createEntry(
                 type = EntryType.HIGHLIGHT,
-                title = word.word,
-                body = word.context,
+                title = pick.text,
+                body = pick.context,
                 source = HighlightRef.encode(
                     kind = HighlightRef.KIND_SUBTITLE,
                     sourceId = movieId,
-                    color = HighlightColor.BLUE,
+                    color = if (pick.sentence) HighlightColor.RED else HighlightColor.BLUE,
                 ),
             )
         }
-        return words.size
+        return picks.size
     }
 
     private companion object {
-        /** Seviye sınavına girilmemişse varsayılan bilinen sıklık aralığı. */
-        const val DEFAULT_KNOWN_RANK = 2000
-
         /** Bu kadar replik yoksa elimizdeki şey altyazı değildir. */
         const val MIN_LINES = 20
-
-        /** Bir filmden alınacak en fazla kalıp sayısı. */
-        const val PHRASE_LIMIT = 15
     }
 }

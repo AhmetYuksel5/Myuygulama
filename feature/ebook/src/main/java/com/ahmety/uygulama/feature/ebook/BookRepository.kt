@@ -42,11 +42,10 @@ class BookRepository @Inject constructor(
         get() = File(context.filesDir, "kitaplar").apply { mkdirs() }
 
     /**
-     * Kitaplık. Filmler de aynı kayıt türünü kullanıyor (kelimeleri
-     * kaynağına göre süzebilmek için) ama kitaplıkta görünmemeliler.
+     * Kitaplık. Filmler de burada: altyazı da okunacak bir metin, kitaptan
+     * farkı yalnızca nereden geldiği. Süzgeç ekranda.
      */
     fun observeBooks(): Flow<List<Entry>> = entryRepository.observeByType(EntryType.DOCUMENT)
-        .map { entries -> entries.filterNot { it.source == HighlightRef.SUBTITLE_SOURCE_MARKER } }
 
     fun observeHighlights(): Flow<List<Entry>> = entryRepository.observeByType(EntryType.HIGHLIGHT)
 
@@ -82,18 +81,67 @@ class BookRepository @Inject constructor(
         ImportResult.Imported(id, book.title)
     }
 
+    /**
+     * Film altyazısını kitaplığa okunabilir bir belge olarak koyar.
+     *
+     * Altyazı da bir metin: kitapta yaptığın gibi okuyup mavi/kırmızı
+     * işaretleyebilmen için aynı biçime çeviriyoruz. Bölümler on dakikalık
+     * bloklar değil, sabit sayıda replik — altyazıda zaman damgasını
+     * atıyoruz, elimizde yalnızca sıra kalıyor.
+     */
+    suspend fun importFilm(
+        title: String,
+        release: String,
+        sentences: List<String>,
+    ): Long = withContext(Dispatchers.IO) {
+        val stamp = System.currentTimeMillis()
+        val chapters = sentences
+            .chunked(FILM_CHAPTER_SENTENCES)
+            .mapIndexed { index, block ->
+                EpubChapter(title = "${index + 1}. bölüm", paragraphs = block)
+            }
+        val book = EpubBook(title = title, author = release, chapters = chapters)
+        val textFile = File(booksDir, "film_$stamp.json")
+        runCatching { textFile.writeText(encodeBook(book)) }
+
+        entryRepository.createEntry(
+            type = EntryType.DOCUMENT,
+            title = title,
+            body = release,
+            // "film:" öneki hem kitaplıkta filmi ayırt ettiriyor hem de
+            // metnin yolunu taşıyor; eski kayıtlarda yalnız "film" yazıyor.
+            source = "${HighlightRef.SUBTITLE_SOURCE_MARKER}:${textFile.absolutePath}",
+        )
+    }
+
+    /** Kayıt bir film altyazısı mı, gerçek bir kitap mı. */
+    fun isFilm(entry: Entry): Boolean {
+        val source = entry.source ?: return false
+        return source == HighlightRef.SUBTITLE_SOURCE_MARKER ||
+            source.startsWith("${HighlightRef.SUBTITLE_SOURCE_MARKER}:")
+    }
+
     /** Ayrıştırılmış metni okur. Kayıt yoksa veya dosya silinmişse null. */
     suspend fun loadBook(entryId: Long): EpubBook? = withContext(Dispatchers.IO) {
         val entry = entryRepository.getById(entryId) ?: return@withContext null
-        val path = entry.source ?: return@withContext null
+        val raw = entry.source ?: return@withContext null
+        val path = raw.removePrefix("${HighlightRef.SUBTITLE_SOURCE_MARKER}:")
+        if (path.isBlank() || path == HighlightRef.SUBTITLE_SOURCE_MARKER) return@withContext null
         val file = File(path)
         if (!file.exists()) return@withContext null
         runCatching { decodeBook(file.readText(), entry.title, entry.body) }.getOrNull()
     }
 
+    /**
+     * Bu belgenin işaretleri.
+     *
+     * Kitap ve film işaretleri farklı türde ("book" / "subtitle") çünkü
+     * kelime listesi kaynağı oradan okuyor; ama okuyucu için ikisi de aynı
+     * şey, bu yüzden ikisini birden alıyoruz.
+     */
     suspend fun highlightsFor(bookId: Long): List<Entry> =
         entryRepository.listByType(EntryType.HIGHLIGHT)
-            .filter { HighlightRef.sourceId(it.source) == bookId && isBook(it.source) }
+            .filter { HighlightRef.sourceId(it.source) == bookId && isReadable(it.source) }
 
     /**
      * Kelimeyi işaretler ya da rengini değiştirir.
@@ -114,7 +162,7 @@ class BookRepository @Inject constructor(
         val existing = highlightsFor(bookId).firstOrNull {
             it.title.equals(trimmed, ignoreCase = true)
         }
-        val source = HighlightRef.encode(HighlightRef.KIND_BOOK, bookId, color)
+        val source = HighlightRef.encode(kindOf(bookId), bookId, color)
         val sentence = contextSentence.trim()
 
         if (existing == null) {
@@ -174,8 +222,24 @@ class BookRepository @Inject constructor(
         entryRepository.deleteEntry(entry.id)
     }
 
-    private fun isBook(source: String?): Boolean =
-        HighlightRef.kind(source) == HighlightRef.KIND_BOOK
+    private fun isReadable(source: String?): Boolean =
+        HighlightRef.kind(source) in READABLE_KINDS
+
+    /**
+     * İşaret hangi türle kaydedilecek. Filmde işaretlediğin kelime kelime
+     * listesinde "Filmden" görünmeli, "Kitaptan" değil.
+     */
+    private suspend fun kindOf(bookId: Long): String {
+        val entry = entryRepository.getById(bookId) ?: return HighlightRef.KIND_BOOK
+        return if (isFilm(entry)) HighlightRef.KIND_SUBTITLE else HighlightRef.KIND_BOOK
+    }
+
+    private companion object {
+        /** Bir "bölüm"e kaç replik giriyor. Okuyucunun ilerleme çubuğu için. */
+        const val FILM_CHAPTER_SENTENCES = 120
+
+        val READABLE_KINDS = setOf(HighlightRef.KIND_BOOK, HighlightRef.KIND_SUBTITLE)
+    }
 
     private fun encodeBook(book: EpubBook): String {
         val chapters = JSONArray()

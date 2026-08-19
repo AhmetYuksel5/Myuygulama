@@ -40,6 +40,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -82,6 +83,7 @@ fun BookShelfRoute(
 ) {
     val books by viewModel.books.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var shelf by rememberSaveable { mutableStateOf(Shelf.ALL) }
 
     // Belge seçici: EPUB'ların MIME türü cihazdan cihaza değiştiği için
     // her dosyayı seçtirip doğrulamayı ayrıştırıcıya bırakıyoruz.
@@ -104,6 +106,17 @@ fun BookShelfRoute(
     ) {
         Text("Kitaplık", style = MaterialTheme.typography.headlineSmall)
 
+        // Filmler de burada: altyazı da okunacak bir metin. Karışmasınlar
+        // diye süzgeç, ikisi birden varken görünüyor.
+        val films = books.count { viewModel.isFilm(it) }
+        if (films > 0 && films < books.size) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ShelfChip("Tümü", shelf == Shelf.ALL) { shelf = Shelf.ALL }
+                ShelfChip("Kitaplar", shelf == Shelf.BOOKS) { shelf = Shelf.BOOKS }
+                ShelfChip("Filmler", shelf == Shelf.FILMS) { shelf = Shelf.FILMS }
+            }
+        }
+
         Button(
             onClick = { picker.launch(arrayOf("*/*")) },
             enabled = !state.importing,
@@ -125,7 +138,8 @@ fun BookShelfRoute(
 
         if (books.isEmpty()) {
             Text(
-                text = "Henüz kitap yok. EPUB dosyanı yükle; okurken kelimelere " +
+                text = "Henüz bir şey yok. EPUB yükle ya da Film hazırlığından bir " +
+                    "altyazı ekle; okurken kelimelere " +
                     "dokunarak sarı, mavi, yeşil, kırmızı işaretleyebilirsin. " +
                     "Mavi işaretlediklerin kelime çalışmasına düşer.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -133,10 +147,18 @@ fun BookShelfRoute(
             )
         }
 
+        val shown = books.filter { book ->
+            when (shelf) {
+                Shelf.ALL -> true
+                Shelf.BOOKS -> !viewModel.isFilm(book)
+                Shelf.FILMS -> viewModel.isFilm(book)
+            }
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(books, key = { it.id }) { book ->
+            items(shown, key = { it.id }) { book ->
                 BookCard(
                     book = book,
+                    film = viewModel.isFilm(book),
                     onOpen = { onOpenBook(book.id) },
                     onDelete = { viewModel.delete(book) },
                 )
@@ -145,8 +167,21 @@ fun BookShelfRoute(
     }
 }
 
+/** Kitaplık süzgeci. */
+private enum class Shelf { ALL, BOOKS, FILMS }
+
 @Composable
-private fun BookCard(book: Entry, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun ShelfChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+}
+
+@Composable
+private fun BookCard(
+    book: Entry,
+    film: Boolean,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var confirmDelete by remember { mutableStateOf(false) }
 
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
@@ -155,6 +190,13 @@ private fun BookCard(book: Entry, onOpen: () -> Unit, onDelete: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                if (film) {
+                    Text(
+                        text = "Film",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Text(
                     text = book.title.ifBlank { "(adsız kitap)" },
                     style = MaterialTheme.typography.titleSmall,
