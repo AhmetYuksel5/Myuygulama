@@ -106,10 +106,8 @@ fun VocabRoute(
         ) {
             // Başlık nerede olduğunu söylüyor; sayılar zaten çiplerde.
             Text(
-                text = when {
-                    state.filter.sourceName.isNotBlank() -> state.filter.sourceName
-                    state.filter.source != null -> state.filter.source.label
-                    else -> "Tüm kelimeler"
+                text = state.filter.sourceName.ifBlank {
+                    state.filter.source?.label ?: "Tüm kelimeler"
                 },
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,

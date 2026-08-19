@@ -32,10 +32,16 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Debug APK derle
-        run: ./gradlew --no-daemon assembleDebug 2>&1 | tee derleme.log
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon assembleDebug 2>&1 | tee derleme.log
 
       - name: Birim testleri
-        run: ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee -a derleme.log
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee -a derleme.log
 
       # Kırılınca derleyici hatalarını log'un en sonuna yazıyoruz. Gradle'ın
       # yığın izi yüzlerce satır sürüyor ve asıl "e:" satırları ortada kalıyor;
