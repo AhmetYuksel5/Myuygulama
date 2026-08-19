@@ -182,9 +182,9 @@ class VocabViewModel @Inject constructor(
         val filter: VocabFilter = VocabFilter(),
     )
 
-    private val session = MutableStateFlow(VocabSession())
-
     private val prefs = VocabPrefs(context)
+
+    private val session = MutableStateFlow(VocabSession(filter = VocabFilter(pen = prefs.pen)))
 
     private val mode = MutableStateFlow(VocabMode.ALL)
 
@@ -214,11 +214,16 @@ class VocabViewModel @Inject constructor(
         }
 
         // Kalem süzgeci kaynağın içinde çalışıyor: "şu kitabın kırmızıları".
-        val filtered = when (sessionState.filter.pen) {
-            VocabPen.BOTH -> scoped
-            VocabPen.RED -> scoped.filter { it.isPassage }
-            VocabPen.BLUE -> scoped.filter { !it.isPassage }
+        fun byPen(list: List<VocabWord>) = when (sessionState.filter.pen) {
+            VocabPen.BOTH -> list
+            VocabPen.RED -> list.filter { it.isPassage }
+            VocabPen.BLUE -> list.filter { !it.isPassage }
         }
+        val filtered = byPen(scoped)
+        // Kaynak çipleri de kaleme uyuyor: kalem kırmızıyken "Filmden (212)"
+        // yazıp basınca boş ekran vermek yanıltıcıydı — filmden gelen her
+        // kelime mavi.
+        val penWords = byPen(words)
 
         val schedules = progress.associateBy({ it.word }, { it.toSchedule() })
 
@@ -321,10 +326,10 @@ class VocabViewModel @Inject constructor(
             list = (if (currentMode == VocabMode.ALL) filtered else deck)
                 .sortedBy { it.word.lowercase() }
                 .map { VocabListItem(word = it, status = statusOf(it)) },
-            bookCount = bookWords.count { it.source == VocabSource.BOOK },
-            subtitleCount = bookWords.count { it.source == VocabSource.SUBTITLE },
-            selectionCount = bookWords.count { it.source == VocabSource.SELECTION },
-            sources = bookWords
+            bookCount = penWords.count { it.source == VocabSource.BOOK },
+            subtitleCount = penWords.count { it.source == VocabSource.SUBTITLE },
+            selectionCount = penWords.count { it.source == VocabSource.SELECTION },
+            sources = penWords
                 .filter { it.sourceName.isNotBlank() }
                 .map { it.source to it.sourceName }
                 .distinct()
@@ -435,8 +440,10 @@ class VocabViewModel @Inject constructor(
     /** Kalem düğmesi: her ikisi → kırmızı → mavi → her ikisi. */
     fun cyclePen() {
         val current = session.value.filter
+        val next = current.pen.next()
+        prefs.pen = next
         session.value = session.value.copy(
-            filter = current.copy(pen = current.pen.next()),
+            filter = current.copy(pen = next),
             turn = session.value.turn + 1,
         )
     }

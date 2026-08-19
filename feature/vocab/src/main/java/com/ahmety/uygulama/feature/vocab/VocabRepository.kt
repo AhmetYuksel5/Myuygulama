@@ -95,24 +95,40 @@ class VocabRepository @Inject constructor(
     }
 
     /**
-     * Kelimeyi listeden kaldırır.
-     *
-     * Kitaptan/filmden gelen kelime kendi işaretleme kaydından siliniyor.
-     * Sabit destedeki kelimenin kaydı asset'te; onu silemeyiz, gizlenenler
-     * listesine yazıyoruz.
-     */
-    /**
-     * Kelimeyi kökünden siler: kitaptaki/filmdeki işaret de gidiyor.
+     * Kelimeyi kökünden siler: kitaptaki/filmdeki işaret de kalkıyor.
      *
      * Eskiden yalnızca listeden gizliyorduk; kitabı açınca kelime hâlâ
-     * boyalı duruyordu. Artık kaydın kendisi siliniyor, yani kitapta da
-     * işaret kalkıyor. Aynı kelimeyi yeniden işaretlersen geri gelir —
-     * silmek "bir daha asla" değil, "bunu istemiyorum" demek.
+     * boyalı duruyordu. Artık işaretleme kaydının kendisi siliniyor.
+     *
+     * Yalnızca çalışılan renkler siliniyor: sarı ya da yeşil işaretlediğin
+     * bir yer kelime listesine hiç düşmüyor, dolayısıyla buradan silinmesi
+     * de gerekmiyor.
+     *
+     * Tekrar programındaki satır da temizleniyor. Olmasaydı kelimeyi
+     * yeniden işaretlediğinde eski "öğrendim" damgasıyla geri gelir ve
+     * destede hiç görünmezdi.
      */
     suspend fun deleteWord(word: VocabWord) {
+        val target = word.word.trim()
         entryRepository.listByType(EntryType.HIGHLIGHT)
-            .filter { it.title.trim().equals(word.word.trim(), ignoreCase = true) }
+            .filter { it.title.trim().equals(target, ignoreCase = true) }
+            .filter { HighlightRef.color(it.source) in STUDIED_COLORS }
             .forEach { entryRepository.deleteEntry(it.id) }
+        forgetProgress(target)
+    }
+
+    /** Tekrar programındaki satırı siler; senkronda karşı tarafa da geçiyor. */
+    private suspend fun forgetProgress(word: String) {
+        val existing = vocabDao.get(word) ?: return
+        val timestamp = now.millis()
+        val cleared = existing.copy(deletedAt = timestamp, updatedAt = timestamp)
+        vocabDao.upsert(cleared)
+        changeRecorder.record(
+            entityType = ChangeEntityType.VOCAB,
+            entityUuid = word,
+            operation = ChangeOperation.DELETE,
+            payload = json.encodeToString(VocabProgressEntity.serializer(), cleared),
+        )
     }
 
     /** Kullanıcının elle düzenlediği ya da çoğalttığı kelime bilgisi. */

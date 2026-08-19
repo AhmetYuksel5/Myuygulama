@@ -108,6 +108,25 @@ class SubtitleTextTest {
     }
 
     @Test
+    fun `kapanmayan isaret repligi yutmuyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            It's 5 < 10, believe me.
+
+            2
+            00:00:04,000 --> 00:00:06,000
+            The pointer --> north, remember.
+        """.trimIndent()
+
+        val lines = SubtitleText.lines(srt)
+        // Kapanışı olmayan "<" etiket değil; satırın kalanı duruyor.
+        assertTrue(lines.any { it.contains("believe me") })
+        // İçinde ok geçen replik zaman satırı değil.
+        assertTrue(lines.any { it.contains("north") })
+    }
+
+    @Test
     fun `ayni surum grubu eslesiyor`() {
         val english = "The.Matrix.1999.1080p.BluRay.x264-YIFY"
         val turkishYify = "The.Matrix.1999.1080p.BluRay.x264.YTS"

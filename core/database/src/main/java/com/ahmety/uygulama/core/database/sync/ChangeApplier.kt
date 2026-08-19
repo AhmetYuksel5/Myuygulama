@@ -114,7 +114,7 @@ class ChangeApplier @Inject constructor(
      */
     private suspend fun applyVocab(payload: String): Boolean {
         val incoming = json.decodeFromString(VocabProgressEntity.serializer(), payload)
-        val local = vocabDao.get(incoming.word)
+        val local = vocabDao.getIncludingDeleted(incoming.word)
         // word birincil anahtar; id sorunu yok, sadece zaman karşılaştırması.
         if (local != null && incoming.updatedAt < local.updatedAt) return false
         val merged = if (local == null) {

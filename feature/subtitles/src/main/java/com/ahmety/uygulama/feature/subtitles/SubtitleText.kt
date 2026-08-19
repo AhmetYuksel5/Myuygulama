@@ -16,26 +16,47 @@ data class SubtitleWord(
  */
 object SubtitleText {
 
-    // Burada bilerek düzenli ifade (Regex) kullanmıyoruz. Önceki sürümde üç
-    // Regex, nesne kurulurken hazırlanıyordu; biri kurulamayınca sınıfın
-    // kendisi yüklenemez oluyor ve akış "Beklenmedik hata: ...SubtitleText"
-    // diye bitiyordu, asıl sebebi göstermeden. Elle yazılan tarayıcılar hem
-    // daha hızlı hem de kurulurken hiçbir iş yapmıyorlar: bu sınıf artık
-    // yüklenirken çökemez.
+    // Burada Regex kullanmıyoruz. Bu sınıfa erişince "Beklenmedik hata:
+    // ...SubtitleText" alıyorduk; sebebi kesin olarak bilinmiyor ama nesne
+    // kurulurken yapılan iş ne kadar azsa o kadar iyi. Elle yazılan
+    // tarayıcılar hem daha hızlı hem de tek tek denenebiliyor.
 
-    /** Zaman satırı: "00:01:02,500 --> 00:01:04,000". Oku yeter. */
-    private fun isTimeLine(line: String): Boolean = line.contains("-->")
+    /**
+     * Zaman satırı: "00:01:02,500 --> 00:01:04,000".
+     *
+     * Yalnızca oka bakmak yetmiyor: replikte de ok geçebiliyor
+     * ("The pointer --> north"). Rakam ve iki nokta da arıyoruz.
+     */
+    private fun isTimeLine(line: String): Boolean {
+        val arrow = line.indexOf("-->")
+        if (arrow < 0) return false
+        val before = line.take(arrow)
+        return before.contains(':') && before.any(Char::isDigit)
+    }
 
-    /** `<i>`, `{\an8}` gibi biçim etiketlerini atar. */
+    /**
+     * `<i>`, `{\an8}` gibi biçim etiketlerini atar.
+     *
+     * Yalnızca kapanışı olan etiketi atıyoruz. Kapanmayan bir işareti etiket
+     * saymak "It's 5 < 10, believe me." satırının yarısını yutuyordu.
+     */
     private fun stripTags(line: String): String {
         if (!line.contains('<') && !line.contains('{')) return line
         val out = StringBuilder(line.length)
-        var depth = 0
-        line.forEach { char ->
-            when {
-                char == '<' || char == '{' -> depth++
-                (char == '>' || char == '}') && depth > 0 -> depth--
-                depth == 0 -> out.append(char)
+        var index = 0
+        while (index < line.length) {
+            val char = line[index]
+            val closing = when (char) {
+                '<' -> '>'
+                '{' -> '}'
+                else -> null
+            }
+            val end = closing?.let { line.indexOf(it, index + 1) } ?: -1
+            if (end >= 0) {
+                index = end + 1
+            } else {
+                out.append(char)
+                index++
             }
         }
         return out.toString()

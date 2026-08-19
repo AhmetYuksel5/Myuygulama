@@ -14,8 +14,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -23,7 +26,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.ScrollState
@@ -46,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +64,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -102,7 +107,7 @@ fun VocabRoute(
     var showSettings by remember { mutableStateOf(false) }
     // Kart destesi mi, tam liste mi. Liste "hepsini bir arada gör" için;
     // kart çalışmak için.
-    var listView by remember { mutableStateOf(false) }
+    var listView by rememberSaveable { mutableStateOf(false) }
     var menuWord by remember { mutableStateOf<VocabWord?>(null) }
     var editWord by remember { mutableStateOf<VocabWord?>(null) }
 
@@ -128,7 +133,15 @@ fun VocabRoute(
             )
             // Kalem süzgeci: kırmızı işaretlediklerin cümle, mavi
             // işaretlediklerin kelime. Tek düğme, üç durum.
-            PenToggle(pen = state.filter.pen, onClick = viewModel::cyclePen)
+            PenToggle(
+                pen = state.filter.pen,
+                count = when (state.filter.pen) {
+                    VocabPen.RED -> state.redCount
+                    VocabPen.BLUE -> state.blueCount
+                    VocabPen.BOTH -> state.redCount + state.blueCount
+                },
+                onClick = viewModel::cyclePen,
+            )
             TextButton(onClick = { listView = !listView }) {
                 Text(if (listView) "Kart" else "Liste")
             }
@@ -215,6 +228,7 @@ fun VocabRoute(
                 !state.loaded -> Text("Yükleniyor…")
                 listView -> WordList(
                     rows = state.list,
+                    emptyMessage = penEmptyMessage(state) ?: "Bu süzgeçte kelime yok.",
                     onSelect = { menuWord = it },
                 )
                 state.deck.isEmpty() -> EmptyDeck(state)
@@ -303,7 +317,7 @@ fun VocabRoute(
     }
 }
 
-/** Kelimeye uzun basınca çıkan menü. */
+/** Kelime kartına uzun basınca ya da listede satıra dokununca çıkan menü. */
 @Composable
 private fun WordMenuDialog(
     word: VocabWord,
@@ -321,8 +335,22 @@ private fun WordMenuDialog(
         text = {
             Column {
                 if (confirmDelete) {
-                    Text("Bu kelime listeden kaldırılacak. Emin misin?")
+                    Text(
+                        "Bu kelime silinecek; kitapta ya da filmde bıraktığın " +
+                            "işaret de kalkacak. Yeniden işaretlersen geri gelir.",
+                    )
                 } else {
+                    // Listeden gelindiğinde kelimenin ne olduğunu görmek
+                    // gerekiyor: menü tek başına "bu neydi?" bırakıyordu.
+                    val summary = word.meaning.ifBlank { word.definition }
+                    if (summary.isNotBlank()) {
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
                     MenuRow("Kelimeyi düzenle", onEdit)
                     if (aiReady) {
                         MenuRow("Bilgiyi yenile", onRefresh)
@@ -523,20 +551,37 @@ private fun VocabSettingsDialog(
  * Kalem süzgeci düğmesi.
  *
  * Üç durumu tek simgeyle anlatıyor: ikiye bölünmüş kare "her ikisi", dolu
- * kırmızı kare yalnız cümleler, dolu mavi kare yalnız kelimeler. Yazı yok —
- * renklerin kendisi zaten kitapta kullandığın kalemler.
+ * kırmızı kare yalnız cümleler, dolu mavi kare yalnız kelimeler. Yanındaki
+ * sayı o kalemde kaç kelime olduğunu söylüyor — düğmenin ne yaptığı ilk
+ * basışta anlaşılsın diye.
  */
 @Composable
-private fun PenToggle(pen: VocabPen, onClick: () -> Unit) {
+private fun PenToggle(
+    pen: VocabPen,
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val divider = MaterialTheme.colorScheme.surface
-    Box(
-        modifier = Modifier
-            .size(40.dp)
+    // Süzgeç açıkken düğmenin kendisi de dolu görünüyor: "bir şey saklıyorum"
+    // sinyalini renk tek başına vermiyordu.
+    val background = if (pen == VocabPen.BOTH) {
+        Color.Transparent
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    Row(
+        modifier = modifier
+            .heightIn(min = 40.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .background(background)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = pen.label }
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Canvas(modifier = Modifier.size(22.dp)) {
+        Canvas(modifier = Modifier.size(20.dp)) {
             val radius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
             when (pen) {
                 VocabPen.RED -> drawRoundRect(color = CHIP_RED, cornerRadius = radius)
@@ -556,6 +601,11 @@ private fun PenToggle(pen: VocabPen, onClick: () -> Unit) {
                 }
             }
         }
+        Text(
+            text = "$count",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -567,10 +617,14 @@ private fun PenToggle(pen: VocabPen, onClick: () -> Unit) {
  * renk şeridi kitapta hangi kalemle işaretlediğini söylüyor.
  */
 @Composable
-private fun WordList(rows: List<VocabListItem>, onSelect: (VocabWord) -> Unit) {
+private fun WordList(
+    rows: List<VocabListItem>,
+    emptyMessage: String,
+    onSelect: (VocabWord) -> Unit,
+) {
     if (rows.isEmpty()) {
         Text(
-            text = "Bu süzgeçte kelime yok.",
+            text = emptyMessage,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -579,11 +633,10 @@ private fun WordList(rows: List<VocabListItem>, onSelect: (VocabWord) -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
+        contentPadding = PaddingValues(vertical = 6.dp),
     ) {
-        // Anahtar vermiyoruz: aynı kelime iki ayrı kitapta işaretlenmiş
-        // olabiliyor ve yinelenen anahtar listeyi çökertir.
-        items(rows) { item ->
+        // Kelime benzersiz: depo aynı kelimenin ikinci kaydını eliyor.
+        items(rows, key = { it.word.word }) { item ->
             WordRow(item = item, onClick = { onSelect(item.word) })
         }
     }
@@ -604,14 +657,17 @@ private fun WordRow(item: VocabListItem, onClick: () -> Unit) {
             .clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.padding(start = 10.dp, top = 10.dp, end = 12.dp, bottom = 10.dp),
+            modifier = Modifier
+                .height(IntrinsicSize.Min)
+                .padding(start = 10.dp, top = 10.dp, end = 12.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Kalem şeridi: kırmızı cümle, mavi kelime.
+            // Kalem şeridi: kırmızı cümle, mavi kelime. Satır iki satırlık
+            // bir cümle olduğunda da boyunca uzuyor, ortada asılı kalmıyor.
             Box(
                 modifier = Modifier
                     .width(4.dp)
-                    .height(34.dp)
+                    .fillMaxHeight()
                     .clip(RoundedCornerShape(2.dp))
                     .background(penColor),
             )
@@ -636,38 +692,33 @@ private fun WordRow(item: VocabListItem, onClick: () -> Unit) {
                 }
             }
             Spacer(Modifier.width(10.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                SourcePill(word.sourceName.ifBlank { word.source.label })
+            // Kaynak sabit genişlikte: satırlar alt alta gelince sağ kenar
+            // hizalı duruyor, "aynı satırda" gerçekten bir sütun oluyor.
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.width(104.dp),
+            ) {
+                Text(
+                    text = word.sourceName.ifBlank { word.source.label },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.End,
+                )
                 val status = statusLabel(item.status)
                 if (status != null) {
                     Text(
                         text = status,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 3.dp),
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
             }
         }
     }
-}
-
-/** Kaynağın adı: satırın sağ ucunda, kelimeyle aynı hizada. */
-@Composable
-private fun SourcePill(name: String) {
-    Text(
-        text = name,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurface,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.End,
-        modifier = Modifier
-            .widthIn(max = 120.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    )
 }
 
 private fun statusLabel(status: VocabStatus?): String? = when (status) {
@@ -682,6 +733,27 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(selected = selected, onClick = onClick, label = { Text(label, fontSize = 12.sp) })
 }
 
+/**
+ * Boşluğun sebebi kalem süzgeciyse onu söyleyen ileti; değilse null.
+ */
+private fun penEmptyMessage(state: VocabUiState): String? = when (state.filter.pen) {
+    VocabPen.RED -> if (state.redCount == 0 && state.blueCount > 0) {
+        "Bu kapsamda kırmızı kalemli yok; ${state.blueCount} mavi var. " +
+            "Kare simgeye bas."
+    } else {
+        null
+    }
+
+    VocabPen.BLUE -> if (state.blueCount == 0 && state.redCount > 0) {
+        "Bu kapsamda mavi kalemli yok; ${state.redCount} kırmızı var. " +
+            "Kare simgeye bas."
+    } else {
+        null
+    }
+
+    VocabPen.BOTH -> null
+}
+
 @Composable
 private fun EmptyDeck(state: VocabUiState) {
     Column(
@@ -689,7 +761,9 @@ private fun EmptyDeck(state: VocabUiState) {
         modifier = Modifier.padding(24.dp),
     ) {
         Text(
-            text = when (state.mode) {
+            // Kalem süzgeci açıkken "hiç kelime yok" demek yanıltıcı: kelime
+            // var, süzgeç saklıyor. Önce onu söylüyoruz.
+            text = penEmptyMessage(state) ?: when (state.mode) {
                 VocabMode.TODAY -> "Bugün tekrar edilecek kelime yok."
                 VocabMode.NEW -> "Karar verilmemiş kelime kalmadı."
                 VocabMode.ALL -> "Burada kelime yok. Kitapta ya da altyazıda " +

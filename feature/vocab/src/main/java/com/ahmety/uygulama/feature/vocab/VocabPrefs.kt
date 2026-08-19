@@ -18,8 +18,18 @@ class VocabPrefs(context: Context) {
         get() = prefs.getInt(KEY_THRESHOLD, 40).coerceIn(20, 160)
         set(value) = prefs.edit().putInt(KEY_THRESHOLD, value.coerceIn(20, 160)).apply()
 
+    /**
+     * Kalem süzgeci. Sekmeler arasında gidip gelince ekran sıfırdan
+     * kuruluyor; "yalnız kırmızılar" seçimi her seferinde bozulmasın.
+     */
+    var pen: VocabPen
+        get() = runCatching { VocabPen.valueOf(prefs.getString(KEY_PEN, null).orEmpty()) }
+            .getOrDefault(VocabPen.BOTH)
+        set(value) = prefs.edit().putString(KEY_PEN, value.name).apply()
+
     private companion object {
         const val PREFS_NAME = "merkez_kelime"
         const val KEY_THRESHOLD = "swipe_threshold"
+        const val KEY_PEN = "pen"
     }
 }
