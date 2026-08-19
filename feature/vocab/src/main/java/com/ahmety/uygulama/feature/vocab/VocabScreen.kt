@@ -72,6 +72,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -110,6 +112,9 @@ fun VocabRoute(
     // kart çalışmak için.
     var listView by rememberSaveable { mutableStateOf(false) }
     var menuWord by remember { mutableStateOf<VocabWord?>(null) }
+    // Listeden açılan kart. Destedekinden farkı: karar verilmiyor, sadece
+    // bakılıyor.
+    var cardWord by remember { mutableStateOf<VocabWord?>(null) }
     var editWord by remember { mutableStateOf<VocabWord?>(null) }
 
     Column(
@@ -230,7 +235,8 @@ fun VocabRoute(
                 listView -> WordList(
                     rows = state.list,
                     emptyMessage = penEmptyMessage(state) ?: "Bu süzgeçte kelime yok.",
-                    onSelect = { menuWord = it },
+                    onSelect = { cardWord = it },
+                    onLongPress = { menuWord = it },
                 )
                 state.deck.isEmpty() -> EmptyDeck(state)
                 else -> {
@@ -282,6 +288,10 @@ fun VocabRoute(
         )
     }
 
+    cardWord?.let { word ->
+        WordCardDialog(word = word, onDismiss = { cardWord = null })
+    }
+
     menuWord?.let { word ->
         WordMenuDialog(
             word = word,
@@ -315,6 +325,40 @@ fun VocabRoute(
             },
             onDismiss = { editWord = null },
         )
+    }
+}
+
+/**
+ * Listeden açılan kart.
+ *
+ * Destedeki kartın aynısı, ama açık hâlde ve karar vermeden: listeye
+ * "şu kelime neydi" diye bakmaya geliyorsun, sağa sola atmaya değil.
+ */
+@Composable
+private fun WordCardDialog(word: VocabWord, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                WordCard(
+                    word = word,
+                    tint = Color.Transparent,
+                    interactive = false,
+                    revealed = true,
+                    scrollState = rememberScrollState(),
+                )
+            }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.End),
+            ) { Text("Kapat") }
+        }
     }
 }
 
@@ -622,6 +666,7 @@ private fun WordList(
     rows: List<VocabListItem>,
     emptyMessage: String,
     onSelect: (VocabWord) -> Unit,
+    onLongPress: (VocabWord) -> Unit,
 ) {
     if (rows.isEmpty()) {
         Text(
@@ -638,13 +683,21 @@ private fun WordList(
     ) {
         // Kelime benzersiz: depo aynı kelimenin ikinci kaydını eliyor.
         items(rows, key = { it.word.word }) { item ->
-            WordRow(item = item, onClick = { onSelect(item.word) })
+            WordRow(
+                item = item,
+                onClick = { onSelect(item.word) },
+                onLongClick = { onLongPress(item.word) },
+            )
         }
     }
 }
 
 @Composable
-private fun WordRow(item: VocabListItem, onClick: () -> Unit) {
+private fun WordRow(
+    item: VocabListItem,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     val word = item.word
     val penColor = if (word.isPassage) CHIP_RED else CHIP_BLUE
     Card(
@@ -655,7 +708,8 @@ private fun WordRow(item: VocabListItem, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            // Kartla aynı sözleşme: dokun bak, uzun bas menü.
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(
             modifier = Modifier
