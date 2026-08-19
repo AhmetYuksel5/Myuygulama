@@ -4,6 +4,7 @@ package com.ahmety.uygulama.feature.vocab
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -20,7 +21,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -45,7 +50,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -64,6 +72,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.model.Collocation
 import com.ahmety.uygulama.core.model.VocabSource
+import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -91,6 +100,9 @@ fun VocabRoute(
     val aiReady = viewModel.aiConfigured
     val density = LocalDensity.current
     var showSettings by remember { mutableStateOf(false) }
+    // Kart destesi mi, tam liste mi. Liste "hepsini bir arada gör" için;
+    // kart çalışmak için.
+    var listView by remember { mutableStateOf(false) }
     var menuWord by remember { mutableStateOf<VocabWord?>(null) }
     var editWord by remember { mutableStateOf<VocabWord?>(null) }
 
@@ -114,6 +126,12 @@ fun VocabRoute(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            // Kalem süzgeci: kırmızı işaretlediklerin cümle, mavi
+            // işaretlediklerin kelime. Tek düğme, üç durum.
+            PenToggle(pen = state.filter.pen, onClick = viewModel::cyclePen)
+            TextButton(onClick = { listView = !listView }) {
+                Text(if (listView) "Kart" else "Liste")
+            }
             TextButton(onClick = { showSettings = !showSettings }) { Text("Ayar") }
         }
 
@@ -195,6 +213,10 @@ fun VocabRoute(
         ) {
             when {
                 !state.loaded -> Text("Yükleniyor…")
+                listView -> WordList(
+                    rows = state.list,
+                    onSelect = { menuWord = it },
+                )
                 state.deck.isEmpty() -> EmptyDeck(state)
                 else -> {
                     state.deck.getOrNull(1)?.let { next ->
@@ -495,6 +517,164 @@ private fun VocabSettingsDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
     )
+}
+
+/**
+ * Kalem süzgeci düğmesi.
+ *
+ * Üç durumu tek simgeyle anlatıyor: ikiye bölünmüş kare "her ikisi", dolu
+ * kırmızı kare yalnız cümleler, dolu mavi kare yalnız kelimeler. Yazı yok —
+ * renklerin kendisi zaten kitapta kullandığın kalemler.
+ */
+@Composable
+private fun PenToggle(pen: VocabPen, onClick: () -> Unit) {
+    val divider = MaterialTheme.colorScheme.surface
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(22.dp)) {
+            val radius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+            when (pen) {
+                VocabPen.RED -> drawRoundRect(color = CHIP_RED, cornerRadius = radius)
+                VocabPen.BLUE -> drawRoundRect(color = CHIP_BLUE, cornerRadius = radius)
+                VocabPen.BOTH -> {
+                    drawRoundRect(color = CHIP_RED, cornerRadius = radius)
+                    clipRect(left = size.width / 2f) {
+                        drawRoundRect(color = CHIP_BLUE, cornerRadius = radius)
+                    }
+                    // İnce ayraç: iki yarım tek renk gibi görünmesin.
+                    drawLine(
+                        color = divider,
+                        start = Offset(size.width / 2f, 0f),
+                        end = Offset(size.width / 2f, size.height),
+                        strokeWidth = 1.5.dp.toPx(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Kapsamdaki bütün kelimeler, alfabetik.
+ *
+ * Kart destesi tek tek çalışmak için; bu liste ne olduğunu bir bakışta
+ * görmek için. Her satırda kelime solda, geldiği kaynak sağda; soldaki
+ * renk şeridi kitapta hangi kalemle işaretlediğini söylüyor.
+ */
+@Composable
+private fun WordList(rows: List<VocabListItem>, onSelect: (VocabWord) -> Unit) {
+    if (rows.isEmpty()) {
+        Text(
+            text = "Bu süzgeçte kelime yok.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
+    ) {
+        // Anahtar vermiyoruz: aynı kelime iki ayrı kitapta işaretlenmiş
+        // olabiliyor ve yinelenen anahtar listeyi çökertir.
+        items(rows) { item ->
+            WordRow(item = item, onClick = { onSelect(item.word) })
+        }
+    }
+}
+
+@Composable
+private fun WordRow(item: VocabListItem, onClick: () -> Unit) {
+    val word = item.word
+    val penColor = if (word.isPassage) CHIP_RED else CHIP_BLUE
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 10.dp, top = 10.dp, end = 12.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Kalem şeridi: kırmızı cümle, mavi kelime.
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(penColor),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = word.word,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = if (word.isPassage) 2 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val second = word.meaning.ifBlank { word.definition }
+                if (second.isNotBlank()) {
+                    Text(
+                        text = second,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                SourcePill(word.sourceName.ifBlank { word.source.label })
+                val status = statusLabel(item.status)
+                if (status != null) {
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Kaynağın adı: satırın sağ ucunda, kelimeyle aynı hizada. */
+@Composable
+private fun SourcePill(name: String) {
+    Text(
+        text = name,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.End,
+        modifier = Modifier
+            .widthIn(max = 120.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
+}
+
+private fun statusLabel(status: VocabStatus?): String? = when (status) {
+    VocabStatus.KNOWN -> "öğrendim"
+    VocabStatus.LEARNING -> "çalışıyorum"
+    VocabStatus.IGNORED -> "önemsiz"
+    else -> null
 }
 
 @Composable

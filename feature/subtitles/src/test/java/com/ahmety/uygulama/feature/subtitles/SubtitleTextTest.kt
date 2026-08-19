@@ -79,6 +79,35 @@ class SubtitleTextTest {
     }
 
     @Test
+    fun `bicim etiketleri ve konum etiketleri temizleniyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            {\an8}<font color="#ffffff">Meet me at the <b>docks</b>.</font>
+        """.trimIndent()
+
+        val lines = SubtitleText.lines(srt)
+        assertEquals(listOf("Meet me at the docks."), lines)
+    }
+
+    @Test
+    fun `nokta ve rakamlar kelime sanilmiyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            Room 237 -- well-lit, quiet, O'Brien said.
+        """.trimIndent()
+
+        val words = SubtitleText.words(srt).map { it.word }
+        assertTrue("well-lit" in words)
+        assertTrue("room" in words)
+        assertTrue("said" in words)
+        // Rakamlar, kesme işaretliler ve üç harften kısalar dışarıda.
+        assertTrue(words.none { it.any(Char::isDigit) })
+        assertTrue(words.none { it.contains('\'') })
+    }
+
+    @Test
     fun `ayni surum grubu eslesiyor`() {
         val english = "The.Matrix.1999.1080p.BluRay.x264-YIFY"
         val turkishYify = "The.Matrix.1999.1080p.BluRay.x264.YTS"

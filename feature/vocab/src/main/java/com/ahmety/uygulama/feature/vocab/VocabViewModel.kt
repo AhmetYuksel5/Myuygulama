@@ -48,10 +48,38 @@ enum class VocabMode(val label: String) {
     KNOWN("Öğrendiklerim"),
 }
 
+/**
+ * Kalem süzgeci.
+ *
+ * Kitapta mavi işaretlediklerin kelime, kırmızı işaretlediklerin ise
+ * anlamadığın cümle/cümlecik. İkisi farklı iş: kelime ezberlerken cümle
+ * çözümlemesi araya girmesin diye ayrı ayrı çalışılabiliyor.
+ */
+enum class VocabPen(val label: String) {
+    BOTH("Kırmızı + mavi"),
+    RED("Kırmızı (cümleler)"),
+    BLUE("Mavi (kelimeler)"),
+    ;
+
+    /** Düğmeye her basışta sıradaki: her ikisi → kırmızı → mavi → her ikisi. */
+    fun next(): VocabPen = when (this) {
+        BOTH -> RED
+        RED -> BLUE
+        BLUE -> BOTH
+    }
+}
+
 /** Kaynak süzgeci: tümü, yalnız kitaplar, yalnız filmler ya da tek bir başlık. */
 data class VocabFilter(
     val source: VocabSource? = null,
     val sourceName: String = "",
+    val pen: VocabPen = VocabPen.BOTH,
+)
+
+/** Tam listedeki bir satır: kelime, kaynağı ve nerede olduğu. */
+data class VocabListItem(
+    val word: VocabWord,
+    val status: VocabStatus?,
 )
 
 data class VocabUiState(
@@ -67,6 +95,11 @@ data class VocabUiState(
     val newCount: Int = 0,
     /** Seçili kaynaktaki toplam kelime sayısı. */
     val totalCount: Int = 0,
+    /** Kırmızı ve mavi kalemli kelime sayıları (kalem süzgecinden önce). */
+    val redCount: Int = 0,
+    val blueCount: Int = 0,
+    /** Seçili kapsamdaki her kelime, alfabetik: "hepsini gör" listesi için. */
+    val list: List<VocabListItem> = emptyList(),
     /** Bugün vadesi gelen kelime sayısı (kuyruk sınırından önce). */
     val dueToday: Int = 0,
     /** Bugün eklenen yeni kelime sayısı ve günlük sınır. */
@@ -171,13 +204,20 @@ class VocabViewModel @Inject constructor(
 
         // Kaynak asıl kapsam: bir kitap seçildiğinde bütün sayaçlar ve
         // bölmeler o kitabın içinde çalışıyor. Kaynak seçilmemişse her şey.
-        val filtered = words.filter { word ->
+        val scoped = words.filter { word ->
             val filter = sessionState.filter
             when {
                 filter.sourceName.isNotBlank() -> word.sourceName == filter.sourceName
                 filter.source != null -> word.source == filter.source
                 else -> true
             }
+        }
+
+        // Kalem süzgeci kaynağın içinde çalışıyor: "şu kitabın kırmızıları".
+        val filtered = when (sessionState.filter.pen) {
+            VocabPen.BOTH -> scoped
+            VocabPen.RED -> scoped.filter { it.isPassage }
+            VocabPen.BLUE -> scoped.filter { !it.isPassage }
         }
 
         val schedules = progress.associateBy({ it.word }, { it.toSchedule() })
@@ -273,6 +313,14 @@ class VocabViewModel @Inject constructor(
             unsureCount = ignored,
             newCount = untouched,
             totalCount = filtered.size,
+            redCount = scoped.count { it.isPassage },
+            blueCount = scoped.count { !it.isPassage },
+            // Liste de bölmeye uyuyor: "Öğrendiklerim"e basılıyken listede de
+            // yalnız onlar olmalı. "Tümü" ise gerçekten tümü — kart destesi
+            // öğrendiklerini ve önemsizleri atlıyor, liste atlamıyor.
+            list = (if (currentMode == VocabMode.ALL) filtered else deck)
+                .sortedBy { it.word.lowercase() }
+                .map { VocabListItem(word = it, status = statusOf(it)) },
             bookCount = bookWords.count { it.source == VocabSource.BOOK },
             subtitleCount = bookWords.count { it.source == VocabSource.SUBTITLE },
             selectionCount = bookWords.count { it.source == VocabSource.SELECTION },
@@ -378,7 +426,19 @@ class VocabViewModel @Inject constructor(
     }
 
     fun setFilter(filter: VocabFilter) {
-        session.value = session.value.copy(filter = filter, turn = session.value.turn + 1)
+        // Kaynak değişse de kalem seçimi korunuyor: iki süzgeç birbirinden
+        // bağımsız, kitap değiştirince "yalnız kırmızılar" bozulmamalı.
+        val kept = filter.copy(pen = session.value.filter.pen)
+        session.value = session.value.copy(filter = kept, turn = session.value.turn + 1)
+    }
+
+    /** Kalem düğmesi: her ikisi → kırmızı → mavi → her ikisi. */
+    fun cyclePen() {
+        val current = session.value.filter
+        session.value = session.value.copy(
+            filter = current.copy(pen = current.pen.next()),
+            turn = session.value.turn + 1,
+        )
     }
 
     /**

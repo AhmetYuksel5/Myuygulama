@@ -16,9 +16,55 @@ data class SubtitleWord(
  */
 object SubtitleText {
 
-    private val TIME_LINE = Regex("""\d{1,2}:\d{2}:\d{2}[,.]\d{3}\s*-->""")
-    private val TAG = Regex("""<[^>]+>|\{[^}]*}""")
-    private val WORD = Regex("""[A-Za-z][A-Za-z'-]*""")
+    // Burada bilerek düzenli ifade (Regex) kullanmıyoruz. Önceki sürümde üç
+    // Regex, nesne kurulurken hazırlanıyordu; biri kurulamayınca sınıfın
+    // kendisi yüklenemez oluyor ve akış "Beklenmedik hata: ...SubtitleText"
+    // diye bitiyordu, asıl sebebi göstermeden. Elle yazılan tarayıcılar hem
+    // daha hızlı hem de kurulurken hiçbir iş yapmıyorlar: bu sınıf artık
+    // yüklenirken çökemez.
+
+    /** Zaman satırı: "00:01:02,500 --> 00:01:04,000". Oku yeter. */
+    private fun isTimeLine(line: String): Boolean = line.contains("-->")
+
+    /** `<i>`, `{\an8}` gibi biçim etiketlerini atar. */
+    private fun stripTags(line: String): String {
+        if (!line.contains('<') && !line.contains('{')) return line
+        val out = StringBuilder(line.length)
+        var depth = 0
+        line.forEach { char ->
+            when {
+                char == '<' || char == '{' -> depth++
+                (char == '>' || char == '}') && depth > 0 -> depth--
+                depth == 0 -> out.append(char)
+            }
+        }
+        return out.toString()
+    }
+
+    /**
+     * Satırdaki kelimeler. Harfle başlayan, harf/kesme/tire ile süren
+     * diziler. Rakam ve noktalama kelime değil.
+     */
+    private fun tokens(line: String): List<String> {
+        val found = ArrayList<String>()
+        var index = 0
+        while (index < line.length) {
+            if (!line[index].isAsciiLetter()) {
+                index++
+                continue
+            }
+            val start = index
+            while (index < line.length &&
+                (line[index].isAsciiLetter() || line[index] == '\'' || line[index] == '-')
+            ) {
+                index++
+            }
+            found.add(line.substring(start, index))
+        }
+        return found
+    }
+
+    private fun Char.isAsciiLetter(): Boolean = this in 'a'..'z' || this in 'A'..'Z'
 
     /** Altyazıdaki konuşma satırları, sırayla. */
     fun lines(srt: String): List<String> = srt
@@ -28,8 +74,8 @@ object SubtitleText {
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .filterNot { it.all { char -> char.isDigit() } }
-        .filterNot { TIME_LINE.containsMatchIn(it) }
-        .map { TAG.replace(it, "").replace("- ", "").trim() }
+        .filterNot { isTimeLine(it) }
+        .map { stripTags(it).replace("- ", "").trim() }
         .filter { it.isNotEmpty() }
         .toList()
 
@@ -51,8 +97,7 @@ object SubtitleText {
                 line,
                 all.getOrNull(index + 1),
             ).joinToString(" ")
-            WORD.findAll(line).forEach { match ->
-                val raw = match.value
+            tokens(line).forEach { raw ->
                 if (raw.contains('\'')) return@forEach
                 val word = raw.lowercase().trim('-')
                 if (word.length < 3) return@forEach
@@ -86,7 +131,7 @@ object SubtitleText {
                 line,
                 all.getOrNull(index + 1),
             ).joinToString(" ")
-            val tokens = WORD.findAll(line).map { it.value.lowercase() }.toList()
+            val tokens = tokens(line).map { it.lowercase() }
 
             IDIOMS.forEach { idiom ->
                 if (line.contains(idiom, ignoreCase = true)) {

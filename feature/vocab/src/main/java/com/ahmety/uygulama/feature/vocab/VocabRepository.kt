@@ -38,7 +38,6 @@ class VocabRepository @Inject constructor(
     private val vocabDao: VocabDao,
     private val entryRepository: EntryRepository,
     private val enrichment: WordEnrichmentStore,
-    private val hidden: HiddenWordStore,
     private val changeRecorder: ChangeRecorder,
     private val json: Json,
     private val now: Now,
@@ -62,7 +61,6 @@ class VocabRepository @Inject constructor(
             // İkisi de çalışılacak; kartta farklı davranıyorlar.
             .filter { HighlightRef.color(it.source) in STUDIED_COLORS }
             .filter { it.title.isNotBlank() }
-            .filter { it.title.trim().lowercase() !in hidden.words() }
             .map { entry ->
                 val word = entry.title.trim()
                 // Daha önce yapay zekâyla doldurulduysa onu kullan.
@@ -103,12 +101,18 @@ class VocabRepository @Inject constructor(
      * Sabit destedeki kelimenin kaydı asset'te; onu silemeyiz, gizlenenler
      * listesine yazıyoruz.
      */
+    /**
+     * Kelimeyi kökünden siler: kitaptaki/filmdeki işaret de gidiyor.
+     *
+     * Eskiden yalnızca listeden gizliyorduk; kitabı açınca kelime hâlâ
+     * boyalı duruyordu. Artık kaydın kendisi siliniyor, yani kitapta da
+     * işaret kalkıyor. Aynı kelimeyi yeniden işaretlersen geri gelir —
+     * silmek "bir daha asla" değil, "bunu istemiyorum" demek.
+     */
     suspend fun deleteWord(word: VocabWord) {
         entryRepository.listByType(EntryType.HIGHLIGHT)
-            .filter { it.title.trim().equals(word.word, ignoreCase = true) }
+            .filter { it.title.trim().equals(word.word.trim(), ignoreCase = true) }
             .forEach { entryRepository.deleteEntry(it.id) }
-        // Aynı kelime kitapta yeniden işaretlenirse geri gelmesin.
-        hidden.hide(word.word)
     }
 
     /** Kullanıcının elle düzenlediği ya da çoğalttığı kelime bilgisi. */

@@ -60,7 +60,7 @@ class SubtitleViewModel @Inject constructor(
             val outcome = runCatching {
                 repository.prepare(current.query, current.year.toIntOrNull())
             }.getOrElse { error ->
-                SubtitleResult.Failed("Beklenmedik hata: ${error.message ?: error::class.simpleName}")
+                SubtitleResult.Failed("Beklenmedik hata: ${describe(error)}")
             }
             when (val result = outcome) {
                 is SubtitleResult.Failed -> _state.value = _state.value.copy(
@@ -75,19 +75,24 @@ class SubtitleViewModel @Inject constructor(
                         pair = result.value,
                         step = "Bilmediğin kelimeler çıkarılıyor…",
                     )
-                    val words = runCatching {
+                    // Kelime çıkarma patlarsa bunu "kelime bulunamadı" diye
+                    // göstermek yanıltıyordu: sebebi olduğu gibi yazıyoruz.
+                    val extracted = runCatching {
                         repository.extractWords(result.value, WORD_LIMIT)
-                    }.getOrElse { emptyList() }
+                    }
+                    val words = extracted.getOrDefault(emptyList())
+                    val failure = extracted.exceptionOrNull()
                     _state.value = _state.value.copy(
                         busy = false,
                         step = "",
                         words = words,
-                        message = if (words.isEmpty()) {
-                            "Seviyenin üstünde kelime bulunamadı — bu filmi rahat izlersin."
-                        } else {
-                            null
+                        message = when {
+                            failure != null -> "Kelimeler çıkarılamadı: ${describe(failure)}"
+                            words.isEmpty() ->
+                                "Seviyenin üstünde kelime bulunamadı — bu filmi rahat izlersin."
+                            else -> null
                         },
-                        failed = false,
+                        failed = failure != null,
                     )
                 }
             }
@@ -112,6 +117,26 @@ class SubtitleViewModel @Inject constructor(
     }
 
     private companion object {
+        /**
+         * Hatayı okunur hâle getirir.
+         *
+         * Yalnız `message` yazınca bazı hatalar tek başına anlamsız kalıyordu
+         * (sınıf yüklenemediğinde ileti yalnızca sınıfın adı oluyor). Sebep
+         * zincirini ve hatanın çıktığı satırı da yazıyoruz ki bir dahaki
+         * seferde tahmin etmek zorunda kalmayalım.
+         */
+        fun describe(error: Throwable): String {
+            val chain = generateSequence(error) { it.cause }
+                .take(3)
+                .joinToString(" ← ") {
+                    "${it::class.java.simpleName}: ${it.message ?: "-"}"
+                }
+            val frame = error.stackTrace.firstOrNull()?.let {
+                "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}"
+            }
+            return listOfNotNull(chain, frame).joinToString(" @ ")
+        }
+
         /**
          * Bir filmden çıkarılan en fazla kelime. Sınırsız olsaydı tek filmden
          * üç yüz kelime düşerdi ve tekrar programı boğulurdu.
