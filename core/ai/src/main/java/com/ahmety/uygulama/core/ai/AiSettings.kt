@@ -24,6 +24,15 @@ class AiSettings @Inject constructor(
         get() = prefs.getString(KEY_API, null).orEmpty()
         set(value) = prefs.edit().putString(KEY_API, value.trim()).apply()
 
+    /**
+     * Kullanılacak model. Ucuz olanı çoğu kelime için yetiyor ama zor
+     * cümlelerde büyük model gözle görülür biçimde daha iyi çözümlüyor;
+     * hangisini kullanacağına sen karar ver.
+     */
+    var model: String
+        get() = prefs.getString(KEY_MODEL, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
+        set(value) = prefs.edit().putString(KEY_MODEL, value.trim()).apply()
+
     val configured: Boolean get() = apiKey.isNotBlank()
 
     /** Ekranda gösterirken anahtarın tamamını asla yazmıyoruz. */
@@ -37,8 +46,19 @@ class AiSettings @Inject constructor(
         prefs.edit().remove(KEY_API).apply()
     }
 
+    companion object {
+        const val DEFAULT_MODEL = "gpt-4o-mini"
+
+        /**
+         * Hazır seçenekler. Liste kapalı değil: OpenAI yeni bir model
+         * çıkardığında adını elle yazabilesin diye kutu da düzenlenebilir.
+         */
+        val MODELS = listOf("gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1")
+    }
+
     private companion object {
         const val PREFS_NAME = "merkez_yapay_zeka"
         const val KEY_API = "openai_key"
+        const val KEY_MODEL = "model"
     }
 }

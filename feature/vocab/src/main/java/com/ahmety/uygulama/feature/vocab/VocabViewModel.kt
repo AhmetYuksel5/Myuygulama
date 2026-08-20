@@ -145,7 +145,12 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(word.word, word.context, word.isPassage)) {
+            when (val result = openAi.describeWord(
+                word = word.word,
+                context = word.context,
+                passage = word.isPassage,
+                sourceName = word.sourceName,
+            )) {
                 is AiResult.Ok -> {
                     repository.saveEnrichment(result.value)
                     _aiMessage.value = null
@@ -355,6 +360,17 @@ class VocabViewModel @Inject constructor(
     fun skip(word: VocabWord, revealed: Boolean) =
         decide(word, VocabDecision.POSTPONE, revealed)
 
+    /** Mavi (kelime) ile kırmızı (cümle) arasında geçiş. */
+    fun setPassage(word: VocabWord, passage: Boolean) {
+        viewModelScope.launch {
+            repository.setPassage(word, passage)
+            session.value = session.value.copy(
+                refresh = session.value.refresh + 1,
+                turn = session.value.turn + 1,
+            )
+        }
+    }
+
     /** Listeden tamamen kaldır. */
     fun delete(word: VocabWord) {
         advance(word)
@@ -399,7 +415,12 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(word.word, word.context, word.isPassage)) {
+            when (val result = openAi.describeWord(
+                word = word.word,
+                context = word.context,
+                passage = word.isPassage,
+                sourceName = word.sourceName,
+            )) {
                 is AiResult.Ok -> {
                     repository.saveEnrichment(result.value)
                     _aiMessage.value = null
@@ -416,7 +437,12 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(word.word, word.context, word.isPassage)) {
+            when (val result = openAi.describeWord(
+                word = word.word,
+                context = word.context,
+                passage = word.isPassage,
+                sourceName = word.sourceName,
+            )) {
                 is AiResult.Ok -> {
                     val fresh = result.value
                     repository.saveEdit(

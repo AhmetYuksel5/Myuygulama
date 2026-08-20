@@ -65,20 +65,29 @@ class OpenAiClient @Inject constructor(
         word: String,
         context: String = "",
         passage: Boolean = false,
+        sourceName: String = "",
     ): AiResult<WordInfo> {
         // "word" tek kelime de olabilir, kitaptan seçilmiş bir öbek de.
         val key = settings.apiKey
         if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
 
         val instruction = if (passage) passageInstruction() else wordInstruction()
-        val userText = if (context.isBlank()) {
-            "Input: $word"
-        } else {
-            "Input: $word\nIt appeared in this sentence, so prefer the meaning that fits it:\n$context"
+        // Kitabın ya da filmin adı da gidiyor: aynı cümle bir mafya filminde
+        // ve bir iş kitabında farklı şey demek olabiliyor, argo ve göndermeler
+        // ancak eseri bilerek çözülüyor.
+        val userText = buildString {
+            append("Input: ").append(word)
+            if (sourceName.isNotBlank()) {
+                append("\nIt is from this book or film: ").append(sourceName)
+            }
+            if (context.isNotBlank()) {
+                append("\nIt appeared in this passage, so prefer the reading that fits it:\n")
+                append(context)
+            }
         }
 
         val payload = JSONObject().apply {
-            put("model", MODEL)
+            put("model", settings.model)
             put("temperature", 0.3)
             put("response_format", JSONObject().put("type", "json_object"))
             put(
@@ -231,11 +240,18 @@ class OpenAiClient @Inject constructor(
         append("You are a bilingual English-Turkish teacher. ")
         append("The input is a sentence or clause a Turkish learner did not understand. ")
         append("Any surrounding text is context only — explain THE INPUT itself. ")
+        append("If you are told which book or film it comes from, use that: the ")
+        append("same line can mean different things in a mob film and in a ")
+        append("business book, and slang, allusions and running jokes only make ")
+        append("sense once you know the work. ")
         append("Return STRICT JSON with keys: ")
-        append("t (natural Turkish translation of the input), ")
         append("d (the same idea in simple English, max 15 words), ")
-        append("e (array of 1-3 short notes in Turkish explaining what makes it hard: ")
-        append("idiom, phrasal verb, inversion, ellipsis, tense — name it and explain), ")
+        append("t (natural Turkish translation of the input), ")
+        append("e (array of 1-3 short notes in Turkish explaining what makes it ")
+        append("hard — an idiom, a cultural reference, an omitted word, an ")
+        append("unusual tense: name it and explain it. Never write a note about ")
+        append("inversion or word order; it is not what stops a reader. Say ")
+        append("nothing rather than filling the list), ")
         append("r (array of 0-4 idioms or phrasal verbs that appear in it, ")
         append("each as \"expression — Turkish meaning\"), ")
         append("c, f, x, s, a (empty arrays), k (empty string). ")
@@ -348,7 +364,7 @@ class OpenAiClient @Inject constructor(
 
     private companion object {
         const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
-        const val MODEL = "gpt-4o-mini"
+
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     }
 }

@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -41,6 +43,14 @@ class AiSettingsViewModel @Inject constructor(
     fun clear() = settings.clear()
 
     fun configured(): Boolean = settings.configured
+
+    fun model(): String = settings.model
+
+    fun saveModel(value: String) {
+        settings.model = value.ifBlank { AiSettings.DEFAULT_MODEL }
+    }
+
+    val models: List<String> get() = AiSettings.MODELS
 }
 
 /**
@@ -59,6 +69,7 @@ fun AiSettingsScreen(
     var configured by remember { mutableStateOf(viewModel.configured()) }
     var masked by remember { mutableStateOf(viewModel.masked()) }
     var saved by remember { mutableStateOf(false) }
+    var model by remember { mutableStateOf(viewModel.model()) }
 
     Column(
         modifier = modifier
@@ -133,6 +144,38 @@ fun AiSettingsScreen(
                 }
             }
         }
+
+        // Model seçimi: ucuz olan çoğu kelimeye yetiyor, zor cümlelerde
+        // büyük model gözle görülür biçimde daha iyi çözümlüyor. Liste kapalı
+        // değil, yeni bir modelin adını elle de yazabiliyorsun.
+        Text("Model", style = MaterialTheme.typography.titleSmall)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            viewModel.models.forEach { option ->
+                FilterChip(
+                    selected = model == option,
+                    onClick = {
+                        model = option
+                        viewModel.saveModel(option)
+                    },
+                    label = { Text(option) },
+                )
+            }
+        }
+        OutlinedTextField(
+            value = model,
+            onValueChange = {
+                model = it
+                viewModel.saveModel(it)
+            },
+            label = { Text("Model adı") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         if (saved) {
             Text(

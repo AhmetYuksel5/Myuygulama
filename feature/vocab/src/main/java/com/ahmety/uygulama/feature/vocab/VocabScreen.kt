@@ -290,6 +290,10 @@ fun VocabRoute(
                 menuWord = null
                 editWord = word
             },
+            onTogglePen = {
+                menuWord = null
+                viewModel.setPassage(word, !word.isPassage)
+            },
             onRefresh = {
                 menuWord = null
                 viewModel.refresh(word)
@@ -358,6 +362,7 @@ private fun WordMenuDialog(
     word: VocabWord,
     aiReady: Boolean,
     onEdit: () -> Unit,
+    onTogglePen: () -> Unit,
     onRefresh: () -> Unit,
     onMoreExamples: () -> Unit,
     onDelete: () -> Unit,
@@ -386,7 +391,11 @@ private fun WordMenuDialog(
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                     }
-                    MenuRow("Kelimeyi düzenle", onEdit)
+                    MenuRow(if (word.isPassage) "Cümleyi düzenle" else "Kelimeyi düzenle", onEdit)
+                    MenuRow(
+                        if (word.isPassage) "Mavi yap (kelime)" else "Kırmızı yap (cümle)",
+                        onTogglePen,
+                    )
                     if (aiReady) {
                         MenuRow("Bilgiyi yenile", onRefresh)
                         MenuRow("Örnek çoğalt", onMoreExamples)
@@ -1112,6 +1121,65 @@ private fun WordCard(
                             text = word.context,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                } else if (word.isPassage) {
+                    // Kırmızı işaret bir cümle: sıralama kelimeninkinden
+                    // başka. Önce cümlenin geçtiği yer, sonra aynı şeyin
+                    // kolay İngilizcesi, çizginin altında Türkçesi, en sonda
+                    // neyin zorlaştırdığı ve içindeki kalıplar.
+                    if (word.context.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = word.context,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        )
+                    }
+
+                    if (word.definition.isNotBlank()) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = word.definition,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+
+                    if (word.meaning.isNotBlank()) {
+                        Spacer(Modifier.height(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = word.meaning,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+
+                    if (word.examples.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        word.examples.forEachIndexed { index, note ->
+                            NumberedLine(number = index + 1, text = note)
+                        }
+                    }
+
+                    // Deyim ve öbek fiiller: cümleyi anlamanı asıl bunlar
+                    // engelliyor, o yüzden küçük gri yazı değil.
+                    if (word.related.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        word.related.forEach { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 6.dp),
+                            )
+                        }
                     }
                 } else {
                     Spacer(Modifier.height(10.dp))

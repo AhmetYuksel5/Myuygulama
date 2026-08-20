@@ -140,6 +140,32 @@ class VocabRepository @Inject constructor(
         return true
     }
 
+    /**
+     * İşaretin rengini değiştirir: mavi kelime, kırmızı cümle.
+     *
+     * Çalışırken fark ediyorsun — "bu aslında bir kelime değil, çözemediğim
+     * bir cümleymiş". Kitaba dönüp işareti bulmak gerekmesin diye karttan da
+     * yapılabiliyor. Bilgisi siliniyor çünkü kelime ve cümle için yapay
+     * zekâya giden yönerge başka; eldeki bilgi yanlış kalıptan.
+     */
+    suspend fun setPassage(word: VocabWord, passage: Boolean) {
+        if (word.isPassage == passage) return
+        val target = word.word.trim()
+        val color = if (passage) HighlightColor.RED else HighlightColor.BLUE
+        entryRepository.listByType(EntryType.HIGHLIGHT)
+            .filter { it.title.trim().equals(target, ignoreCase = true) }
+            .filter { HighlightRef.color(it.source) in STUDIED_COLORS }
+            .forEach { entry ->
+                val kind = HighlightRef.kind(entry.source) ?: HighlightRef.KIND_BOOK
+                val sourceId = HighlightRef.sourceId(entry.source) ?: return@forEach
+                entryRepository.updateSource(
+                    entry.id,
+                    HighlightRef.encode(kind, sourceId, color),
+                )
+            }
+        enrichment.forget(target)
+    }
+
     /** Tekrar programındaki satırı siler; senkronda karşı tarafa da geçiyor. */
     private suspend fun forgetProgress(word: String) {
         val existing = vocabDao.get(word) ?: return
