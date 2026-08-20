@@ -669,6 +669,15 @@ private fun DisplayOptionsDialog(
 data class PendingHighlight(val word: String, val sentence: String)
 
 /**
+ * Çift dokunuştan sonra üçüncü dokunuşu bekleme süresi.
+ *
+ * Compose ikinci dokunuşu hemen bildiriyor ama üçüncüyü, kendi çift dokunuş
+ * penceresi dolmadan haber vermiyor; o yüzden bu süre onun üstünde olmak
+ * zorunda. Kısaltırsak üç dokunuş hiç çalışmaz.
+ */
+private const val TRIPLE_TAP_WINDOW_MS = 420L
+
+/**
  * Paragrafı çizer ve dokunulan kelimeyi bulur.
  *
  * Metin tek bir [Text] olarak çiziliyor; dokunma noktası, yerleşim sonucundan
@@ -689,9 +698,20 @@ private fun HighlightableParagraph(
     // Seçim: uzun basınca kelimede başlar, parmak sürüklendikçe genişler.
     var selection by remember(paragraph) { mutableStateOf<IntRange?>(null) }
     var anchor by remember(paragraph) { mutableStateOf<Pair<Int, Int>?>(null) }
-    // Çift dokunuşun bıraktığı iz: hemen ardından gelen dokunuş üçüncü
-    // dokunuş sayılıyor ve cümlenin tamamını seçiyor.
-    var lastDoubleTap by remember(paragraph) { mutableStateOf<Int?>(null) }
+    // Çift dokunuşta seçilen kelime hemen açılmıyor: üçüncü bir dokunuş
+    // gelirse cümlenin tamamı seçilecek. Bekleme olmadan üçüncü dokunuşa
+    // sıra gelmiyordu, çünkü ikinci dokunuşta renk kutusu açılıyordu.
+    var pendingWord by remember(paragraph) { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    LaunchedEffect(pendingWord) {
+        val bounds = pendingWord ?: return@LaunchedEffect
+        delay(TRIPLE_TAP_WINDOW_MS)
+        pendingWord = null
+        onSelection(
+            paragraph.substring(bounds.first, bounds.second),
+            contextAround(paragraph, bounds.first, bounds.second),
+        )
+    }
     val haptic = LocalHapticFeedback.current
     val selectionTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
 
@@ -758,21 +778,15 @@ private fun HighlightableParagraph(
                         onDoubleTap = { position ->
                             val result = layout ?: return@detectTapGestures
                             val offset = result.getOffsetForPosition(position)
-                            val bounds = wordBoundsAt(paragraph, offset)
-                                ?: return@detectTapGestures
-                            lastDoubleTap = offset
-                            onSelection(
-                                paragraph.substring(bounds.first, bounds.second),
-                                contextAround(paragraph, bounds.first, bounds.second),
-                            )
+                            pendingWord = wordBoundsAt(paragraph, offset)
                         },
                         onTap = { position ->
                             val offset = layout?.getOffsetForPosition(position)
-                            // Çift dokunuşun hemen ardından gelen dokunuş,
-                            // üçüncü dokunuştur: cümlenin tamamını seçiyor.
-                            val third = lastDoubleTap
-                            if (third != null && offset != null) {
-                                lastDoubleTap = null
+                            // Çift dokunuşun ardından gelen dokunuş üçüncüdür:
+                            // bekleyen kelime seçimi iptal edilip cümlenin
+                            // tamamı seçiliyor.
+                            if (pendingWord != null && offset != null) {
+                                pendingWord = null
                                 val bounds = sentenceBoundsAt(paragraph, offset)
                                 if (bounds != null) {
                                     onSelection(

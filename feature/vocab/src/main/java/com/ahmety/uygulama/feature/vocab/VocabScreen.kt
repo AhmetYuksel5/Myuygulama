@@ -1313,6 +1313,8 @@ private fun WordCard(
                             )
                         }
                     }
+
+                    SavedAnswers(word.answers)
                 } else {
                     Spacer(Modifier.height(10.dp))
 
@@ -1384,23 +1386,7 @@ private fun WordCard(
                         }
                     }
 
-                    // Sorup kaydettiğin yanıtlar: senin notların, modelin
-                    // ürettiği bilgiden ayrı dursun diye çizginin altında.
-                    if (word.answers.isNotEmpty()) {
-                        Spacer(Modifier.height(14.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Spacer(Modifier.height(8.dp))
-                        word.answers.forEach { note ->
-                            Text(
-                                text = note,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Start,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp),
-                            )
-                        }
-                    }
+                    SavedAnswers(word.answers)
 
                     // Karıştırma en altta ve çizginin altında: kelimenin
                     // kendisiyle ilgili değil, ona benzeyen başka
@@ -1463,6 +1449,30 @@ private fun WordCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Sorup kaydettiğin yanıtlar.
+ *
+ * Senin notların; modelin ürettiği bilgiden ayrı dursun diye çizginin
+ * altında. Hem kelime hem cümle kartında aynı yerde.
+ */
+@Composable
+private fun SavedAnswers(answers: List<String>) {
+    if (answers.isEmpty()) return
+    Spacer(Modifier.height(14.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Spacer(Modifier.height(8.dp))
+    answers.forEach { note ->
+        Text(
+            text = note,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Start,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        )
     }
 }
 
