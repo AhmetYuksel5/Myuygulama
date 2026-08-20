@@ -8,9 +8,12 @@ coreKtx = "1.15.0"
 documentFile = "1.0.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
-# Yazı kutularında çift dokunuşla kelime seçme davranışı Compose'un
-# kendi jest yönetiminde; sürümü yükseltmek onu değiştirebilecek tek yol.
-composeBom = "2025.04.01"
+# Yazı kutularında çift dokunuşla kelime seçme, eski metin kutusu
+# uygulamasında yoktu; Compose Foundation 1.10.0 ile geldi ("Added support
+# for double-tap to select word in SelectionContainer and BasicTextField").
+# Bu BOM foundation 1.10.0 getiriyor. Daha düşüğü dokunmatikte yalnız uzun
+# basışla seçiyor.
+composeBom = "2025.12.01"
 navigationCompose = "2.8.5"
 hiltNavigationCompose = "1.2.0"
 datastore = "1.1.1"
