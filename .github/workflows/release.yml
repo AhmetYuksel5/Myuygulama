@@ -42,16 +42,6 @@ jobs:
           set -o pipefail
           ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee derleme.log
 
-      # Kırılınca derleyici hatalarını log'un en sonuna yazıyoruz. Gradle'ın
-      # yığın izi yüzlerce satır sürüyor ve asıl "e:" satırları ortada kalıyor.
-      - name: Hataları özetle
-        if: failure()
-        run: |
-          echo "===== DERLEME HATALARI ====="
-          grep -E "^e: |^w: .*error|FAILED$|^\s+> " derleme.log | head -60 || true
-          echo "===== TEST HATALARI ====="
-          grep -E "FAILED|AssertionError|tests completed" derleme.log | head -40 || true
-
       # Anahtar eksikse sessizce atlamıyoruz: yeşil tik alıp hiçbir şey
       # yayınlamamak, sorunu saatlerce görünmez kılıyor.
       - name: İmzalama anahtarını çöz
@@ -99,7 +89,10 @@ jobs:
           SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/merkez-release.jks
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: merkez
-        run: ./gradlew --no-daemon assembleRelease
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee -a derleme.log
 
       - name: APK'yı adlandır
         if: steps.keystore.outputs.ready == 'true'
@@ -117,6 +110,18 @@ jobs:
             ${{ github.event.head_commit.message }}
           files: yayin/merkez-0.${{ github.run_number }}.apk
           make_latest: true
+
+      # Kırılınca hataları log'un en sonuna yazıyoruz. Gradle'ın yığın izi
+      # yüzlerce satır sürüyor ve asıl "e:" satırları ortada kalıyor. Adım
+      # en sonda: hangi aşama kırılırsa kırılsın özet çıksın.
+      - name: Hataları özetle
+        if: failure()
+        run: |
+          echo "===== NE KIRILDI ====="
+          grep -E "^\* What went wrong:|^Execution failed for task|^e: |FAILED$" derleme.log |
+            head -40 || true
+          echo "===== AYRINTI ====="
+          grep -E "^\s+> |AssertionError|tests completed" derleme.log | head -40 || true
 
       - name: Anahtarı sil
         if: always()

@@ -71,6 +71,21 @@ android {
         compose = true
     }
 
+    /**
+     * Sürüm derlemesinde lint çalışmıyor.
+     *
+     * AGP 8.7'nin içindeki lint motoru, yeni Compose'un getirdiği lifecycle
+     * denetçileriyle uyuşmuyor: denetçi yeni Kotlin çözümleme API'siyle
+     * derlenmiş, motor eskisini taşıyor ve analiz
+     * "Found class KaCallableMemberCall, but interface was expected" diye
+     * çöküyor. Kodla ilgisi yok, APK üretimini durduruyor. Zaten lint
+     * çıktısına bakmıyoruz; derleme ve birim testleri her gönderide
+     * çalışıyor.
+     */
+    lint {
+        checkReleaseBuilds = false
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
