@@ -3,6 +3,9 @@ package com.ahmety.uygulama.feature.ebook
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ahmety.uygulama.core.ai.AiResult
+import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.ai.WorkBriefStore
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
@@ -15,6 +18,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Künye kutusunun durumu. */
+data class BriefUiState(
+    val work: String,
+    val text: String,
+    val busy: Boolean = false,
+    val error: String? = null,
+)
+
 data class BookShelfUiState(
     val books: List<Entry> = emptyList(),
     val importing: Boolean = false,
@@ -25,7 +36,52 @@ data class BookShelfUiState(
 @HiltViewModel
 class BookShelfViewModel @Inject constructor(
     private val repository: BookRepository,
+    private val openAi: OpenAiClient,
+    private val briefs: WorkBriefStore,
 ) : ViewModel() {
+
+    /**
+     * Açık künye kutusu. Künye, kelime sorgularına eklenen kısa eser
+     * tanıtımı; ne dediğini görebilmek gerekiyor, çünkü model eseri yanlış
+     * tanırsa bütün kartlar ondan etkileniyor.
+     */
+    private val _brief = MutableStateFlow<BriefUiState?>(null)
+    val brief: StateFlow<BriefUiState?> = _brief.asStateFlow()
+
+    fun openBrief(entry: Entry) {
+        _brief.value = BriefUiState(
+            work = entry.title,
+            text = briefs.get(entry.title).orEmpty(),
+        )
+    }
+
+    fun closeBrief() {
+        _brief.value = null
+    }
+
+    fun generateBrief() {
+        val current = _brief.value ?: return
+        if (current.busy) return
+        _brief.value = current.copy(busy = true, error = null)
+        viewModelScope.launch {
+            val sample = runCatching { repository.sampleFor(current.work) }.getOrDefault("")
+            if (sample.isBlank()) {
+                _brief.value = current.copy(busy = false, error = "Eserin metni bulunamadı.")
+                return@launch
+            }
+            when (val result = openAi.describeWork(current.work, sample)) {
+                is AiResult.Ok -> {
+                    briefs.put(current.work, result.value)
+                    _brief.value = current.copy(text = result.value, busy = false)
+                }
+
+                is AiResult.Failed -> _brief.value = current.copy(
+                    busy = false,
+                    error = result.reason,
+                )
+            }
+        }
+    }
 
     private val _state = MutableStateFlow(BookShelfUiState())
     val state: StateFlow<BookShelfUiState> = _state.asStateFlow()

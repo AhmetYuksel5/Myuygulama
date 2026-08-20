@@ -3,6 +3,8 @@ package com.ahmety.uygulama.feature.ebook
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -85,6 +88,7 @@ fun BookShelfRoute(
     val books by viewModel.books.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     var shelf by rememberSaveable { mutableStateOf(Shelf.ALL) }
+    val brief by viewModel.brief.collectAsStateWithLifecycle()
 
     // Belge seçici: EPUB'ların MIME türü cihazdan cihaza değiştiği için
     // her dosyayı seçtirip doğrulamayı ayrıştırıcıya bırakıyoruz.
@@ -161,11 +165,66 @@ fun BookShelfRoute(
                     book = book,
                     film = viewModel.isFilm(book),
                     onOpen = { onOpenBook(book.id) },
+                    onBrief = { viewModel.openBrief(book) },
                     onDelete = { viewModel.delete(book) },
                 )
             }
         }
     }
+
+    brief?.let { state ->
+        BriefDialog(
+            state = state,
+            onGenerate = viewModel::generateBrief,
+            onDismiss = viewModel::closeBrief,
+        )
+    }
+}
+
+/**
+ * Eser künyesi kutusu.
+ *
+ * Künye kelime sorgularına sessizce ekleniyor; modelin eseri nasıl
+ * tanıdığını görebilmek gerekiyor, çünkü yanlış tanırsa o eserden gelen
+ * bütün kartlar ondan etkileniyor.
+ */
+@Composable
+private fun BriefDialog(
+    state: BriefUiState,
+    onGenerate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(state.work) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                when {
+                    state.busy -> Text("Künye çıkarılıyor…")
+                    state.text.isBlank() -> Text(
+                        "Bu eserin künyesi yok. Çıkarırsan bu kitaptan ya da " +
+                            "filmden gelen her kelime sorgusuna eklenir.",
+                    )
+
+                    else -> Text(state.text)
+                }
+                state.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !state.busy, onClick = onGenerate) {
+                Text(if (state.text.isBlank()) "Çıkar" else "Yenile")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+    )
 }
 
 /** Kitaplık süzgeci. */
@@ -181,6 +240,7 @@ private fun BookCard(
     book: Entry,
     film: Boolean,
     onOpen: () -> Unit,
+    onBrief: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
@@ -212,6 +272,7 @@ private fun BookCard(
                     )
                 }
             }
+            TextButton(onClick = onBrief) { Text("Künye") }
             TextButton(onClick = { confirmDelete = true }) { Text("Sil") }
         }
     }
