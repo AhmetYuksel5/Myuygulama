@@ -3,6 +3,7 @@ package com.ahmety.uygulama.feature.ebook
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -646,67 +647,140 @@ private fun HighlightableParagraph(
         }
     }
 
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Sürüklerken seçilen metin paragrafın üstünde: parmağın seçtiğin
+        // yeri kapatıyor ve nereye kadar geldiğin görünmüyordu.
+        selection?.let { range ->
+            SelectionPreview(paragraph.substring(range.first, range.last + 1))
+        }
+
+        Text(
+                text = painted,
+                color = textColor,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = fontSizeSp.sp,
+                lineHeight = (fontSizeSp * 1.65f).sp,
+            ),
+            onTextLayout = { layout = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                // Dokunma bölgesi: solda geri, sağda ileri, ortada arayüz.
+                // onLongPress boş bırakılıyor ki uzun basıp seçim yaparken
+                // parmak kalkınca ayrıca "dokunuş" sayılmasın.
+                .pointerInput(paragraph, colors) {
+                    detectTapGestures(
+                        onLongPress = {},
+                        onTap = { position ->
+                            // İşaretli bir kelimeye dokunmak renk kutusunu
+                            // açsın: işareti kaldırmanın tek yolu oydu ama
+                            // dokunuş arayüzü açıp kapatmakla harcanıyordu.
+                            val marked = layout?.let {
+                                markedAt(paragraph, colors, it.getOffsetForPosition(position))
+                            }
+                            if (marked != null) {
+                                onSelection(
+                                    marked.text,
+                                    contextAround(paragraph, marked.start, marked.end),
+                                )
+                            } else {
+                                onZoneTap(position.x / size.width.toFloat())
+                            }
+                        },
+                    )
+                }
+                // Uzun bas + sürükle: birden çok kelime seçilebiliyor. Sarı ile
+                // altı çizilecek yerler genelde tek kelime değil.
+                .pointerInput(paragraph) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { position ->
+                            val result = layout ?: return@detectDragGesturesAfterLongPress
+                            val offset = result.getOffsetForPosition(position)
+                            val bounds = wordBoundsAt(paragraph, offset)
+                                ?: return@detectDragGesturesAfterLongPress
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            anchor = bounds
+                            selection = bounds.first until bounds.second
+                        },
+                        onDrag = { change, _ ->
+                            val result = layout ?: return@detectDragGesturesAfterLongPress
+                            val start = anchor ?: return@detectDragGesturesAfterLongPress
+                            val offset = result.getOffsetForPosition(change.position)
+                            val bounds = wordBoundsAt(paragraph, offset)
+                                ?: return@detectDragGesturesAfterLongPress
+                            selection = minOf(start.first, bounds.first) until
+                                maxOf(start.second, bounds.second)
+                        },
+                        onDragEnd = {
+                            val range = selection
+                            if (range != null && !range.isEmpty()) {
+                                val text = paragraph.substring(range.first, range.last + 1).trim()
+                                if (text.isNotEmpty()) {
+                                    onSelection(
+                                        text,
+                                        contextAround(paragraph, range.first, range.last + 1),
+                                    )
+                                }
+                            }
+                            selection = null
+                            anchor = null
+                        },
+                        onDragCancel = {
+                            selection = null
+                            anchor = null
+                        },
+                    )
+                },
+        )
+    }
+}
+
+/** Paragraftaki bir işaretin metni ve yeri. */
+private data class MarkedSpan(val text: String, val start: Int, val end: Int)
+
+/**
+ * Dokunulan yerde bir işaret var mı.
+ *
+ * Önce çok kelimeli işaretlere bakıyoruz — onlar tek kelimeyi de kapsıyor
+ * olabilir — sonra tek kelimeye.
+ */
+private fun markedAt(
+    paragraph: String,
+    colors: Map<String, HighlightColor>,
+    offset: Int,
+): MarkedSpan? {
+    colors.keys.filter { it.contains(' ') }.forEach { phrase ->
+        var index = paragraph.indexOf(phrase, ignoreCase = true)
+        while (index >= 0) {
+            val end = index + phrase.length
+            if (offset in index until end) {
+                return MarkedSpan(paragraph.substring(index, end), index, end)
+            }
+            index = paragraph.indexOf(phrase, end, ignoreCase = true)
+        }
+    }
+    val bounds = wordBoundsAt(paragraph, offset) ?: return null
+    val word = paragraph.substring(bounds.first, bounds.second)
+    if (word.lowercase() !in colors) return null
+    return MarkedSpan(word, bounds.first, bounds.second)
+}
+
+/** Sürüklerken seçilen metnin önizlemesi. */
+@Composable
+private fun SelectionPreview(text: String) {
     Text(
-        text = painted,
-        color = textColor,
-        style = MaterialTheme.typography.bodyLarge.copy(
-            fontSize = fontSizeSp.sp,
-            lineHeight = (fontSizeSp * 1.65f).sp,
-        ),
-        onTextLayout = { layout = it },
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            // Dokunma bölgesi: solda geri, sağda ileri, ortada arayüz.
-            // onLongPress boş bırakılıyor ki uzun basıp seçim yaparken
-            // parmak kalkınca ayrıca "dokunuş" sayılmasın.
-            .pointerInput(paragraph) {
-                detectTapGestures(
-                    onLongPress = {},
-                    onTap = { position -> onZoneTap(position.x / size.width.toFloat()) },
-                )
-            }
-            // Uzun bas + sürükle: birden çok kelime seçilebiliyor. Sarı ile
-            // altı çizilecek yerler genelde tek kelime değil.
-            .pointerInput(paragraph) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { position ->
-                        val result = layout ?: return@detectDragGesturesAfterLongPress
-                        val offset = result.getOffsetForPosition(position)
-                        val bounds = wordBoundsAt(paragraph, offset)
-                            ?: return@detectDragGesturesAfterLongPress
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        anchor = bounds
-                        selection = bounds.first until bounds.second
-                    },
-                    onDrag = { change, _ ->
-                        val result = layout ?: return@detectDragGesturesAfterLongPress
-                        val start = anchor ?: return@detectDragGesturesAfterLongPress
-                        val offset = result.getOffsetForPosition(change.position)
-                        val bounds = wordBoundsAt(paragraph, offset)
-                            ?: return@detectDragGesturesAfterLongPress
-                        selection = minOf(start.first, bounds.first) until
-                            maxOf(start.second, bounds.second)
-                    },
-                    onDragEnd = {
-                        val range = selection
-                        if (range != null && !range.isEmpty()) {
-                            val text = paragraph.substring(range.first, range.last + 1).trim()
-                            if (text.isNotEmpty()) {
-                                onSelection(
-                                    text,
-                                    contextAround(paragraph, range.first, range.last + 1),
-                                )
-                            }
-                        }
-                        selection = null
-                        anchor = null
-                    },
-                    onDragCancel = {
-                        selection = null
-                        anchor = null
-                    },
-                )
-            },
+            .padding(bottom = 4.dp)
+            .background(
+                MaterialTheme.colorScheme.primaryContainer,
+                RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp),
     )
 }
 

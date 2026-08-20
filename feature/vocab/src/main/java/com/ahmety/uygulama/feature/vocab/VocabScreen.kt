@@ -63,7 +63,6 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -84,15 +83,6 @@ import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
 import kotlinx.coroutines.delay
 import kotlin.math.abs
-
-/** Kelimeyi cihazın tarayıcısında aratır. */
-private fun lookUp(context: android.content.Context, word: String) {
-    val intent = android.content.Intent(
-        android.content.Intent.ACTION_VIEW,
-        android.net.Uri.parse("https://www.google.com/search?q=" + android.net.Uri.encode("$word meaning")),
-    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
-}
 
 @Composable
 fun VocabRoute(
@@ -1160,9 +1150,14 @@ private fun WordCard(
 
                     if (word.family.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
-                        // Kökendaşlar arasında yön oku yanlış olurdu: biri
-                        // ötekinden türemiyor, hepsi aynı kökten geliyor.
-                        LabeledBlock("Aile", word.family.joinToString(" · "))
+                        // Her kökendaş kendi satırında: yanlarında Türkçeleri
+                        // var, yan yana dizilince okunmuyorlar. Aralarına yön
+                        // oku koymuyoruz — biri ötekinden türemiyor, hepsi
+                        // aynı kökten geliyor.
+                        LabeledBlock("Aile", word.family.first())
+                        word.family.drop(1).forEach { line ->
+                            LabeledBlock("", line)
+                        }
                     }
 
                     if (word.synonyms.isNotEmpty() ||
@@ -1210,29 +1205,6 @@ private fun WordCard(
                             )
                         }
                     }
-
-                    // Kitaptan gelip destede karşılığı olmayan kelime: boş kart
-                    // göstermek yerine yapay zekâyla doldurmayı öneriyoruz.
-                    if (word.meaning.isBlank() && word.definition.isBlank()) {
-                        val context = LocalContext.current
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "Bu kelime kitaptan geldi, sözlükte karşılığı yok.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (onEnrich != null) {
-                                TextButton(enabled = !enriching, onClick = onEnrich) {
-                                    Text(if (enriching) "Getiriliyor…" else "Anlamını getir")
-                                }
-                            }
-                            TextButton(onClick = { lookUp(context, word.word) }) {
-                                Text("Sözlükte ara")
-                            }
-                        }
-                    }
                 }
             }
 
@@ -1241,6 +1213,21 @@ private fun WordCard(
                     .fillMaxSize()
                     .background(tint, RoundedCornerShape(24.dp)),
             )
+
+            // Anlamı henüz getirilmemiş kelime: düğme kartın dibinde duruyor,
+            // metnin arasında değil. Açıklama yazısı yok — düğme zaten ne
+            // yapacağını söylüyor.
+            if (word.meaning.isBlank() && word.definition.isBlank() && onEnrich != null) {
+                TextButton(
+                    enabled = !enriching,
+                    onClick = onEnrich,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp),
+                ) {
+                    Text(if (enriching) "Getiriliyor…" else "Anlamını getir")
+                }
+            }
         }
     }
 }
