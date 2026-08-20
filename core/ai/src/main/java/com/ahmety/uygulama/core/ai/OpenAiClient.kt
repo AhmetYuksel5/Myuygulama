@@ -181,7 +181,11 @@ class OpenAiClient @Inject constructor(
         append("For \"discordant\" that search yields discard, descendant, ")
         append("redundant. Never list a word that shares the input's root — ")
         append("those belong in f, and a shared root is the opposite of what ")
-        append("this section is for. Write each one as ")
+        append("this section is for. Never list the input itself, and never a ")
+        append("mere inflection or derivation of it: for \"discordant\", the ")
+        append("words discordant, discordance and discordantly are all the same ")
+        append("word and none of them belongs here. A look-alike is a ")
+        append("DIFFERENT word that happens to look similar. Write each one as ")
         append("\"lookalike — Türkçe karşılığı\" and nothing else. Do NOT explain ")
         append("which letters differ; the reader sees that at a glance. Example ")
         append("for amorphous: \"amorous — aşk dolu\". ")
@@ -245,7 +249,11 @@ class OpenAiClient @Inject constructor(
         val antonyms = json.optJSONArray("a").toStringList()
         val root = json.optString("k").trim()
         val family = json.optJSONArray("f").toStringList()
+            .filterNot { it.headWord().equals(word.trim(), ignoreCase = true) }
+        // Modelin kelimenin kendisini "benzeyen kelime" diye vermesi olan bir
+        // şey; yönerge yasaklıyor ama bir de burada eliyoruz.
         val confusions = json.optJSONArray("x").toStringList()
+            .filterNot { it.headWord().equals(word.trim(), ignoreCase = true) }
         val meaning = json.optString("t").trim()
         if (meaning.isBlank() && examples.isEmpty()) {
             return AiResult.Failed("Yanıt anlaşılamadı.")
@@ -277,6 +285,10 @@ class OpenAiClient @Inject constructor(
             if (pattern.isBlank() || words.isEmpty()) null else Collocation(pattern, words)
         }
     }
+
+    /** "amorous — aşk dolu" satırından yalnız kelimeyi alır. */
+    private fun String.headWord(): String =
+        substringBefore('\u2014').substringBefore(" - ").substringBefore(';').trim()
 
     private fun JSONArray?.toStringList(): List<String> {
         if (this == null) return emptyList()

@@ -1150,14 +1150,9 @@ private fun WordCard(
 
                     if (word.family.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
-                        // Her kökendaş kendi satırında: yanlarında Türkçeleri
-                        // var, yan yana dizilince okunmuyorlar. Aralarına yön
-                        // oku koymuyoruz — biri ötekinden türemiyor, hepsi
-                        // aynı kökten geliyor.
-                        LabeledBlock("Aile", word.family.first())
-                        word.family.drop(1).forEach { line ->
-                            LabeledBlock("", line)
-                        }
+                        // Kökendaşlar arasında yön oku yanlış olurdu: biri
+                        // ötekinden türemiyor, hepsi aynı kökten geliyor.
+                        LabeledBlock("Aile", word.family.joinToString(" · "))
                     }
 
                     if (word.synonyms.isNotEmpty() ||
