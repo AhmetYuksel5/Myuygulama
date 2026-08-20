@@ -655,8 +655,8 @@ private fun HighlightableParagraph(
         }
 
         Text(
-                text = painted,
-                color = textColor,
+            text = painted,
+            color = textColor,
             style = MaterialTheme.typography.bodyLarge.copy(
                 fontSize = fontSizeSp.sp,
                 lineHeight = (fontSizeSp * 1.65f).sp,
