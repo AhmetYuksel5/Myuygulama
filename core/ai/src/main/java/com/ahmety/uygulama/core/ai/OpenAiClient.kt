@@ -66,6 +66,7 @@ class OpenAiClient @Inject constructor(
         context: String = "",
         passage: Boolean = false,
         sourceName: String = "",
+        brief: String = "",
     ): AiResult<WordInfo> {
         // "word" tek kelime de olabilir, kitaptan seçilmiş bir öbek de.
         val key = settings.apiKey
@@ -79,6 +80,11 @@ class OpenAiClient @Inject constructor(
             append("Input: ").append(word)
             if (sourceName.isNotBlank()) {
                 append("\nIt is from this book or film: ").append(sourceName)
+            }
+            // Eserin künyesi: dönem, kişiler, dilin düzeyi. Metnin tamamını
+            // göndermenin ucuz ve kalıcı karşılığı.
+            if (brief.isNotBlank()) {
+                append("\nWhat that work is: ").append(brief)
             }
             if (context.isNotBlank()) {
                 append("\nIt appeared in this passage, so prefer the reading that fits it:\n")
@@ -117,6 +123,77 @@ class OpenAiClient @Inject constructor(
                         .getJSONObject("message")
                         .getString("content")
                     parseWord(word, JSONObject(content))
+                }
+            }.getOrElse { error ->
+                AiResult.Failed("Bağlantı kurulamadı: ${error.message ?: "bilinmeyen hata"}")
+            }
+        }
+    }
+
+    /**
+     * Eserin künyesini çıkarır: kitabın ya da filmin kısa tanıtımı.
+     *
+     * Metinden bir örnek gönderiliyor — altyazının tamamı, kitapta ilk
+     * bölümler. Dönen metin cihazda saklanıp bundan sonraki her kelime
+     * sorgusuna ekleniyor, yani bu istek eser başına bir kez atılıyor.
+     */
+    suspend fun describeWork(title: String, sample: String): AiResult<String> {
+        val key = settings.apiKey
+        if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
+        if (sample.isBlank()) return AiResult.Failed("Eserin metni bulunamadı.")
+
+        val instruction = buildString {
+            append("You brief a Turkish-English dictionary assistant on a work ")
+            append("so that it can read individual lines correctly later. ")
+            append("From the sample, write at most 150 words in TURKISH covering: ")
+            append("türü ve dönemi; geçtiği yer ve çevre; kimler var ve ")
+            append("aralarındaki ilişki; dilin düzeyi (argo, ağız, resmî, ")
+            append("eskimiş); tekrar eden argo sözcükler ve göndermeler ve ne ")
+            append("anlama geldikleri. ")
+            append("Write it as dense running prose a machine will read, not as ")
+            append("a review: no praise, no plot summary, no markdown, no lists. ")
+            append("If the sample is too thin to tell, say only what you can.")
+        }
+
+        val payload = JSONObject().apply {
+            put("model", settings.model)
+            put("temperature", 0.2)
+            put(
+                "messages",
+                JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", instruction))
+                    .put(
+                        JSONObject()
+                            .put("role", "user")
+                            .put("content", "Work: $title\n\nSample:\n$sample"),
+                    ),
+            )
+        }
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder()
+                    .url(ENDPOINT)
+                    .addHeader("Authorization", "Bearer $key")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA))
+                    .build()
+
+                http.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        return@use AiResult.Failed(readableError(response.code, body))
+                    }
+                    val content = JSONObject(body)
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content")
+                        .trim()
+                    if (content.isBlank()) {
+                        AiResult.Failed("Künye boş döndü.")
+                    } else {
+                        AiResult.Ok(content)
+                    }
                 }
             }.getOrElse { error ->
                 AiResult.Failed("Bağlantı kurulamadı: ${error.message ?: "bilinmeyen hata"}")

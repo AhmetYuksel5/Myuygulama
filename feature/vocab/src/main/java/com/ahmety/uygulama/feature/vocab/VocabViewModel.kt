@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.AiSettings
 import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.ai.WorkBriefStore
+import com.ahmety.uygulama.feature.ebook.BookRepository
 import com.ahmety.uygulama.core.model.Collocation
 import com.ahmety.uygulama.core.model.VocabDecision
 import com.ahmety.uygulama.core.model.VocabSource
@@ -124,6 +126,8 @@ class VocabViewModel @Inject constructor(
     private val repository: VocabRepository,
     private val openAi: OpenAiClient,
     private val aiSettings: AiSettings,
+    private val briefs: WorkBriefStore,
+    private val books: BookRepository,
     @ApplicationContext context: Context,
 ) : ViewModel() {
 
@@ -145,12 +149,16 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(
-                word = word.word,
-                context = word.context,
-                passage = word.isPassage,
-                sourceName = word.sourceName,
-            )) {
+            val brief = briefFor(word)
+            when (
+                val result = openAi.describeWord(
+                    word = word.word,
+                    context = word.context,
+                    passage = word.isPassage,
+                    sourceName = word.sourceName,
+                    brief = brief,
+                )
+            ) {
                 is AiResult.Ok -> {
                     repository.saveEnrichment(result.value)
                     _aiMessage.value = null
@@ -163,6 +171,31 @@ class VocabViewModel @Inject constructor(
             }
             _enriching.value = null
         }
+    }
+
+    /**
+     * Eserin künyesi. İlk kelimede bir kez üretilip saklanıyor; sonraki
+     * sorgular hazır künyeyi kullanıyor.
+     *
+     * Ağ hatası ya da metnin bulunamaması akışı durdurmuyor: künyesiz de
+     * çalışıyoruz, sadece bağlam biraz zayıf oluyor.
+     */
+    private suspend fun briefFor(word: VocabWord): String {
+        val work = word.sourceName.trim()
+        if (work.isBlank()) return ""
+        briefs.get(work)?.let { return it }
+        val sample = runCatching { books.sampleFor(work) }.getOrDefault("")
+        if (sample.isBlank()) return ""
+        return when (val result = openAi.describeWork(work, sample)) {
+            is AiResult.Ok -> result.value.also { briefs.put(work, it) }
+            is AiResult.Failed -> ""
+        }
+    }
+
+    /** Eseri yanlış okuduysa künyeyi attır; sonraki sorgu yenisini üretir. */
+    fun forgetBrief(word: VocabWord) {
+        val work = word.sourceName.trim()
+        if (work.isNotBlank()) briefs.forget(work)
     }
 
     fun clearAiMessage() {
@@ -430,12 +463,16 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(
-                word = word.word,
-                context = word.context,
-                passage = word.isPassage,
-                sourceName = word.sourceName,
-            )) {
+            val brief = briefFor(word)
+            when (
+                val result = openAi.describeWord(
+                    word = word.word,
+                    context = word.context,
+                    passage = word.isPassage,
+                    sourceName = word.sourceName,
+                    brief = brief,
+                )
+            ) {
                 is AiResult.Ok -> {
                     repository.saveEnrichment(result.value)
                     _aiMessage.value = null
@@ -452,12 +489,16 @@ class VocabViewModel @Inject constructor(
         if (_enriching.value != null) return
         _enriching.value = word.word
         viewModelScope.launch {
-            when (val result = openAi.describeWord(
-                word = word.word,
-                context = word.context,
-                passage = word.isPassage,
-                sourceName = word.sourceName,
-            )) {
+            val brief = briefFor(word)
+            when (
+                val result = openAi.describeWord(
+                    word = word.word,
+                    context = word.context,
+                    passage = word.isPassage,
+                    sourceName = word.sourceName,
+                    brief = brief,
+                )
+            ) {
                 is AiResult.Ok -> {
                     val fresh = result.value
                     repository.saveEdit(

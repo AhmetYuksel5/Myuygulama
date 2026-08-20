@@ -32,6 +32,7 @@ android {
 dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:ai"))
+    implementation(project(":feature:ebook"))
     implementation(project(":core:designsystem"))
 
     implementation(platform(libs.androidx.compose.bom))

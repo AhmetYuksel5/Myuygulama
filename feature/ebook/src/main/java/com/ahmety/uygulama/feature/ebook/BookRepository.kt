@@ -114,6 +114,29 @@ class BookRepository @Inject constructor(
         )
     }
 
+    /**
+     * Eser künyesi için metinden örnek.
+     *
+     * Altyazıda genelde metnin tamamı sığıyor; kitapta baştan başlayıp
+     * sınıra kadar alıyoruz — bir romanın ilk bölümleri dönemi, mekânı ve
+     * dilin düzeyini zaten ele veriyor.
+     */
+    suspend fun sampleFor(title: String, maxChars: Int = SAMPLE_CHARS): String =
+        withContext(Dispatchers.IO) {
+            val entry = entryRepository.listByType(EntryType.DOCUMENT)
+                .firstOrNull { it.title.trim().equals(title.trim(), ignoreCase = true) }
+                ?: return@withContext ""
+            val book = loadBook(entry.id) ?: return@withContext ""
+            val out = StringBuilder()
+            book.chapters.forEach { chapter ->
+                chapter.paragraphs.forEach { paragraph ->
+                    if (out.length >= maxChars) return@withContext out.toString()
+                    out.append(paragraph).append('\n')
+                }
+            }
+            out.toString()
+        }
+
     /** Kayıt bir film altyazısı mı, gerçek bir kitap mı. */
     fun isFilm(entry: Entry): Boolean {
         val source = entry.source ?: return false
@@ -237,6 +260,9 @@ class BookRepository @Inject constructor(
     private companion object {
         /** Bir "bölüm"e kaç replik giriyor. Okuyucunun ilerleme çubuğu için. */
         const val FILM_CHAPTER_SENTENCES = 120
+
+        /** Künye için gönderilecek en fazla karakter (~10 bin token). */
+        const val SAMPLE_CHARS = 40_000
 
         val READABLE_KINDS = setOf(HighlightRef.KIND_BOOK, HighlightRef.KIND_SUBTITLE)
     }

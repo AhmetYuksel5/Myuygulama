@@ -306,6 +306,15 @@ fun VocabRoute(
                 menuWord = null
                 viewModel.setPassage(word, !word.isPassage)
             },
+            onForgetBrief = if (word.sourceName.isNotBlank()) {
+                {
+                    menuWord = null
+                    viewModel.forgetBrief(word)
+                    viewModel.refresh(word)
+                }
+            } else {
+                null
+            },
             onRefresh = {
                 menuWord = null
                 viewModel.refresh(word)
@@ -382,6 +391,7 @@ private fun WordMenuDialog(
     aiReady: Boolean,
     onEdit: () -> Unit,
     onTogglePen: () -> Unit,
+    onForgetBrief: (() -> Unit)?,
     onRefresh: () -> Unit,
     onMoreExamples: () -> Unit,
     onDelete: () -> Unit,
@@ -418,6 +428,9 @@ private fun WordMenuDialog(
                     if (aiReady) {
                         MenuRow("Bilgiyi yenile", onRefresh)
                         MenuRow("Örnek çoğalt", onMoreExamples)
+                        // Eseri yanlış tanımışsa künyeyi attırmak gerekiyor;
+                        // sonraki sorgu yenisini üretiyor.
+                        onForgetBrief?.let { MenuRow("Eser künyesini yenile", it) }
                     }
                     MenuRow("Sil") { confirmDelete = true }
                 }
