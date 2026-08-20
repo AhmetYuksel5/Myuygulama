@@ -309,9 +309,9 @@ fun VocabRoute(
     editWord?.let { word ->
         WordEditDialog(
             word = word,
-            onSave = {
+            onSave = { edited ->
                 editWord = null
-                viewModel.saveEdit(it)
+                viewModel.saveEdit(original = word, edited = edited)
             },
             onDismiss = { editWord = null },
         )
@@ -434,6 +434,9 @@ private fun WordEditDialog(
     onSave: (VocabWord) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Kelimenin kendisi de düzenlenebiliyor: kitaptan gelen metin bazen
+    // bozuk ("shittyjobs"), bazen yanlış yeri seçmiş oluyorsun.
+    var text by remember(word.word) { mutableStateOf(word.word) }
     var meaning by remember(word.word) { mutableStateOf(word.meaning) }
     var definition by remember(word.word) { mutableStateOf(word.definition) }
     var examples by remember(word.word) { mutableStateOf(word.examples.joinToString("\n")) }
@@ -458,6 +461,12 @@ private fun WordEditDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(if (word.isPassage) "Cümle" else "Kelime") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 OutlinedTextField(
                     value = meaning,
                     onValueChange = { meaning = it },
@@ -519,6 +528,7 @@ private fun WordEditDialog(
                 onClick = {
                     onSave(
                         word.copy(
+                            word = text.trim().ifBlank { word.word },
                             meaning = meaning.trim(),
                             definition = definition.trim(),
                             examples = examples.lines().map { it.trim() }.filter { it.isNotBlank() },
@@ -534,7 +544,13 @@ private fun WordEditDialog(
                         ),
                     )
                 },
-            ) { Text("Kaydet") }
+            ) {
+                // Kelime değiştiyse bilgisi yeniden getirilecek; düğme bunu
+                // önceden söylesin.
+                Text(
+                    if (text.trim() != word.word.trim()) "Kaydet ve yenile" else "Kaydet",
+                )
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } },
     )

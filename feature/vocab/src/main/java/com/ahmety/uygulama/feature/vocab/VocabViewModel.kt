@@ -361,10 +361,26 @@ class VocabViewModel @Inject constructor(
         viewModelScope.launch { repository.deleteWord(word) }
     }
 
-    /** Elle düzenlenen kelime bilgisini kaydeder. */
-    fun saveEdit(word: VocabWord) {
-        repository.saveEdit(word)
-        session.value = session.value.copy(refresh = session.value.refresh + 1)
+    /**
+     * Elle düzenlenen kelime bilgisini kaydeder.
+     *
+     * Kelimenin ya da cümlenin kendisi değiştiyse bu artık başka bir kelime:
+     * kitaptaki işaret de düzeltiliyor ve bilgisi yapay zekâdan yeniden
+     * getiriliyor. Eski yazıma ait anlam, örnek ve eşdizimleri taşımanın
+     * anlamı yok — yanlış kelimenin bilgisiydi.
+     */
+    fun saveEdit(original: VocabWord, edited: VocabWord) {
+        val renamed = edited.word.trim() != original.word.trim()
+        if (!renamed) {
+            repository.saveEdit(edited)
+            session.value = session.value.copy(refresh = session.value.refresh + 1)
+            return
+        }
+        viewModelScope.launch {
+            repository.renameWord(original, edited.word)
+            session.value = session.value.copy(refresh = session.value.refresh + 1)
+            refresh(edited.copy(word = edited.word.trim()))
+        }
     }
 
     /**

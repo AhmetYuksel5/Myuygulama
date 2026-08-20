@@ -103,6 +103,14 @@ class WordEnrichmentStore @Inject constructor(
 
     fun has(word: String): Boolean = prefs.contains(word.lowercase())
 
+    /** Kelime düzeltilince eski yazımın bilgisi ortada kalmasın. */
+    fun forget(word: String) {
+        val key = word.lowercase()
+        prefs.edit().remove(key).apply()
+        cache.remove(key)
+        missing.add(key)
+    }
+
     private fun JSONArray?.toCollocations(): List<Collocation> {
         if (this == null) return emptyList()
         return (0 until length()).mapNotNull { index ->

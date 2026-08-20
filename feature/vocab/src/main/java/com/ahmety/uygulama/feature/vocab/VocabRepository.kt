@@ -117,6 +117,29 @@ class VocabRepository @Inject constructor(
         forgetProgress(target)
     }
 
+    /**
+     * Kelimenin ya da cümlenin kendisini düzeltir.
+     *
+     * Kitaptan gelen metin bazen bozuk oluyor ("shittyjobs"), bazen yanlış
+     * yeri seçmiş oluyorsun. Düzeltme işaretleme kaydının başlığına yazılıyor,
+     * yani kitapta da düzeliyor. Eski yazımın bilgisi ve tekrar geçmişi
+     * siliniyor: artık başka bir kelime.
+     */
+    suspend fun renameWord(old: VocabWord, newText: String): Boolean {
+        val target = newText.trim()
+        val previous = old.word.trim()
+        if (target.isBlank() || target.equals(previous, ignoreCase = true)) return false
+
+        entryRepository.listByType(EntryType.HIGHLIGHT)
+            .filter { it.title.trim().equals(previous, ignoreCase = true) }
+            .filter { HighlightRef.color(it.source) in STUDIED_COLORS }
+            .forEach { entryRepository.updateEntry(it.id, target, it.body) }
+
+        enrichment.forget(previous)
+        forgetProgress(previous)
+        return true
+    }
+
     /** Tekrar programındaki satırı siler; senkronda karşı tarafa da geçiyor. */
     private suspend fun forgetProgress(word: String) {
         val existing = vocabDao.get(word) ?: return
