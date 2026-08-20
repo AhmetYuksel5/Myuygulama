@@ -279,7 +279,19 @@ fun VocabRoute(
     }
 
     cardWord?.let { word ->
-        WordCardDialog(word = word, onDismiss = { cardWord = null })
+        // Listeden açılan kartta da anlamı getirebilmek gerekiyor: çoğu
+        // kelimeye ilk kez orada bakıyorsun.
+        val fresh = state.list.firstOrNull { it.word.word == word.word }?.word ?: word
+        WordCardDialog(
+            word = fresh,
+            enriching = enrichingWord == fresh.word,
+            onEnrich = if (aiReady) {
+                { viewModel.enrich(fresh) }
+            } else {
+                null
+            },
+            onDismiss = { cardWord = null },
+        )
     }
 
     menuWord?.let { word ->
@@ -329,7 +341,12 @@ fun VocabRoute(
  * "şu kelime neydi" diye bakmaya geliyorsun, sağa sola atmaya değil.
  */
 @Composable
-private fun WordCardDialog(word: VocabWord, onDismiss: () -> Unit) {
+private fun WordCardDialog(
+    word: VocabWord,
+    enriching: Boolean,
+    onEnrich: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -345,6 +362,8 @@ private fun WordCardDialog(word: VocabWord, onDismiss: () -> Unit) {
                     tint = Color.Transparent,
                     interactive = false,
                     revealed = true,
+                    enriching = enriching,
+                    onEnrich = onEnrich,
                     scrollState = rememberScrollState(),
                 )
             }

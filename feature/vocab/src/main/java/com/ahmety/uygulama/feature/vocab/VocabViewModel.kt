@@ -179,6 +179,12 @@ class VocabViewModel @Inject constructor(
         /** Her kararda artıyor; aynı değerle yeniden yayın yapılmasını da önlüyor. */
         val turn: Int = 0,
         val skipped: Set<String> = emptySet(),
+        /**
+         * Düzenlediğin kelime. Deste alfabetik sıralı olduğu için adı değişen
+         * kelime bambaşka bir yere düşüyordu ve karta dönünce onu bulamıyordun;
+         * bu kelime bir sonraki karara kadar destenin başında duruyor.
+         */
+        val pinned: String? = null,
         val filter: VocabFilter = VocabFilter(),
     )
 
@@ -304,7 +310,10 @@ class VocabViewModel @Inject constructor(
         }
 
         // Bu oturumda "geç" denenler en sona; program sırası bozulmuyor.
-        val ordered = deck.sortedBy { if (it.word in sessionState.skipped) 1 else 0 }
+        // Düzenlediğin kelime ise en başta: elini attığın kart karşında kalsın.
+        val ordered = deck
+            .sortedBy { if (it.word in sessionState.skipped) 1 else 0 }
+            .sortedBy { if (it.word == sessionState.pinned) 0 else 1 }
 
         val nextDue = schedules.values
             .mapNotNull { it.dueAt }
@@ -390,12 +399,18 @@ class VocabViewModel @Inject constructor(
         val renamed = edited.word.trim() != original.word.trim()
         if (!renamed) {
             repository.saveEdit(edited)
-            session.value = session.value.copy(refresh = session.value.refresh + 1)
+            session.value = session.value.copy(
+                refresh = session.value.refresh + 1,
+                pinned = edited.word,
+            )
             return
         }
         viewModelScope.launch {
             repository.renameWord(original, edited.word)
-            session.value = session.value.copy(refresh = session.value.refresh + 1)
+            session.value = session.value.copy(
+                refresh = session.value.refresh + 1,
+                pinned = edited.word.trim(),
+            )
         }
     }
 
@@ -495,6 +510,8 @@ class VocabViewModel @Inject constructor(
         session.value = session.value.copy(
             turn = session.value.turn + 1,
             skipped = session.value.skipped + word.word,
+            // Karar verildi: düzenlenen kelimeyi başta tutmanın anlamı kalmadı.
+            pinned = null,
         )
     }
 
