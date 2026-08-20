@@ -181,11 +181,12 @@ class OpenAiClient @Inject constructor(
         append("For \"discordant\" that search yields discard, descendant, ")
         append("redundant. Never list a word that shares the input's root — ")
         append("those belong in f, and a shared root is the opposite of what ")
-        append("this section is for. Never list the input itself, and never a ")
-        append("mere inflection or derivation of it: for \"discordant\", the ")
-        append("words discordant, discordance and discordantly are all the same ")
-        append("word and none of them belongs here. A look-alike is a ")
-        append("DIFFERENT word that happens to look similar. Write each one as ")
+        append("this section is for. Never list the input itself and never an ")
+        append("INFLECTION of it — a form that only adds a grammatical ending ")
+        append("(-s, -es, -ed, -ing) is the same word, so for \"discard\" do not ")
+        append("list discards, discarded or discarding. A DERIVATION is fine ")
+        append("(it is a different word and easy to mix up): discordance and ")
+        append("discordantly may appear for \"discordant\". Write each one as ")
         append("\"lookalike — Türkçe karşılığı\" and nothing else. Do NOT explain ")
         append("which letters differ; the reader sees that at a glance. Example ")
         append("for amorphous: \"amorous — aşk dolu\". ")
@@ -249,11 +250,12 @@ class OpenAiClient @Inject constructor(
         val antonyms = json.optJSONArray("a").toStringList()
         val root = json.optString("k").trim()
         val family = json.optJSONArray("f").toStringList()
-            .filterNot { it.headWord().equals(word.trim(), ignoreCase = true) }
-        // Modelin kelimenin kendisini "benzeyen kelime" diye vermesi olan bir
-        // şey; yönerge yasaklıyor ama bir de burada eliyoruz.
+            .filterNot { sameWord(it.headWord(), word.trim()) }
+        // Kelimenin kendisi ve çekimleri ("discard / discarded") benzeyen
+        // kelime değil, aynı kelime. Türevleri ("discordance") kalabiliyor:
+        // onlar ayrı birer kelime ve karıştırılmaya çok müsait.
         val confusions = json.optJSONArray("x").toStringList()
-            .filterNot { it.headWord().equals(word.trim(), ignoreCase = true) }
+            .filterNot { sameWord(it.headWord(), word.trim()) }
         val meaning = json.optString("t").trim()
         if (meaning.isBlank() && examples.isEmpty()) {
             return AiResult.Failed("Yanıt anlaşılamadı.")
@@ -284,6 +286,40 @@ class OpenAiClient @Inject constructor(
             val words = group.optJSONArray("w").toStringList()
             if (pattern.isBlank() || words.isEmpty()) null else Collocation(pattern, words)
         }
+    }
+
+    /**
+     * İki yazım aynı kelimenin biçimleri mi.
+     *
+     * Yalnız çekim ekleri: çokluk, geçmiş zaman, -ing. Türev ekleri
+     * (-ance, -ly, -ness) kasıtla dışarıda — onlar ayrı kelime.
+     */
+    private fun sameWord(candidate: String, input: String): Boolean {
+        val a = candidate.lowercase()
+        val b = input.lowercase()
+        if (a == b) return true
+        return inflections(b).contains(a) || inflections(a).contains(b)
+    }
+
+    private fun inflections(base: String): Set<String> {
+        if (base.length < 3) return emptySet()
+        val forms = mutableSetOf(base + "s", base + "es", base + "ed", base + "d", base + "ing")
+        if (base.endsWith("e")) {
+            val stem = base.dropLast(1)
+            forms += stem + "ing"
+            forms += stem + "ed"
+        }
+        if (base.endsWith("y")) {
+            val stem = base.dropLast(1)
+            forms += stem + "ies"
+            forms += stem + "ied"
+        }
+        val last = base.last()
+        if (last !in "aeiou" && base.length >= 3 && base[base.length - 2] in "aeiou") {
+            forms += base + last + "ing"
+            forms += base + last + "ed"
+        }
+        return forms
     }
 
     /** "amorous — aşk dolu" satırından yalnız kelimeyi alır. */
