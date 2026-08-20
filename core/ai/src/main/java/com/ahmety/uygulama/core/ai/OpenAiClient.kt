@@ -133,6 +133,90 @@ class OpenAiClient @Inject constructor(
     }
 
     /**
+     * Kart hakkında serbest soru.
+     *
+     * Hazır açıklama her zaman yetmiyor: "peki neden böyle deniyor",
+     * "bunu ben nerede kullanırım" gibi sorular kalıyor. Kelimenin kendisi,
+     * geçtiği cümle ve eserin künyesi soruyla birlikte gidiyor, yani soruyu
+     * baştan anlatmak gerekmiyor.
+     */
+    suspend fun askAbout(
+        word: String,
+        question: String,
+        context: String = "",
+        sourceName: String = "",
+        brief: String = "",
+    ): AiResult<String> {
+        val key = settings.apiKey
+        if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
+        if (question.isBlank()) return AiResult.Failed("Soru boş.")
+
+        val instruction = buildString {
+            append("You are a bilingual English-Turkish teacher. The reader is ")
+            append("studying an English word or sentence and has a follow-up ")
+            append("question about it. Answer IN TURKISH, directly, at most 120 ")
+            append("words, for an adult who already reads English at an ")
+            append("intermediate level. ")
+            append("If the answer involves a figurative sense, give the literal ")
+            append("meaning and the bridge between the two rather than only the ")
+            append("result. ")
+            append("Never explain that a swear word is rude or sexual; the reader ")
+            append("knows. Use the background on the work only to pick the right ")
+            append("reading — do not talk about the work or its genre. ")
+            append("No markdown, no lists, no preamble.")
+        }
+
+        val userText = buildString {
+            append("Expression: ").append(word)
+            if (context.isNotBlank()) append("\nIt appeared here: ").append(context)
+            if (sourceName.isNotBlank()) append("\nFrom: ").append(sourceName)
+            if (brief.isNotBlank()) append("\nBackground (do not discuss): ").append(brief)
+            append("\nQuestion: ").append(question)
+        }
+
+        val payload = JSONObject().apply {
+            put("model", settings.model)
+            put("temperature", 0.3)
+            put(
+                "messages",
+                JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", instruction))
+                    .put(JSONObject().put("role", "user").put("content", userText)),
+            )
+        }
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder()
+                    .url(ENDPOINT)
+                    .addHeader("Authorization", "Bearer $key")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA))
+                    .build()
+
+                http.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        return@use AiResult.Failed(readableError(response.code, body))
+                    }
+                    val content = JSONObject(body)
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content")
+                        .trim()
+                    if (content.isBlank()) {
+                        AiResult.Failed("Yanıt boş döndü.")
+                    } else {
+                        AiResult.Ok(content)
+                    }
+                }
+            }.getOrElse { error ->
+                AiResult.Failed("Bağlantı kurulamadı: ${error.message ?: "bilinmeyen hata"}")
+            }
+        }
+    }
+
+    /**
      * Eserin künyesini çıkarır: kitabın ya da filmin kısa tanıtımı.
      *
      * Metinden bir örnek gönderiliyor — altyazının tamamı, kitapta ilk
@@ -337,26 +421,46 @@ class OpenAiClient @Inject constructor(
         append("first, then make t the Turkish of exactly that. If they disagree, ")
         append("t is the one to fix), ")
 
-        append("e (array of 0-2 notes in Turkish. Write a note ONLY when a ")
-        append("learner who knows every word separately would still read the ")
-        append("sentence wrongly: an idiom whose meaning is not the sum of its ")
-        append("parts, a word used in an unexpected sense, something left out. ")
+        append("e (array of 0-2 notes in Turkish, written for an adult who ")
+        append("already reads English at an intermediate level. ")
+        append("Write a note ONLY when a learner who knows every word separately ")
+        append("would still read the sentence wrongly: a figurative use, an idiom ")
+        append("whose meaning is not the sum of its parts, something left out. ")
         append("If the sentence means exactly what it says, return an EMPTY ")
         append("array — that is the normal case, not a failure. ")
+        append("When the expression IS figurative — an idiom, a phrasal verb, or ")
+        append("a word used outside its plain sense — the note must do three ")
+        append("things in one or two sentences: give the word\u0027s literal, ")
+        append("original meaning; give the sense it carries here; and show the ")
+        append("BRIDGE between the two — which image or association carries the ")
+        append("meaning across, and for a phrasal verb what the particle ")
+        append("contributes. This is the most useful thing you can write, ")
+        append("because the bridge is what lets the reader guess the next idiom ")
+        append("unaided. To show the kind of thing meant (do not reuse these ")
+        append("unless the input actually contains them): \"can\" is literally a ")
+        append("metal container, hence a small closed box you cannot leave, ")
+        append("hence prison; \"stand\" is literally to stay upright, hence to ")
+        append("hold your ground under a weight, hence to tolerate; the particle ")
+        append("\"off\" carries separation, so \"hack off\" is cutting a piece ")
+        append("AWAY rather than cutting into something; \"around\" carries ")
+        append("\"here and there, no fixed point\", so \"see you around\" is ")
+        append("meeting again at no arranged time. ")
+        append("If a real bridge does not exist, say plainly that the meaning is ")
+        append("idiomatic and unmotivated — never invent an etymology. ")
+        append("Never explain that a swear word is rude, vulgar or sexual: the ")
+        append("reader is an adult and already knows. Write about a swear word ")
+        append("only when it carries a sense its parts do not give ")
+        append("(\"fuck off\" = defol), and then explain only that sense. ")
         append("Do not restate the sentence. Do not label its speech act ")
         append("(\"bir tavsiye\", \"bir soru\"). Do not mention word order. ")
-        append("Above all: never decorate a note with the genre or the work. ")
-        append("Sentences like \"mafya ortamında böyle kullanılır\" or ")
-        append("\"bu tür filmlerde ...\" are almost always invented, and the ")
-        append("reader is tired of reading them on every card. A wig advert is ")
-        append("a wig advert even in a mob film. Mention the world of the work ")
-        append("only if the expression truly belongs to it and would otherwise ")
-        append("be misread. ")
-        append("When a note IS warranted, teach the expression: what it ")
-        append("literally says, when an English speaker reaches for it, what ")
-        append("register it belongs to. Grammar labels alone ")
-        append("(\"present perfect kullanılmış\") teach nothing; say what that ")
-        append("choice does to the meaning), ")
+        append("Do not say that a word\u0027s reference \"depends on context\" — ")
+        append("that is true of every word and teaches nothing. ")
+        append("Never decorate a note with the genre or the work. Sentences like ")
+        append("\"mafya ortamında böyle kullanılır\" or \"bu tür filmlerde ...\" ")
+        append("are almost always invented, and the reader is tired of reading ")
+        append("them on every card. A wig advert is a wig advert even in a mob ")
+        append("film. Mention the world of the work only if the expression truly ")
+        append("belongs to it and would otherwise be misread), ")
         append("r (array of 0-4 idioms or phrasal verbs that appear in it, ")
         append("each as \"expression — Turkish meaning\"), ")
         append("c, f, x, s, a (empty arrays), k (empty string). ")

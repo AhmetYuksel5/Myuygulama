@@ -93,6 +93,7 @@ fun VocabRoute(
     val threshold by viewModel.swipeThreshold.collectAsStateWithLifecycle()
     val enrichingWord by viewModel.enriching.collectAsStateWithLifecycle()
     val aiMessage by viewModel.aiMessage.collectAsStateWithLifecycle()
+    val question by viewModel.question.collectAsStateWithLifecycle()
     // remember ile sarmıyoruz: anahtar Ayarlar'dan yeni girildiyse bu ekrana
     // dönüldüğünde düğmenin hemen görünmesi gerekiyor.
     val aiReady = viewModel.aiConfigured
@@ -246,6 +247,11 @@ fun VocabRoute(
                         } else {
                             null
                         },
+                        onAsk = if (aiReady) {
+                            { viewModel.openQuestion(top) }
+                        } else {
+                            null
+                        },
                         onKnown = { viewModel.markKnown(top, it) },
                         onLearning = { viewModel.markLearning(top, it) },
                         onIgnore = { viewModel.markIgnored(top, it) },
@@ -278,6 +284,14 @@ fun VocabRoute(
         )
     }
 
+    question?.let { state ->
+        QuestionDialog(
+            state = state,
+            onAsk = viewModel::ask,
+            onDismiss = viewModel::closeQuestion,
+        )
+    }
+
     cardWord?.let { word ->
         // Listeden açılan kartta da anlamı getirebilmek gerekiyor: çoğu
         // kelimeye ilk kez orada bakıyorsun.
@@ -287,6 +301,11 @@ fun VocabRoute(
             enriching = enrichingWord == fresh.word,
             onEnrich = if (aiReady) {
                 { viewModel.enrich(fresh) }
+            } else {
+                null
+            },
+            onAsk = if (aiReady) {
+                { viewModel.openQuestion(fresh) }
             } else {
                 null
             },
@@ -344,6 +363,65 @@ fun VocabRoute(
 }
 
 /**
+ * Kart hakkında serbest soru kutusu.
+ *
+ * Hazır açıklama her zaman yetmiyor: "peki neden böyle deniyor", "ben bunu
+ * nerede kullanırım" gibi sorular kalıyor. Kelimenin kendisi, geçtiği cümle
+ * ve eserin künyesi soruyla birlikte gidiyor.
+ */
+@Composable
+private fun QuestionDialog(
+    state: QuestionUiState,
+    onAsk: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember(state.word.word) { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = state.word.word,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Sorun") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (state.busy) {
+                    Text("Düşünüyor…", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (state.answer.isNotBlank()) {
+                    Text(state.answer, style = MaterialTheme.typography.bodyMedium)
+                }
+                state.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !state.busy && text.isNotBlank(),
+                onClick = { onAsk(text) },
+            ) { Text("Sor") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+    )
+}
+
+/**
  * Listeden açılan kart.
  *
  * Destedeki kartın aynısı, ama açık hâlde ve karar vermeden: listeye
@@ -354,6 +432,7 @@ private fun WordCardDialog(
     word: VocabWord,
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
+    onAsk: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     Dialog(
@@ -373,6 +452,7 @@ private fun WordCardDialog(
                     revealed = true,
                     enriching = enriching,
                     onEnrich = onEnrich,
+                    onAsk = onAsk,
                     scrollState = rememberScrollState(),
                 )
             }
@@ -911,6 +991,7 @@ private fun SwipeableCard(
     threshold: Float,
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
+    onAsk: (() -> Unit)?,
     onKnown: (Boolean) -> Unit,
     onLearning: (Boolean) -> Unit,
     onIgnore: (Boolean) -> Unit,
@@ -1049,6 +1130,7 @@ private fun SwipeableCard(
             tint = tint,
             enriching = enriching,
             onEnrich = onEnrich,
+            onAsk = onAsk,
             revealed = revealed,
             onToggleReveal = { revealed = !revealed },
             onLongPress = onLongPress,
@@ -1083,6 +1165,7 @@ private fun WordCard(
     interactive: Boolean = true,
     enriching: Boolean = false,
     onEnrich: (() -> Unit)? = null,
+    onAsk: (() -> Unit)? = null,
     revealed: Boolean = false,
     onToggleReveal: () -> Unit = {},
     onLongPress: () -> Unit = {},
@@ -1319,18 +1402,29 @@ private fun WordCard(
                     .background(tint, RoundedCornerShape(24.dp)),
             )
 
-            // Anlamı henüz getirilmemiş kelime: düğme kartın dibinde duruyor,
-            // metnin arasında değil. Açıklama yazısı yok — düğme zaten ne
-            // yapacağını söylüyor.
-            if (word.meaning.isBlank() && word.definition.isBlank() && onEnrich != null) {
+            // Kartın dibindeki düğme: bilgi yoksa getiriyor, varsa soru
+            // sormaya açıyor. Metnin arasında değil dipte, çünkü kartın
+            // içeriği her kelimede farklı uzunlukta bitiyor.
+            val empty = word.meaning.isBlank() && word.definition.isBlank()
+            val bottomAction: (() -> Unit)? = when {
+                empty -> onEnrich
+                else -> onAsk
+            }
+            if (bottomAction != null && revealed) {
                 TextButton(
                     enabled = !enriching,
-                    onClick = onEnrich,
+                    onClick = bottomAction,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 12.dp),
                 ) {
-                    Text(if (enriching) "Getiriliyor…" else "Anlamını getir")
+                    Text(
+                        when {
+                            enriching -> "Getiriliyor…"
+                            empty -> "Anlamını getir"
+                            else -> "Soru sor"
+                        },
+                    )
                 }
             }
         }

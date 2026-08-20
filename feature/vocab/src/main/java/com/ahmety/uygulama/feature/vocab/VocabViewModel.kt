@@ -78,6 +78,14 @@ data class VocabFilter(
     val pen: VocabPen = VocabPen.BOTH,
 )
 
+/** Kart hakkında sorulan sorunun durumu. */
+data class QuestionUiState(
+    val word: VocabWord,
+    val answer: String = "",
+    val busy: Boolean = false,
+    val error: String? = null,
+)
+
 /** Tam listedeki bir satır: kelime, kaynağı ve nerede olduğu. */
 data class VocabListItem(
     val word: VocabWord,
@@ -189,6 +197,52 @@ class VocabViewModel @Inject constructor(
         return when (val result = openAi.describeWork(work, sample)) {
             is AiResult.Ok -> result.value.also { briefs.put(work, it) }
             is AiResult.Failed -> ""
+        }
+    }
+
+    /**
+     * Kart hakkında sorulan serbest sorunun durumu.
+     *
+     * Hazır açıklama her zaman yetmiyor; "peki neden böyle deniyor" diye
+     * sorabilmek gerekiyor.
+     */
+    private val _question = MutableStateFlow<QuestionUiState?>(null)
+    val question: StateFlow<QuestionUiState?> = _question
+
+    fun openQuestion(word: VocabWord) {
+        _question.value = QuestionUiState(word = word)
+    }
+
+    fun closeQuestion() {
+        _question.value = null
+    }
+
+    fun ask(text: String) {
+        val current = _question.value ?: return
+        if (current.busy || text.isBlank()) return
+        _question.value = current.copy(busy = true, answer = "", error = null)
+        viewModelScope.launch {
+            val word = current.word
+            val brief = briefFor(word)
+            when (
+                val result = openAi.askAbout(
+                    word = word.word,
+                    question = text,
+                    context = word.context,
+                    sourceName = word.sourceName,
+                    brief = brief,
+                )
+            ) {
+                is AiResult.Ok -> _question.value = _question.value?.copy(
+                    busy = false,
+                    answer = result.value,
+                )
+
+                is AiResult.Failed -> _question.value = _question.value?.copy(
+                    busy = false,
+                    error = result.reason,
+                )
+            }
         }
     }
 
