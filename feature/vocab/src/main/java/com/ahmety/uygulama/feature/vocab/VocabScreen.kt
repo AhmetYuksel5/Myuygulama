@@ -288,6 +288,7 @@ fun VocabRoute(
         QuestionDialog(
             state = state,
             onAsk = viewModel::ask,
+            onSave = viewModel::saveAnswer,
             onDismiss = viewModel::closeQuestion,
         )
     }
@@ -373,6 +374,7 @@ fun VocabRoute(
 private fun QuestionDialog(
     state: QuestionUiState,
     onAsk: (String) -> Unit,
+    onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var text by remember(state.word.word) { mutableStateOf("") }
@@ -412,12 +414,20 @@ private fun QuestionDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = !state.busy && text.isNotBlank(),
-                onClick = { onAsk(text) },
-            ) { Text("Sor") }
+            // Kapat / Kaydet / Sor birlikte: yanıtı beğendiysen karta
+            // yazdırıp çıkıyorsun, beğenmediysen yeniden soruyorsun.
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onDismiss) { Text("Kapat") }
+                TextButton(
+                    enabled = !state.busy && state.answer.isNotBlank(),
+                    onClick = onSave,
+                ) { Text("Kaydet") }
+                TextButton(
+                    enabled = !state.busy && text.isNotBlank(),
+                    onClick = { onAsk(text) },
+                ) { Text("Sor") }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
     )
 }
 
@@ -662,6 +672,7 @@ private fun WordEditDialog(
                             confusions = confusions.lines().map { it.trim() }
                                 .filter { it.isNotBlank() },
                             collocations = parseCollocations(collocations),
+                            answers = word.answers,
                         ),
                     )
                 },
@@ -1132,7 +1143,13 @@ private fun SwipeableCard(
             onEnrich = onEnrich,
             onAsk = onAsk,
             revealed = revealed,
-            onToggleReveal = { revealed = !revealed },
+            onToggleReveal = {
+                revealed = !revealed
+                // Kartın arkasına bakmak zaten "anlamını görmek istiyorum"
+                // demek; ayrıca bir düğmeye basmak gereksiz.
+                val empty = word.meaning.isBlank() && word.definition.isBlank()
+                if (revealed && empty && !enriching) onEnrich?.invoke()
+            },
             onLongPress = onLongPress,
             scrollState = if (revealed) scrollState else null,
         )
@@ -1364,6 +1381,24 @@ private fun WordCard(
                         Spacer(Modifier.height(10.dp))
                         word.collocations.forEach { group ->
                             CollocationRow(group)
+                        }
+                    }
+
+                    // Sorup kaydettiğin yanıtlar: senin notların, modelin
+                    // ürettiği bilgiden ayrı dursun diye çizginin altında.
+                    if (word.answers.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Spacer(Modifier.height(8.dp))
+                        word.answers.forEach { note ->
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Start,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                            )
                         }
                     }
 

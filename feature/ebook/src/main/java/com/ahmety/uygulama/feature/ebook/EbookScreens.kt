@@ -689,6 +689,9 @@ private fun HighlightableParagraph(
     // Seçim: uzun basınca kelimede başlar, parmak sürüklendikçe genişler.
     var selection by remember(paragraph) { mutableStateOf<IntRange?>(null) }
     var anchor by remember(paragraph) { mutableStateOf<Pair<Int, Int>?>(null) }
+    // Çift dokunuşun bıraktığı iz: hemen ardından gelen dokunuş üçüncü
+    // dokunuş sayılıyor ve cümlenin tamamını seçiyor.
+    var lastDoubleTap by remember(paragraph) { mutableStateOf<Int?>(null) }
     val haptic = LocalHapticFeedback.current
     val selectionTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
 
@@ -748,7 +751,37 @@ private fun HighlightableParagraph(
                 .pointerInput(paragraph, colors) {
                     detectTapGestures(
                         onLongPress = {},
+                        // Çift dokunuş kelimeyi, üçüncü dokunuş cümleyi
+                        // seçiyor. Uzun basıp sürüklemek hâlâ serbest seçim
+                        // için duruyor ama tek kelime ya da tam cümle için
+                        // uğraştırıyordu.
+                        onDoubleTap = { position ->
+                            val result = layout ?: return@detectTapGestures
+                            val offset = result.getOffsetForPosition(position)
+                            val bounds = wordBoundsAt(paragraph, offset)
+                                ?: return@detectTapGestures
+                            lastDoubleTap = offset
+                            onSelection(
+                                paragraph.substring(bounds.first, bounds.second),
+                                contextAround(paragraph, bounds.first, bounds.second),
+                            )
+                        },
                         onTap = { position ->
+                            val offset = layout?.getOffsetForPosition(position)
+                            // Çift dokunuşun hemen ardından gelen dokunuş,
+                            // üçüncü dokunuştur: cümlenin tamamını seçiyor.
+                            val third = lastDoubleTap
+                            if (third != null && offset != null) {
+                                lastDoubleTap = null
+                                val bounds = sentenceBoundsAt(paragraph, offset)
+                                if (bounds != null) {
+                                    onSelection(
+                                        paragraph.substring(bounds.first, bounds.second).trim(),
+                                        paragraph,
+                                    )
+                                    return@detectTapGestures
+                                }
+                            }
                             // İşaretli bir kelimeye dokunmak renk kutusunu
                             // açsın: işareti kaldırmanın tek yolu oydu ama
                             // dokunuş arayüzü açıp kapatmakla harcanıyordu.
@@ -812,6 +845,31 @@ private fun HighlightableParagraph(
                 },
         )
     }
+}
+
+/**
+ * Verilen konumdaki cümlenin sınırları.
+ *
+ * Cümle sonu ".", "!" ya da "?" — ama "Mr." gibi kısaltmalarda yanılmamak
+ * için noktadan sonra boşluk arıyoruz.
+ */
+private fun sentenceBoundsAt(text: String, offset: Int): Pair<Int, Int>? {
+    if (text.isEmpty()) return null
+    val index = offset.coerceIn(0, text.length - 1)
+    var start = index
+    while (start > 0) {
+        val char = text[start - 1]
+        if (char in ".!?" && (start >= text.length || text[start].isWhitespace())) break
+        start--
+    }
+    var end = index
+    while (end < text.length) {
+        val char = text[end]
+        end++
+        if (char in ".!?" && (end >= text.length || text[end].isWhitespace())) break
+    }
+    while (start < end && text[start].isWhitespace()) start++
+    return if (end - start < 2) null else start to end
 }
 
 /** Paragraftaki bir işaretin metni ve yeri. */

@@ -81,6 +81,7 @@ data class VocabFilter(
 /** Kart hakkında sorulan sorunun durumu. */
 data class QuestionUiState(
     val word: VocabWord,
+    val asked: String = "",
     val answer: String = "",
     val busy: Boolean = false,
     val error: String? = null,
@@ -220,7 +221,7 @@ class VocabViewModel @Inject constructor(
     fun ask(text: String) {
         val current = _question.value ?: return
         if (current.busy || text.isBlank()) return
-        _question.value = current.copy(busy = true, answer = "", error = null)
+        _question.value = current.copy(busy = true, asked = text.trim(), answer = "", error = null)
         viewModelScope.launch {
             val word = current.word
             val brief = briefFor(word)
@@ -244,6 +245,24 @@ class VocabViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Soruyu ve yanıtı kelimenin kartına yazar.
+     *
+     * Sorup öğrendiğin şey kartta kalmalı; ikinci kez aynı soruyu sormak
+     * gerekmesin. Bilgi yenilenirken de silinmiyor, çünkü o senin notun.
+     */
+    fun saveAnswer() {
+        val current = _question.value ?: return
+        if (current.answer.isBlank()) return
+        val note = buildString {
+            if (current.asked.isNotBlank()) append(current.asked.trim()).append("\n")
+            append(current.answer.trim())
+        }
+        repository.saveAnswer(current.word, note)
+        session.value = session.value.copy(refresh = session.value.refresh + 1)
+        _question.value = null
     }
 
     /** Eseri yanlış okuduysa künyeyi attır; sonraki sorgu yenisini üretir. */

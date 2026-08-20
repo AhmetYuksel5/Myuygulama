@@ -31,6 +31,8 @@ data class WordInfo(
      * göre gruplanmış — Oxford Collocations Dictionary mantığı.
      */
     val collocations: List<Collocation>,
+    /** Kullanıcının kart üstünde sorup kaydettiği sorular ve yanıtları. */
+    val answers: List<String> = emptyList(),
 )
 
 sealed interface AiResult<out T> {
@@ -158,8 +160,9 @@ class OpenAiClient @Inject constructor(
             append("words, for an adult who already reads English at an ")
             append("intermediate level. ")
             append("If the answer involves a figurative sense, give the literal ")
-            append("meaning and the bridge between the two rather than only the ")
-            append("result. ")
+            append("meaning and how the sense travelled from it, not only the ")
+            append("result — but say it in ordinary Turkish, never using the ")
+            append("word \"köprü\" or any other jargon. ")
             append("Never explain that a swear word is rude or sexual; the reader ")
             append("knows. Use the background on the work only to pick the right ")
             append("reading — do not talk about the work or its genre. ")
@@ -419,7 +422,12 @@ class OpenAiClient @Inject constructor(
         append("\"muhbir olabilir\" — NOT \"biraz daha beklersek muhbir olabilir\". ")
         append("t and d must say the same thing about the same words: write d ")
         append("first, then make t the Turkish of exactly that. If they disagree, ")
-        append("t is the one to fix), ")
+        append("t is the one to fix. ")
+        append("Write the Turkish a Turkish speaker would actually SAY in ")
+        append("that situation, not a word-by-word gloss: \"on the house\" ")
+        append("is \"müessesenin ikramı\", not \"bedava\"; \"it is on me\" ")
+        append("is \"benden\", not \"hesap bana ait\". Reach for the ")
+        append("ready-made Turkish expression whenever one exists), ")
 
         append("e (array of 0-2 notes in Turkish, written for an adult who ")
         append("already reads English at an intermediate level. ")
@@ -432,11 +440,14 @@ class OpenAiClient @Inject constructor(
         append("a word used outside its plain sense — the note must do three ")
         append("things in one or two sentences: give the word\u0027s literal, ")
         append("original meaning; give the sense it carries here; and show the ")
-        append("BRIDGE between the two — which image or association carries the ")
+        append("CONNECTION between the two — which image or association carries the ")
         append("meaning across, and for a phrasal verb what the particle ")
         append("contributes. This is the most useful thing you can write, ")
-        append("because the bridge is what lets the reader guess the next idiom ")
-        append("unaided. To show the kind of thing meant (do not reuse these ")
+        append("because seeing how the sense travelled is what lets the ")
+        append("reader guess the next idiom unaided. Show that movement in ")
+        append("ordinary Turkish; never name the mechanism and never use ")
+        append("the word \"köprü\" or any other jargon for it. ")
+        append("To show the kind of thing meant (do not reuse these ")
         append("unless the input actually contains them): \"can\" is literally a ")
         append("metal container, hence a small closed box you cannot leave, ")
         append("hence prison; \"stand\" is literally to stay upright, hence to ")
@@ -445,12 +456,14 @@ class OpenAiClient @Inject constructor(
         append("AWAY rather than cutting into something; \"around\" carries ")
         append("\"here and there, no fixed point\", so \"see you around\" is ")
         append("meeting again at no arranged time. ")
-        append("If a real bridge does not exist, say plainly that the meaning is ")
+        append("If no real connection exists, say plainly that the meaning is ")
         append("idiomatic and unmotivated — never invent an etymology. ")
         append("Never explain that a swear word is rude, vulgar or sexual: the ")
         append("reader is an adult and already knows. Write about a swear word ")
         append("only when it carries a sense its parts do not give ")
         append("(\"fuck off\" = defol), and then explain only that sense. ")
+        append("Each note is a PLAIN Turkish string — never a JSON object, ")
+        append("never English. ")
         append("Do not restate the sentence. Do not label its speech act ")
         append("(\"bir tavsiye\", \"bir soru\"). Do not mention word order. ")
         append("Do not say that a word\u0027s reference \"depends on context\" — ")
@@ -551,10 +564,27 @@ class OpenAiClient @Inject constructor(
     private fun String.headWord(): String =
         substringBefore('\u2014').substringBefore(" - ").substringBefore(';').trim()
 
+    /**
+     * Dizideki metinler.
+     *
+     * Model bazen düz metin yerine `{"en":"..."}` gibi bir nesne koyuyor;
+     * o zaman `optString` nesnenin JSON'unu olduğu gibi veriyor ve kartta
+     * süslü parantezler görünüyordu. Nesne gelirse içindeki ilk metni
+     * alıyoruz.
+     */
     private fun JSONArray?.toStringList(): List<String> {
         if (this == null) return emptyList()
         return (0 until length()).mapNotNull { index ->
-            optString(index).trim().takeIf { it.isNotBlank() }
+            val nested = optJSONObject(index)
+            val raw = if (nested != null) {
+                nested.keys().asSequence()
+                    .mapNotNull { nested.optString(it).trim().takeIf { value -> value.isNotBlank() } }
+                    .firstOrNull()
+                    .orEmpty()
+            } else {
+                optString(index)
+            }
+            raw.trim().takeIf { it.isNotBlank() }
         }
     }
 

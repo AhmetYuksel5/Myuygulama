@@ -44,6 +44,8 @@ data class VocabWord(
      */
     val collocations: List<Collocation> = emptyList(),
     /** Kitaptan/filmden aktarıldıysa kelimenin geçtiği cümle. */
+    /** Kart üstünde sorup kaydettiğin sorular ve yanıtları. */
+    val answers: List<String> = emptyList(),
     val context: String = "",
     /** Kelimenin nereden geldiği. */
     val source: VocabSource = VocabSource.SELECTION,

@@ -79,6 +79,7 @@ class VocabRepository @Inject constructor(
                     family = filled?.family.orEmpty(),
                     confusions = filled?.confusions.orEmpty(),
                     collocations = filled?.collocations.orEmpty(),
+                    answers = filled?.answers.orEmpty(),
                     context = entry.body.trim(),
                     source = when (kind) {
                         HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
@@ -195,13 +196,27 @@ class VocabRepository @Inject constructor(
                 family = word.family,
                 confusions = word.confusions,
                 collocations = word.collocations,
+                answers = word.answers,
             ),
         )
     }
 
     /** Yapay zekâyla üretilen bilgiyi saklar. */
+    /**
+     * Yapay zekâdan gelen bilgiyi yazar.
+     *
+     * Kart üstünde sorup kaydettiğin yanıtlar korunuyor: onlar senin
+     * notların, modelin ürettiği bilginin yenilenmesiyle silinmemeliler.
+     */
     fun saveEnrichment(info: com.ahmety.uygulama.core.ai.WordInfo) {
-        enrichment.put(info)
+        val kept = enrichment.get(info.word)?.answers.orEmpty()
+        enrichment.put(if (kept.isEmpty()) info else info.copy(answers = kept))
+    }
+
+    /** Kart üstünde sorulan soruyu ve yanıtını kelimeye ekler. */
+    fun saveAnswer(word: VocabWord, note: String) {
+        val current = enrichment.get(word.word) ?: word
+        saveEdit(current.copy(word = word.word, answers = current.answers + note))
     }
 
     /**
@@ -222,6 +237,7 @@ class VocabRepository @Inject constructor(
             family = filled.family,
             confusions = filled.confusions,
             collocations = filled.collocations,
+            answers = filled.answers,
         )
     }
 

@@ -54,6 +54,7 @@ class WordEnrichmentStore @Inject constructor(
                 root = json.optString("k"),
                 family = json.optJSONArray("f").toList(),
                 confusions = json.optJSONArray("x").toList(),
+                answers = json.optJSONArray("n").toList(),
                 collocations = json.optJSONArray("c").toCollocations(),
             )
         }.getOrNull()?.also { cache[key] = it }
@@ -70,6 +71,7 @@ class WordEnrichmentStore @Inject constructor(
             put("k", info.root)
             put("f", JSONArray().apply { info.family.forEach { put(it) } })
             put("x", JSONArray().apply { info.confusions.forEach { put(it) } })
+            put("n", JSONArray().apply { info.answers.forEach { put(it) } })
             put(
                 "c",
                 JSONArray().apply {
@@ -98,6 +100,7 @@ class WordEnrichmentStore @Inject constructor(
             family = info.family,
             confusions = info.confusions,
             collocations = info.collocations,
+            answers = info.answers,
         )
     }
 
