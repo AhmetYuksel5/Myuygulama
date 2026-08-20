@@ -1,4 +1,4 @@
-name: Sürüm yayınla
+name: Derle ve yayınla
 
 on:
   push:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   release:
-    name: İmzalı APK yayınla
+    name: Derle, test et, imzalı APK yayınla
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +29,28 @@ jobs:
 
       - name: Gradle hazırla
         uses: gradle/actions/setup-gradle@v4
+
+      - name: gradlew çalıştırılabilir olsun
+        run: chmod +x ./gradlew
+
+      # Derleme ve testler burada, ayrı bir iş akışında değil. İkiye bölünmüş
+      # olması her kırılmada iki ayrı "Run failed" bildirimi üretiyordu ve
+      # aynı kodu iki kez derliyordu.
+      - name: Derle ve testleri çalıştır
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee derleme.log
+
+      # Kırılınca derleyici hatalarını log'un en sonuna yazıyoruz. Gradle'ın
+      # yığın izi yüzlerce satır sürüyor ve asıl "e:" satırları ortada kalıyor.
+      - name: Hataları özetle
+        if: failure()
+        run: |
+          echo "===== DERLEME HATALARI ====="
+          grep -E "^e: |^w: .*error|FAILED$|^\s+> " derleme.log | head -60 || true
+          echo "===== TEST HATALARI ====="
+          grep -E "FAILED|AssertionError|tests completed" derleme.log | head -40 || true
 
       # Anahtar eksikse sessizce atlamıyoruz: yeşil tik alıp hiçbir şey
       # yayınlamamak, sorunu saatlerce görünmez kılıyor.
@@ -77,9 +99,7 @@ jobs:
           SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/merkez-release.jks
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: merkez
-        run: |
-          chmod +x ./gradlew
-          ./gradlew --no-daemon assembleRelease
+        run: ./gradlew --no-daemon assembleRelease
 
       - name: APK'yı adlandır
         if: steps.keystore.outputs.ready == 'true'
