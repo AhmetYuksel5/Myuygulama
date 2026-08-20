@@ -1019,6 +1019,9 @@ private fun SwipeableCard(
     var flyToY by remember(key) { mutableFloatStateOf(0f) }
     var decision by remember(key) { mutableStateOf<(() -> Unit)?>(null) }
     val scrollState = rememberScrollState()
+    // Bu parmak hareketinde metin kaydırıldı mı. Kaydırıldıysa artan dikey
+    // hareket karta geçmiyor.
+    var scrolled by remember(key) { mutableStateOf(false) }
 
     /** Dikey fırlatma kararını uygular; hem jestten hem kaydırma artığından çağrılıyor. */
     fun decideVertical() {
@@ -1052,13 +1055,32 @@ private fun SwipeableCard(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                if (dismissed || available.y == 0f) return Offset.Zero
+                if (dismissed) return Offset.Zero
+                // Bu harekette metin kaydırıldıysa artığı karta vermiyoruz.
+                // Uzun bir kartı okuyup sonuna gelince parmağını kaldırmak
+                // "yukarı fırlattım" sayılıyor ve kelime öğrenildiye
+                // gidiyordu. Metnin sonunda kart duruyor; öğrendim demek
+                // istersen ayrı bir hareketle yukarı atıyorsun.
+                if (consumed.y != 0f) {
+                    scrolled = true
+                    return Offset.Zero
+                }
+                if (scrolled || available.y == 0f) return Offset.Zero
                 offsetY += available.y
                 return Offset(0f, available.y)
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                if (!dismissed && offsetY != 0f) decideVertical()
+                if (!dismissed) {
+                    if (scrolled) {
+                        // Kaydırma hareketiydi: kart neredeyse yerine dönsün.
+                        offsetY = 0f
+                    } else if (offsetY != 0f) {
+                        decideVertical()
+                    }
+                }
+                // Bir sonraki hareket temiz başlasın.
+                scrolled = false
                 return Velocity.Zero
             }
         }

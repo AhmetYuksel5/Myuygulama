@@ -148,6 +148,7 @@ class OpenAiClient @Inject constructor(
         context: String = "",
         sourceName: String = "",
         brief: String = "",
+        card: String = "",
     ): AiResult<String> {
         val key = settings.apiKey
         if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
@@ -166,6 +167,15 @@ class OpenAiClient @Inject constructor(
             append("Never explain that a swear word is rude or sexual; the reader ")
             append("knows. Use the background on the work only to pick the right ")
             append("reading — do not talk about the work or its genre. ")
+            append("You are shown what the study card already says. If your answer ")
+            append("agrees with it, do not repeat it — add what the card does not ")
+            append("cover. If it CONTRADICTS the card, say so in the first ")
+            append("sentence (\"karttaki not yanlış\" ya da \"kart doğru\") and ")
+            append("explain which reading is right and why; never leave two ")
+            append("opposite answers standing side by side. ")
+            append("Do not simply agree with the way the question is framed: if ")
+            append("its premise is wrong, say that first. Both readings being ")
+            append("possible is also an answer — say which one this line means. ")
             append("No markdown, no lists, no preamble.")
         }
 
@@ -174,6 +184,7 @@ class OpenAiClient @Inject constructor(
             if (context.isNotBlank()) append("\nIt appeared here: ").append(context)
             if (sourceName.isNotBlank()) append("\nFrom: ").append(sourceName)
             if (brief.isNotBlank()) append("\nBackground (do not discuss): ").append(brief)
+            if (card.isNotBlank()) append("\nWhat the card already says:\n").append(card)
             append("\nQuestion: ").append(question)
         }
 

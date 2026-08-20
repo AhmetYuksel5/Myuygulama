@@ -232,6 +232,7 @@ class VocabViewModel @Inject constructor(
                     context = word.context,
                     sourceName = word.sourceName,
                     brief = brief,
+                    card = cardSummary(word),
                 )
             ) {
                 is AiResult.Ok -> _question.value = _question.value?.copy(
@@ -246,6 +247,22 @@ class VocabViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Kartta hâlihazırda yazan bilgi.
+     *
+     * Soruyla birlikte gidiyor: model daha önce ne dediğini görmeden
+     * cevaplayınca kartın tam tersini söyleyebiliyor ve ortada iki karşıt
+     * yanıt kalıyordu. Artık ya kartı doğruluyor ya da açıkça düzeltiyor.
+     */
+    private fun cardSummary(word: VocabWord): String = buildString {
+        if (word.meaning.isNotBlank()) append("Anlam: ").append(word.meaning).append("\n")
+        if (word.definition.isNotBlank()) {
+            append("Basit İngilizce: ").append(word.definition).append("\n")
+        }
+        word.examples.forEach { append("Not: ").append(it).append("\n") }
+        word.related.forEach { append("Kalıp: ").append(it).append("\n") }
+    }.trim()
 
     /**
      * Soruyu ve yanıtı kelimenin kartına yazar.
