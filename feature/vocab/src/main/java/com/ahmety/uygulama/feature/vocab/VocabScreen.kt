@@ -544,13 +544,7 @@ private fun WordEditDialog(
                         ),
                     )
                 },
-            ) {
-                // Kelime değiştiyse bilgisi yeniden getirilecek; düğme bunu
-                // önceden söylesin.
-                Text(
-                    if (text.trim() != word.word.trim()) "Kaydet ve yenile" else "Kaydet",
-                )
-            }
+            ) { Text("Kaydet") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } },
     )
