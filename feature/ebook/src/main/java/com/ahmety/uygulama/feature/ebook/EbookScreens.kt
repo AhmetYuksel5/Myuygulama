@@ -915,7 +915,11 @@ private fun trimBounds(text: String, startIn: Int, endIn: Int): Pair<Int, Int>? 
     var end = endIn
     while (start < end && !text[start].isLetter()) start++
     while (end > start && !text[end - 1].isLetter()) end--
-    return if (end - start < 2) null else start to end
+    // Tek harfli kelimeler de kelimedir: "a" ve "I" hem kendi başlarına
+    // işaretlenebilmeli hem de bir seçimin başında ya da sonunda kalınca
+    // seçime girmeli. Eskiden iki harften kısası yok sayılıyordu ve
+    // "I owe you a favor" seçimi baştaki "I"yı dışarıda bırakıyordu.
+    return if (end <= start) null else start to end
 }
 
 /** Paragraf içinde her kelimeyi dolaşır. */
