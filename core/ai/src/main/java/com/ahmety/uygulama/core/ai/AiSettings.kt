@@ -54,11 +54,9 @@ class AiSettings @Inject constructor(
          * çıkardığında adını elle yazabilesin diye kutu da düzenlenebilir.
          */
         val MODELS = listOf("gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1")
-    }
 
-    private companion object {
-        const val PREFS_NAME = "merkez_yapay_zeka"
-        const val KEY_API = "openai_key"
-        const val KEY_MODEL = "model"
+        private const val PREFS_NAME = "merkez_yapay_zeka"
+        private const val KEY_API = "openai_key"
+        private const val KEY_MODEL = "model"
     }
 }
