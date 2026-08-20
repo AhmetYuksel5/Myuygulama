@@ -260,6 +260,9 @@ fun BookReaderRoute(
     var fontSize by remember { mutableStateOf(prefs.fontSizeSp) }
 
     var pending by remember { mutableStateOf<PendingHighlight?>(null) }
+    // Sürüklerken seçtiğin metin. Ekranın üstünde duruyor: parmağın altında
+    // kalanı göremiyordun.
+    var preview by remember { mutableStateOf<String?>(null) }
     var chromeVisible by remember { mutableStateOf(true) }
     var showIndex by remember { mutableStateOf(false) }
     var showDisplay by remember { mutableStateOf(false) }
@@ -342,6 +345,7 @@ fun BookReaderRoute(
                             onSelection = { text, sentence ->
                                 pending = PendingHighlight(text, sentence)
                             },
+                            onPreview = { preview = it },
                         )
                     }
 
@@ -357,6 +361,15 @@ fun BookReaderRoute(
                             onNext = { viewModel.selectChapter(state.chapterIndex + 1) },
                         )
                     }
+                }
+
+                preview?.let { text ->
+                    SelectionPreview(
+                        text = text,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                    )
                 }
 
                 if (chromeVisible) {
@@ -609,6 +622,7 @@ private fun HighlightableParagraph(
     fontSizeSp: Int,
     onZoneTap: (Float) -> Unit,
     onSelection: (text: String, context: String) -> Unit,
+    onPreview: (String?) -> Unit,
 ) {
     var layout by remember(paragraph) { mutableStateOf<TextLayoutResult?>(null) }
     // Seçim: uzun basınca kelimede başlar, parmak sürüklendikçe genişler.
@@ -647,13 +661,16 @@ private fun HighlightableParagraph(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Sürüklerken seçilen metin paragrafın üstünde: parmağın seçtiğin
-        // yeri kapatıyor ve nereye kadar geldiğin görünmüyordu.
-        selection?.let { range ->
-            SelectionPreview(paragraph.substring(range.first, range.last + 1))
-        }
+    // Seçilen metni ekranın üstündeki şeride bildiriyoruz. Paragrafın içine
+    // koymak metni aşağı itiyor ve okuduğun yer sürüklerken oynuyordu.
+    LaunchedEffect(selection) {
+        // Yalnız dolu seçimi bildiriyoruz: kaydırırken görünüme giren her
+        // paragraf boş bildirseydi başkasının seçimini silerdi. Temizleme
+        // parmağın kalktığı yerde yapılıyor.
+        selection?.let { onPreview(paragraph.substring(it.first, it.last + 1)) }
+    }
 
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = painted,
             color = textColor,
@@ -711,6 +728,7 @@ private fun HighlightableParagraph(
                                 maxOf(start.second, bounds.second)
                         },
                         onDragEnd = {
+                            onPreview(null)
                             val range = selection
                             if (range != null && !range.isEmpty()) {
                                 val text = paragraph.substring(range.first, range.last + 1).trim()
@@ -725,6 +743,7 @@ private fun HighlightableParagraph(
                             anchor = null
                         },
                         onDragCancel = {
+                            onPreview(null)
                             selection = null
                             anchor = null
                         },
@@ -764,24 +783,31 @@ private fun markedAt(
     return MarkedSpan(word, bounds.first, bounds.second)
 }
 
-/** Sürüklerken seçilen metnin önizlemesi. */
+/**
+ * Sürüklerken seçilen metnin önizlemesi.
+ *
+ * Metnin içine değil üstüne çiziliyor: akışa girseydi paragrafı aşağı iter
+ * ve okuduğun satır parmağının altından kayardı. Koyu zemin, sayfanın
+ * temasından bağımsız olarak okunsun diye.
+ */
 @Composable
-private fun SelectionPreview(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onPrimaryContainer,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp)
-            .background(
-                MaterialTheme.colorScheme.primaryContainer,
-                RoundedCornerShape(8.dp),
-            )
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    )
+private fun SelectionPreview(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        shadowElevation = 6.dp,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+    }
 }
 
 @Composable
