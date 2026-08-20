@@ -8,7 +8,9 @@ coreKtx = "1.15.0"
 documentFile = "1.0.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
-composeBom = "2024.12.01"
+# Yazı kutularında çift dokunuşla kelime seçme davranışı Compose'un
+# kendi jest yönetiminde; sürümü yükseltmek onu değiştirebilecek tek yol.
+composeBom = "2025.04.01"
 navigationCompose = "2.8.5"
 hiltNavigationCompose = "1.2.0"
 datastore = "1.1.1"
