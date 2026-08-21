@@ -36,6 +36,18 @@ object HighlightRef {
      */
     const val SUBTITLE_SOURCE_MARKER = "film"
 
+    /**
+     * Bu kayıt bir film mi — `Entry.source` alanına bakarak.
+     *
+     * Eski kayıtlarda yalnız "film" yazıyor, yenilerde metnin yolu da
+     * ekli ("film:/…/film_1.json").
+     */
+    fun isFilmDocument(source: String?): Boolean {
+        val value = source ?: return false
+        return value == SUBTITLE_SOURCE_MARKER ||
+            value.startsWith("$SUBTITLE_SOURCE_MARKER:")
+    }
+
     fun encode(kind: String, sourceId: Long, color: HighlightColor): String =
         "$kind:$sourceId;color=${color.name}"
 

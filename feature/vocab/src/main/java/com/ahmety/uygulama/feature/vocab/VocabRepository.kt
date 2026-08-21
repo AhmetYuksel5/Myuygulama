@@ -58,6 +58,12 @@ class VocabRepository @Inject constructor(
         entryRepository.observeByType(EntryType.DOCUMENT),
     ) { entries, documents ->
         val titleById = documents.associate { it.id to it.title.trim() }
+        // Hangi kayıt film: kelimenin "Kitaptan" mı "Filmden" mi geldiği
+        // buradan belirleniyor, işaretin üzerindeki etiketten değil.
+        val filmIds = documents
+            .filter { HighlightRef.isFilmDocument(it.source) }
+            .map { it.id }
+            .toSet()
         entries
             // Mavi = bilmediğin kelime, kırmızı = anlamadığın cümle/cümlecik.
             // İkisi de çalışılacak; kartta farklı davranıyorlar.
@@ -68,6 +74,7 @@ class VocabRepository @Inject constructor(
                 // Daha önce yapay zekâyla doldurulduysa onu kullan.
                 val filled = enrichment.get(word)
                 val kind = HighlightRef.kind(entry.source)
+                val documentId = HighlightRef.sourceId(entry.source)
                 val passage = HighlightRef.color(entry.source) == HighlightColor.RED
                 VocabWord(
                     word = word,
@@ -84,14 +91,20 @@ class VocabRepository @Inject constructor(
                     collocations = filled?.collocations.orEmpty(),
                     answers = filled?.answers.orEmpty(),
                     context = entry.body.trim(),
-                    source = when (kind) {
-                        HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
-                        HighlightRef.KIND_SELECTION -> VocabSource.SELECTION
+                    // Kaynağın türünü işaretin etiketinden değil, gösterdiği
+                    // kayıttan okuyoruz. Filmi kitaplıkta okurken elle
+                    // işaretlenen kelimeler bir dönem "book" etiketiyle
+                    // kaydedilmişti; etikete güvenilirse o kelimeler
+                    // "Kitaptan" görünüyor ve iki kaynak birbirine karışıyor.
+                    // Kayıt hâlâ filmi gösterdiği için doğrusu buradan çıkıyor
+                    // ve eski işaretler de kendiliğinden düzeliyor.
+                    source = when {
+                        kind == HighlightRef.KIND_SELECTION -> VocabSource.SELECTION
+                        documentId != null && documentId in filmIds -> VocabSource.SUBTITLE
+                        kind == HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
                         else -> VocabSource.BOOK
                     },
-                    sourceName = HighlightRef.sourceId(entry.source)
-                        ?.let { titleById[it] }
-                        .orEmpty(),
+                    sourceName = documentId?.let { titleById[it] }.orEmpty(),
                     isPassage = passage,
                 )
             }

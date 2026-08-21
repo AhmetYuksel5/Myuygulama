@@ -140,11 +140,7 @@ class BookRepository @Inject constructor(
         }
 
     /** Kayıt bir film altyazısı mı, gerçek bir kitap mı. */
-    fun isFilm(entry: Entry): Boolean {
-        val source = entry.source ?: return false
-        return source == HighlightRef.SUBTITLE_SOURCE_MARKER ||
-            source.startsWith("${HighlightRef.SUBTITLE_SOURCE_MARKER}:")
-    }
+    fun isFilm(entry: Entry): Boolean = HighlightRef.isFilmDocument(entry.source)
 
     /** Ayrıştırılmış metni okur. Kayıt yoksa veya dosya silinmişse null. */
     suspend fun loadBook(entryId: Long): EpubBook? = withContext(Dispatchers.IO) {

@@ -1303,6 +1303,17 @@ private fun WordCard(
     scrollState: ScrollState? = null,
 ) {
 
+    // Cümle işaretlerinde bağlam çoğu zaman cümlenin kendisi oluyor;
+    // altyazıdan gelen replikte ikisi harfi harfine aynı. Aynıysa
+    // göstermiyoruz: kart aynı satırı iki kez yazmasın.
+    val context = remember(word.word, word.context) {
+        fun sade(value: String) = value.trim()
+            .trim('"', '\u201C', '\u201D', '\u00AB', '\u00BB')
+            .trim()
+            .lowercase()
+        if (sade(word.context) == sade(word.word)) "" else word.context
+    }
+
     // Punto ölçeği yalnız yazıya uygulanıyor: yoğunluğun kendisine değil
     // yazı ölçeğine dokunuyoruz, böylece kenar boşlukları ve kartın kendisi
     // yerinde kalıyor, yalnız harfler büyüyor.
@@ -1368,10 +1379,10 @@ private fun WordCard(
                 if (!revealed) {
                     // Kitaptan gelen kelimede bağlam cümlesi kapalıyken de
                     // görünsün: kelimeyi zaten o cümlede görmüştün.
-                    if (word.context.isNotBlank()) {
+                    if (context.isNotBlank()) {
                         Spacer(Modifier.height(18.dp))
                         BookQuote(
-                            text = word.context,
+                            text = context,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1394,10 +1405,10 @@ private fun WordCard(
                     // başka. Önce cümlenin geçtiği yer, sonra aynı şeyin
                     // kolay İngilizcesi, çizginin altında Türkçesi, en sonda
                     // neyin zorlaştırdığı ve içindeki kalıplar.
-                    if (word.context.isNotBlank()) {
+                    if (context.isNotBlank()) {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = word.context,
+                            text = context,
                             style = MaterialTheme.typography.bodySmall,
                             fontStyle = FontStyle.Italic,
                             textAlign = TextAlign.Center,
@@ -1474,10 +1485,10 @@ private fun WordCard(
                         )
                     }
 
-                    if (word.context.isNotBlank()) {
+                    if (context.isNotBlank()) {
                         Spacer(Modifier.height(10.dp))
                         BookQuote(
-                            text = word.context,
+                            text = context,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
