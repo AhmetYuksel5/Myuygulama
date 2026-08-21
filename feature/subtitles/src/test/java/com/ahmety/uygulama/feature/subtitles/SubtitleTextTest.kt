@@ -237,6 +237,28 @@ class SubtitleTextTest {
     }
 
     @Test
+    fun `replikler ayri paragraf kaliyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            I had to straighten out
+            her boss at the diner.
+
+            2
+            00:00:04,000 --> 00:00:06,000
+            Let's go.
+        """.trimIndent()
+
+        // Okuma ekranı için birim replik: bir repliğin iki satırı birleşiyor
+        // ama iki replik birleşmiyor. Cümle birleştirme burada yanlış olurdu,
+        // noktası olmayan altyazılarda metin tek duvara dönüşüyordu.
+        val cues = SubtitleText.cues(srt)
+        assertEquals(2, cues.size)
+        assertEquals("I had to straighten out her boss at the diner.", cues.first())
+        assertEquals("Let's go.", cues.last())
+    }
+
+    @Test
     fun `ayni surum grubu eslesiyor`() {
         val english = "The.Matrix.1999.1080p.BluRay.x264-YIFY"
         val turkishYify = "The.Matrix.1999.1080p.BluRay.x264.YTS"

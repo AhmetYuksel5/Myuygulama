@@ -157,7 +157,9 @@ class SubtitleRepository @Inject constructor(
         val movieId = bookRepository.importFilm(
             title = title,
             release = pair.english.release,
-            sentences = SubtitleText.sentences(pair.englishText),
+            // Okuma ekranına replikler gidiyor, birleştirilmiş cümleler
+            // değil: filmi izlerken ekranda gördüğün parça replik.
+            sentences = SubtitleText.cues(pair.englishText),
         )
         picks.forEach { pick ->
             entryRepository.createEntry(

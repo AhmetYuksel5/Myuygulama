@@ -44,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -64,6 +65,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
@@ -73,6 +75,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -1251,19 +1254,17 @@ private fun WordCard(
                 // Kapalıyken kelime kartın tam ortasında dursun.
                 if (!revealed) Spacer(Modifier.weight(1f))
 
-                Text(
+                // Kitaptan seçilen öbekler uzun olabiliyor; tek kelimelik
+                // kartın puntosuyla ekrana sığmıyorlar. Tek kelime hiçbir
+                // zaman ortadan bölünmüyor: sığana kadar küçülüyor.
+                CardTitle(
                     text = word.word,
-                    // Kitaptan seçilen öbekler uzun olabiliyor; tek kelimelik
-                    // kartın puntosuyla ekrana sığmıyorlar.
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontSize = when {
-                            word.word.length > 44 -> if (revealed) 18.sp else 22.sp
-                            word.word.length > 22 -> if (revealed) 24.sp else 30.sp
-                            else -> if (revealed) 30.sp else 40.sp
-                        },
-                    ),
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
+                    startSize = when {
+                        word.word.length > 44 -> if (revealed) 18 else 22
+                        word.word.length > 22 -> if (revealed) 24 else 30
+                        else -> if (revealed) 32 else 44
+                    },
+                    passage = word.isPassage,
                 )
 
                 if (!revealed) {
@@ -1321,7 +1322,7 @@ private fun WordCard(
                         Spacer(Modifier.height(10.dp))
                         Text(
                             text = word.meaning,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                         )
@@ -1339,14 +1340,16 @@ private fun WordCard(
                     if (word.related.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
                         word.related.forEach { line ->
-                            Text(
-                                text = line,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 6.dp),
-                            )
+                            RightToLeftIfArabic(line) {
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp),
+                                )
+                            }
                         }
                     }
 
@@ -1357,7 +1360,7 @@ private fun WordCard(
                     if (word.meaning.isNotBlank()) {
                         Text(
                             text = word.meaning,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                         )
@@ -1367,7 +1370,7 @@ private fun WordCard(
                         Spacer(Modifier.height(8.dp))
                         Text(
                             text = word.definition,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1440,14 +1443,16 @@ private fun WordCard(
                         )
                         Spacer(Modifier.height(4.dp))
                         word.confusions.forEach { line ->
-                            Text(
-                                text = line,
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Start,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 4.dp),
-                            )
+                            RightToLeftIfArabic(line) {
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    textAlign = TextAlign.Start,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 6.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -1503,7 +1508,7 @@ private fun SavedAnswers(answers: List<String>) {
     answers.forEach { note ->
         Text(
             text = note,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Start,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1512,12 +1517,43 @@ private fun SavedAnswers(answers: List<String>) {
     }
 }
 
+/**
+ * Kartın başlığındaki kelime ya da cümle.
+ *
+ * Tek kelime asla ortadan bölünmemeli: Arapça "الإناث" gibi bir kelime
+ * satır sonuna denk gelince ikiye ayrılıyor ve okunmaz hâle geliyordu.
+ * Sığmadığı sürece punto küçülüyor; alt sınıra kadar. Cümlelerde bölme
+ * doğal, orada satırlara izin veriliyor.
+ */
+@Composable
+private fun CardTitle(text: String, startSize: Int, passage: Boolean) {
+    var size by remember(text, startSize) { mutableStateOf(startSize) }
+
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineLarge.copy(fontSize = size.sp),
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
+        softWrap = passage,
+        maxLines = if (passage) 4 else 1,
+        overflow = TextOverflow.Visible,
+        onTextLayout = { layout ->
+            val tooWide = layout.didOverflowWidth || layout.lineCount > (if (passage) 4 else 1)
+            if (tooWide && size > MIN_TITLE_SIZE) size -= 2
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** Başlık bundan küçülmüyor; okunaklılığın sınırı. */
+private const val MIN_TITLE_SIZE = 16
+
 /** Kitaptan alınan cümle: alıntı olduğu belli olsun diye tırnak içinde ve italik. */
 @Composable
 private fun BookQuote(text: String, color: Color) {
     Text(
         text = "\u201C${text.trim().trim('\u201C', '\u201D', '"')}\u201D",
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.bodyLarge,
         fontStyle = FontStyle.Italic,
         textAlign = TextAlign.Center,
         color = color,
@@ -1527,23 +1563,40 @@ private fun BookQuote(text: String, color: Color) {
 /** Sola yaslı, "1. 2. 3." diye numaralanmış örnek cümle. */
 @Composable
 private fun NumberedLine(number: Int, text: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 6.dp),
-    ) {
-        Text(
-            text = "$number.",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(22.dp),
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Start,
-        )
+    // Arapça örnekte numara da sağda olmalı: satırın başı sağ taraf.
+    // Yazının yönünü Compose kendi çözüyor ama satırın düzenini biz
+    // veriyoruz, o yüzden yönü burada çeviriyoruz.
+    RightToLeftIfArabic(text) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = "$number.",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(24.dp),
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Start,
+            )
+        }
+    }
+}
+
+/** Metin Arapçaysa içeriği sağdan sola diziyor. */
+@Composable
+private fun RightToLeftIfArabic(text: String, content: @Composable () -> Unit) {
+    if (text.any { it in '\u0600'..'\u06FF' }) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            content()
+        }
+    } else {
+        content()
     }
 }
 
@@ -1578,11 +1631,11 @@ private fun Chip(text: String, background: Color, content: Color) {
     Box(
         modifier = Modifier
             .background(background, RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.bodyMedium,
             color = content,
         )
     }
@@ -1617,7 +1670,7 @@ private fun CollocationRow(group: Collocation) {
         )
         Text(
             text = group.words.joinToString(" · "),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Start,
         )
     }
@@ -1654,7 +1707,7 @@ private fun LabeledBlock(label: String, text: String) {
         if (text.isNotBlank()) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Start,
             )
         }

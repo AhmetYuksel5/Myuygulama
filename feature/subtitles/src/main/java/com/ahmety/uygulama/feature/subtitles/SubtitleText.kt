@@ -187,6 +187,48 @@ object SubtitleText {
     }
 
     /**
+     * Altyazının okunabilir hâli: her replik ayrı bir paragraf.
+     *
+     * Okuma ekranı için cümle birleştirme yanlış birim: Arapça altyazılarda
+     * nokta çoğu zaman hiç yok, o yüzden metin iki yüz karakterlik bloklara
+     * dönüşüyor ve ekranda tek bir duvar gibi duruyor. Repliğin kendisi
+     * zaten doğru birim — filmi izlerken ekranda gördüğün parça o.
+     *
+     * Bir repliğin birden çok satırı boşlukla birleştiriliyor; replikler
+     * arasındaki sınır boş satırdan ya da yeni bir zaman satırından
+     * anlaşılıyor.
+     */
+    fun cues(srt: String): List<String> {
+        val out = mutableListOf<String>()
+        val current = StringBuilder()
+
+        fun flush() {
+            val text = current.toString().trim()
+            if (text.isNotEmpty()) out += text
+            current.clear()
+        }
+
+        srt.replace("\r\n", "\n").split("\n").forEach { raw ->
+            val line = raw.trim()
+            when {
+                line.isEmpty() -> flush()
+                // Zaman satırı yeni repliğin başı; sıra numarası da öyle.
+                isTimeLine(line) -> flush()
+                line.all { it.isDigit() } -> flush()
+                else -> {
+                    val text = stripTags(line).replace("- ", "").trim()
+                    if (text.isNotEmpty()) {
+                        if (current.isNotEmpty()) current.append(' ')
+                        current.append(text)
+                    }
+                }
+            }
+        }
+        flush()
+        return out
+    }
+
+    /**
      * Filmdeki özel adlar.
      *
      * "Janice" bilinmeyen bir kelime değil, bir kişi. Altyazıda özel ad her
