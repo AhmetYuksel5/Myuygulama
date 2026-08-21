@@ -132,6 +132,13 @@ fun SubtitleRoute(
                     Text("$chosen maddeyi ekle")
                 }
             }
+            // Altyazıyı yalnızca okumak için de eklenebilmeli: kelime
+            // seçmek zorunda değilsin.
+            if (state.pair != null && state.savedMovieId == null) {
+                TextButton(enabled = !state.busy, onClick = viewModel::saveFilm) {
+                    Text("Altyazıyı ekle")
+                }
+            }
         }
 
         if (state.busy) {

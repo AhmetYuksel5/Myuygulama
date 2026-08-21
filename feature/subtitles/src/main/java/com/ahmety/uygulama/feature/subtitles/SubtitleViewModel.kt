@@ -25,6 +25,8 @@ data class SubtitleUiState(
     val message: String? = null,
     val failed: Boolean = false,
     val configured: Boolean = false,
+    /** Film kitaplığa eklendiyse kaydın kimliği; ikinci kez eklenmesin diye. */
+    val savedMovieId: Long? = null,
 )
 
 @HiltViewModel
@@ -103,6 +105,7 @@ class SubtitleViewModel @Inject constructor(
             picks = emptyList(),
             chosen = emptySet(),
             pair = null,
+            savedMovieId = null,
         )
         viewModelScope.launch {
             // Beklenmedik bir hata ekranı kapatmasın: ne olduğunu yazıp
@@ -161,6 +164,33 @@ class SubtitleViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Filmi yalnızca okumak için kitaplığa ekler.
+     *
+     * Kelime seçmeden altyazıyı okuyabilmek gerekiyordu; eskiden film ancak
+     * en az bir madde eklendiğinde kaydediliyordu.
+     */
+    fun saveFilm() {
+        val current = _state.value
+        val pair = current.pair ?: return
+        if (current.busy || current.savedMovieId != null) return
+        _state.value = current.copy(busy = true, step = "Altyazı ekleniyor…")
+        viewModelScope.launch {
+            val id = runCatching { repository.saveFilm(pair) }.getOrNull()
+            _state.value = _state.value.copy(
+                busy = false,
+                step = "",
+                savedMovieId = id,
+                message = if (id == null) {
+                    "Altyazı eklenemedi."
+                } else {
+                    "Altyazı Kitaplık'a eklendi; okuyup kendin işaretleyebilirsin."
+                },
+                failed = id == null,
+            )
+        }
+    }
+
     fun save() {
         val current = _state.value
         val pair = current.pair ?: return
@@ -168,7 +198,9 @@ class SubtitleViewModel @Inject constructor(
         if (current.busy || picks.isEmpty()) return
         _state.value = current.copy(busy = true, step = "Ekleniyor…")
         viewModelScope.launch {
-            val count = runCatching { repository.save(pair, picks) }.getOrElse { 0 }
+            val count = runCatching {
+                repository.save(pair, picks, current.savedMovieId)
+            }.getOrElse { 0 }
             _state.value = _state.value.copy(
                 busy = false,
                 step = "",

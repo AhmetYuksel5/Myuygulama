@@ -94,6 +94,7 @@ fun VocabRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val threshold by viewModel.swipeThreshold.collectAsStateWithLifecycle()
+    val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val enrichingWord by viewModel.enriching.collectAsStateWithLifecycle()
     val aiMessage by viewModel.aiMessage.collectAsStateWithLifecycle()
     val question by viewModel.question.collectAsStateWithLifecycle()
@@ -235,7 +236,7 @@ fun VocabRoute(
                 state.deck.isEmpty() -> EmptyDeck(state)
                 else -> {
                     state.deck.getOrNull(1)?.let { next ->
-                        WordCardStatic(next)
+                        WordCardStatic(next, fontScale)
                     }
                     val top = state.deck.first()
                     SwipeableCard(
@@ -244,6 +245,7 @@ fun VocabRoute(
                         key = "${top.word}#${state.turn}",
                         word = top,
                         threshold = with(density) { threshold.dp.toPx() },
+                        fontScale = fontScale,
                         enriching = enrichingWord == top.word,
                         onEnrich = if (aiReady) {
                             { viewModel.enrich(top) }
@@ -283,6 +285,8 @@ fun VocabRoute(
         VocabSettingsDialog(
             threshold = threshold,
             onThresholdChange = viewModel::setSwipeThreshold,
+            fontScale = fontScale,
+            onFontScaleChange = viewModel::setFontScale,
             onDismiss = { showSettings = false },
         )
     }
@@ -302,6 +306,7 @@ fun VocabRoute(
         val fresh = state.list.firstOrNull { it.word.word == word.word }?.word ?: word
         WordCardDialog(
             word = fresh,
+            fontScale = fontScale,
             enriching = enrichingWord == fresh.word,
             onEnrich = if (aiReady) {
                 { viewModel.enrich(fresh) }
@@ -443,6 +448,7 @@ private fun QuestionDialog(
 @Composable
 private fun WordCardDialog(
     word: VocabWord,
+    fontScale: Int,
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
     onAsk: (() -> Unit)?,
@@ -461,6 +467,7 @@ private fun WordCardDialog(
                 WordCard(
                     word = word,
                     tint = Color.Transparent,
+                    fontScale = fontScale,
                     interactive = false,
                     revealed = true,
                     enriching = enriching,
@@ -690,6 +697,8 @@ private fun WordEditDialog(
 private fun VocabSettingsDialog(
     threshold: Int,
     onThresholdChange: (Int) -> Unit,
+    fontScale: Int,
+    onFontScaleChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -721,6 +730,26 @@ private fun VocabSettingsDialog(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Yazı boyutu",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        enabled = fontScale > 80,
+                        onClick = { onFontScaleChange(fontScale - 10) },
+                    ) { Text("-") }
+                    Text("%$fontScale", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(
+                        enabled = fontScale < 180,
+                        onClick = { onFontScaleChange(fontScale + 10) },
+                    ) { Text("+") }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
@@ -1003,6 +1032,7 @@ private fun SwipeableCard(
     key: String,
     word: VocabWord,
     threshold: Float,
+    fontScale: Int,
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
     onAsk: (() -> Unit)?,
@@ -1164,6 +1194,7 @@ private fun SwipeableCard(
         WordCard(
             word = word,
             tint = tint,
+            fontScale = fontScale,
             enriching = enriching,
             onEnrich = onEnrich,
             onAsk = onAsk,
@@ -1182,7 +1213,7 @@ private fun SwipeableCard(
 }
 
 @Composable
-private fun WordCardStatic(word: VocabWord) {
+private fun WordCardStatic(word: VocabWord, fontScale: Int) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1191,7 +1222,12 @@ private fun WordCardStatic(word: VocabWord) {
                 scaleY = 0.96f
             },
     ) {
-        WordCard(word = word, tint = Color.Transparent, interactive = false)
+        WordCard(
+            word = word,
+            tint = Color.Transparent,
+            fontScale = fontScale,
+            interactive = false,
+        )
     }
 }
 
@@ -1204,6 +1240,7 @@ private fun WordCardStatic(word: VocabWord) {
 private fun WordCard(
     word: VocabWord,
     tint: Color,
+    fontScale: Int = 100,
     interactive: Boolean = true,
     enriching: Boolean = false,
     onEnrich: (() -> Unit)? = null,
@@ -1214,6 +1251,15 @@ private fun WordCard(
     scrollState: ScrollState? = null,
 ) {
 
+    // Punto ölçeği yalnız yazıya uygulanıyor: yoğunluğun kendisine değil
+    // yazı ölçeğine dokunuyoruz, böylece kenar boşlukları ve kartın kendisi
+    // yerinde kalıyor, yalnız harfler büyüyor.
+    val density = LocalDensity.current
+    val scaled = remember(density, fontScale) {
+        Density(density.density, density.fontScale * fontScale / 100f)
+    }
+
+    CompositionLocalProvider(LocalDensity provides scaled) {
     Card(
         modifier = Modifier.fillMaxSize(),
         shape = RoundedCornerShape(24.dp),
@@ -1490,6 +1536,7 @@ private fun WordCard(
                 }
             }
         }
+    }
     }
 }
 

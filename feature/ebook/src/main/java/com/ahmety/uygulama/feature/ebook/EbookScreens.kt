@@ -39,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -59,7 +60,9 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -385,6 +388,17 @@ fun BookReaderRoute(
                         }
                     },
             ) {
+                // Arapça metin sağdan sola okunuyor: satırların hizası da,
+                // paragrafların başlangıcı da o yöne göre. Yalnız okuma
+                // alanını çeviriyoruz — alttaki çubuk ve ilerleme göstergesi
+                // arayüzün parçası, onlar yerinde kalıyor.
+                val rtl = remember(book) {
+                    book.chapters.firstOrNull()?.paragraphs.orEmpty()
+                        .any { paragraph -> paragraph.any { it in '\u0600'..'\u06FF' } }
+                }
+                CompositionLocalProvider(
+                    LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+                ) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -422,6 +436,7 @@ fun BookReaderRoute(
                             onNext = { viewModel.selectChapter(state.chapterIndex + 1) },
                         )
                     }
+                }
                 }
 
                 preview?.let { text ->

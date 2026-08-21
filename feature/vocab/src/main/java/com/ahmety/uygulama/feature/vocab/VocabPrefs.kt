@@ -19,6 +19,15 @@ class VocabPrefs(context: Context) {
         set(value) = prefs.edit().putInt(KEY_THRESHOLD, value.coerceIn(20, 160)).apply()
 
     /**
+     * Kart yazılarının punto ölçeği, yüzde. Arap harfleri aynı puntoda Latin
+     * harflerinden küçük görünüyor ve herkesin gözü aynı değil; kartın
+     * tamamı bu oranla ölçekleniyor.
+     */
+    var fontScale: Int
+        get() = prefs.getInt(KEY_FONT_SCALE, 100).coerceIn(80, 180)
+        set(value) = prefs.edit().putInt(KEY_FONT_SCALE, value.coerceIn(80, 180)).apply()
+
+    /**
      * Kalem süzgeci. Sekmeler arasında gidip gelince ekran sıfırdan
      * kuruluyor; "yalnız kırmızılar" seçimi her seferinde bozulmasın.
      */
@@ -31,5 +40,6 @@ class VocabPrefs(context: Context) {
         const val PREFS_NAME = "merkez_kelime"
         const val KEY_THRESHOLD = "swipe_threshold"
         const val KEY_PEN = "pen"
+        const val KEY_FONT_SCALE = "font_scale"
     }
 }

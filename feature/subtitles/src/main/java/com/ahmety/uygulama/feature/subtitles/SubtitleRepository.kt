@@ -148,14 +148,33 @@ class SubtitleRepository @Inject constructor(
      * altyazıyı kitap gibi okuyup kendin de işaretleyebilesin diye. Kelime
      * maviye, anlaşılması zor cümle kırmızıya gidiyor.
      */
-    suspend fun save(pair: SubtitlePair, picks: List<SubtitlePick>): Int {
+    /**
+     * Filmi yalnızca okumak için kitaplığa koyar.
+     *
+     * Kelime seçmek zorunda kalmadan altyazıyı okuyabilmek gerekiyordu;
+     * eskiden film ancak en az bir madde eklendiğinde kaydediliyordu.
+     * Dönen kimlik, sonradan kelime eklenirse aynı kaydın kullanılması için.
+     */
+    suspend fun saveFilm(pair: SubtitlePair): Long = bookRepository.importFilm(
+        title = titleOf(pair),
+        release = pair.english.release,
+        sentences = SubtitleText.cues(pair.englishText),
+    )
+
+    private fun titleOf(pair: SubtitlePair): String = buildString {
+        append(pair.movie)
+        if (pair.year > 0) append(" (").append(pair.year).append(")")
+    }
+
+    suspend fun save(
+        pair: SubtitlePair,
+        picks: List<SubtitlePick>,
+        existingMovieId: Long? = null,
+    ): Int {
         if (picks.isEmpty()) return 0
-        val title = buildString {
-            append(pair.movie)
-            if (pair.year > 0) append(" (").append(pair.year).append(")")
-        }
-        val movieId = bookRepository.importFilm(
-            title = title,
+        // Film zaten eklendiyse ikinci bir kayıt açmıyoruz.
+        val movieId = existingMovieId ?: bookRepository.importFilm(
+            title = titleOf(pair),
             release = pair.english.release,
             // Okuma ekranına replikler gidiyor, birleştirilmiş cümleler
             // değil: filmi izlerken ekranda gördüğün parça replik.

@@ -320,6 +320,9 @@ class VocabViewModel @Inject constructor(
     private val _swipeThreshold = MutableStateFlow(prefs.swipeThreshold)
     val swipeThreshold: StateFlow<Int> = _swipeThreshold
 
+    private val _fontScale = MutableStateFlow(prefs.fontScale)
+    val fontScale: StateFlow<Int> = _fontScale
+
 
     val uiState: StateFlow<VocabUiState> = combine(
         repository.observeProgress(),
@@ -658,6 +661,11 @@ class VocabViewModel @Inject constructor(
     fun setSwipeThreshold(value: Int) {
         prefs.swipeThreshold = value
         _swipeThreshold.value = prefs.swipeThreshold
+    }
+
+    fun setFontScale(value: Int) {
+        prefs.fontScale = value
+        _fontScale.value = prefs.fontScale
     }
 }
 
