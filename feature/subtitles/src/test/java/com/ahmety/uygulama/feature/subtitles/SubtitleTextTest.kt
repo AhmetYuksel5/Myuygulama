@@ -77,7 +77,13 @@ class SubtitleTextTest {
             SubtitleWord("lions", 4, "throw him to the lions"),
             SubtitleWord("amorphous", 1, "an amorphous shape"),
         )
-        val ranks = mapOf("lion" to 1500)
+        // Zorluk artık mutlak sıraya değil listedeki orana bakıyor, o yüzden
+        // gerçekçi uzunlukta bir liste gerekiyor: "lion" on binlik listenin
+        // 1500. sırasında, yani ilk yüzde on beşte.
+        val ranks = buildMap {
+            repeat(10_000) { put("dolgu$it", it + 1) }
+            put("lion", 1500)
+        }
         val picked = SubtitleText.selectWords(
             words = words,
             ranks = ranks,
