@@ -112,6 +112,8 @@ fun VocabRoute(
     // bakılıyor.
     var cardWord by remember { mutableStateOf<VocabWord?>(null) }
     var editWord by remember { mutableStateOf<VocabWord?>(null) }
+    // Listedekilerin toplu silinmesi için onay kutusu.
+    var confirmPurge by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -144,6 +146,13 @@ fun VocabRoute(
                 },
                 onClick = viewModel::cyclePen,
             )
+            // Toplu silme yalnız listede: neyi sildiğini görmeden silmek
+            // olmaz, kart destesinde ise gözünün önünde tek kelime var.
+            if (listView && state.list.isNotEmpty()) {
+                TextButton(onClick = { confirmPurge = true }) {
+                    Text("Sil (${state.list.size})")
+                }
+            }
             TextButton(onClick = { listView = !listView }) {
                 Text(if (listView) "Kart" else "Liste")
             }
@@ -160,9 +169,12 @@ fun VocabRoute(
                     .horizontalScroll(rememberScrollState()),
             ) {
                 val filter = state.filter
-                ModeChip("Her kaynak", filter.source == null && filter.sourceName.isBlank()) {
-                    viewModel.setFilter(VocabFilter())
-                }
+                ModeChip(
+                    label = "Her kaynak",
+                    selected = filter.source == null &&
+                        filter.sourceName.isBlank() &&
+                        !filter.orphan,
+                ) { viewModel.setFilter(VocabFilter()) }
                 if (state.bookCount > 0) {
                     ModeChip(
                         label = "Kitaptan (${state.bookCount})",
@@ -183,6 +195,14 @@ fun VocabRoute(
                         selected = filter.source == VocabSource.SELECTION &&
                             filter.sourceName.isBlank(),
                     ) { viewModel.setFilter(VocabFilter(source = VocabSource.SELECTION)) }
+                }
+                // Kaynağı silinmiş kelimeler. Kitabı sildiğinde işaretleri
+                // kalıyordu; buradan toplu temizlenebilsinler.
+                if (state.orphanCount > 0) {
+                    ModeChip(
+                        label = "Kaynağı yok (${state.orphanCount})",
+                        selected = filter.orphan,
+                    ) { viewModel.setFilter(VocabFilter(orphan = true)) }
                 }
                 // Tek tek başlıklar: "şu kitaptan" ya da "şu filmden" çalışmak.
                 state.sources.forEach { (source, name) ->
@@ -280,6 +300,37 @@ fun VocabRoute(
                     .padding(top = 4.dp),
             )
         }
+    }
+
+    if (confirmPurge) {
+        val kapsam = when {
+            state.filter.orphan -> "kaynağı silinmiş kelimeler"
+            state.filter.sourceName.isNotBlank() -> "\u201C${state.filter.sourceName}\u201D"
+            state.filter.source != null -> state.filter.source!!.label.lowercase()
+            else -> "bütün kaynaklar"
+        }
+        AlertDialog(
+            onDismissRequest = { confirmPurge = false },
+            title = { Text("${state.list.size} kelime silinsin mi?") },
+            text = {
+                Text(
+                    "Şu an listede ne varsa hepsi silinir: $kapsam, " +
+                        "${state.filter.pen.label.lowercase()}, " +
+                        "\u201C${state.mode.label}\u201D bölmesi. Kitaptaki ya da " +
+                        "filmdeki işaretleri de kalkar, tekrar geçmişleri de. " +
+                        "Geri alınamıyor.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmPurge = false
+                    viewModel.deleteListed()
+                }) { Text("Sil") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmPurge = false }) { Text("Vazgeç") }
+            },
+        )
     }
 
     if (showSettings) {

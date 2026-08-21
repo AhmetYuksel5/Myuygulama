@@ -119,9 +119,15 @@ class BookShelfViewModel @Inject constructor(
         _state.value = _state.value.copy(message = null)
     }
 
-    fun delete(entry: Entry) {
-        viewModelScope.launch { repository.deleteBook(entry) }
+    fun delete(entry: Entry, withWords: Boolean = false) {
+        viewModelScope.launch { repository.deleteBook(entry, withWords) }
     }
+
+    /**
+     * Esere ait işaret sayısı. Silme kutusu açılırken sorulup gösteriliyor:
+     * "kelimeleriyle sil" derken kaç kelimeden söz ettiğimiz belli olsun.
+     */
+    suspend fun highlightCount(entry: Entry): Int = repository.highlightCount(entry.id)
 }
 
 data class ReaderUiState(

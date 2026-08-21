@@ -43,6 +43,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -169,7 +171,8 @@ fun BookShelfRoute(
                     film = viewModel.isFilm(book),
                     onOpen = { onOpenBook(book.id) },
                     onBrief = { viewModel.openBrief(book) },
-                    onDelete = { viewModel.delete(book) },
+                    onDelete = { withWords -> viewModel.delete(book, withWords) },
+                    countWords = { viewModel.highlightCount(book) },
                 )
             }
         }
@@ -244,9 +247,13 @@ private fun BookCard(
     film: Boolean,
     onOpen: () -> Unit,
     onBrief: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (withWords: Boolean) -> Unit,
+    countWords: suspend () -> Int,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
+    // Kutu açılırken sayılıyor: kaç kelimenin gideceğini görmeden seçim
+    // yapmak körlemesine oluyor. -1 "henüz sayılmadı" demek.
+    var wordCount by remember { mutableIntStateOf(-1) }
 
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Row(
@@ -276,24 +283,84 @@ private fun BookCard(
                 }
             }
             TextButton(onClick = onBrief) { Text("Künye") }
-            TextButton(onClick = { confirmDelete = true }) { Text("Sil") }
+            TextButton(onClick = {
+                wordCount = -1
+                confirmDelete = true
+            }) { Text("Sil") }
         }
     }
 
     if (confirmDelete) {
+        LaunchedEffect(book.id) { wordCount = countWords() }
+        val nesne = if (film) "Film" else "Kitap"
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Kitap silinsin mi?") },
-            text = { Text("Kitap ve metni silinir. İşaretlemelerin kalır.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    onDelete()
-                }) { Text("Sil") }
+            title = { Text("$nesne silinsin mi?") },
+            // İki ayrı silme var. Üçüncü bir düğme alt sıraya sığmadığı için
+            // seçenekler gövdede duruyor: her biri ne yaptığını yazıyor.
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = when {
+                            wordCount < 0 -> "İşaretlemeler sayılıyor…"
+                            wordCount == 0 -> "Bu eserde işaretlenmiş kelime yok."
+                            else -> "Bu eserden $wordCount işaretlenmiş kelime var."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    DeleteChoice(
+                        label = "Yalnız eseri sil",
+                        detail = if (wordCount > 0) {
+                            "Kelimeler kalır ama kaynaksız kalırlar."
+                        } else {
+                            "Eser ve metni silinir."
+                        },
+                    ) {
+                        confirmDelete = false
+                        onDelete(false)
+                    }
+                    if (wordCount > 0) {
+                        DeleteChoice(
+                            label = "Kelimeleriyle birlikte sil",
+                            detail = "$wordCount kelime, işaretleri ve tekrar " +
+                                "geçmişleriyle birlikte gider. Geri alınamaz.",
+                        ) {
+                            confirmDelete = false
+                            onDelete(true)
+                        }
+                    }
+                }
             },
-            dismissButton = {
+            confirmButton = {
                 TextButton(onClick = { confirmDelete = false }) { Text("Vazgeç") }
             },
+        )
+    }
+}
+
+/** Silme kutusundaki tek seçenek: üstte ne yaptığı, altında sonucu. */
+@Composable
+private fun DeleteChoice(
+    label: String,
+    detail: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

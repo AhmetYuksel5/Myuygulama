@@ -5,6 +5,7 @@ import com.ahmety.uygulama.core.database.entity.ChangeEntityType
 import com.ahmety.uygulama.core.database.entity.ChangeOperation
 import com.ahmety.uygulama.core.database.entity.VocabProgressEntity
 import com.ahmety.uygulama.core.database.repository.EntryRepository
+import com.ahmety.uygulama.core.database.repository.VocabProgressRepository
 import com.ahmety.uygulama.core.database.sync.ChangeRecorder
 import com.ahmety.uygulama.core.database.sync.Now
 import com.ahmety.uygulama.core.model.EntryType
@@ -39,6 +40,7 @@ class VocabRepository @Inject constructor(
     private val entryRepository: EntryRepository,
     private val enrichment: WordEnrichmentStore,
     private val changeRecorder: ChangeRecorder,
+    private val progressStore: VocabProgressRepository,
     private val json: Json,
     private val now: Now,
 ) {
@@ -120,6 +122,31 @@ class VocabRepository @Inject constructor(
     }
 
     /**
+     * Verilen kelimelerin hepsini birden siler.
+     *
+     * Tek tek silmek yüz kelimede yüz onay demek. İşaretleme kayıtları tek
+     * geçişte taranıyor: kelime başına ayrı bir sorgu, listenin uzunluğuyla
+     * çarpılınca gözle görülür bir bekleme oluyordu.
+     *
+     * Geriye gerçekten kaç kelimenin silindiği dönüyor.
+     */
+    suspend fun deleteWords(words: Collection<VocabWord>): Int {
+        val targets = words.map { it.word.trim() }
+            .filter { it.isNotBlank() }
+            .map { it.lowercase() }
+            .toSet()
+        if (targets.isEmpty()) return 0
+
+        entryRepository.listByType(EntryType.HIGHLIGHT)
+            .filter { it.title.trim().lowercase() in targets }
+            .filter { HighlightRef.color(it.source) in STUDIED_COLORS }
+            .forEach { entryRepository.deleteEntry(it.id) }
+
+        progressStore.forgetAll(words.map { it.word.trim() })
+        return targets.size
+    }
+
+    /**
      * Kelimenin ya da cümlenin kendisini düzeltir.
      *
      * Kitaptan gelen metin bazen bozuk oluyor ("shittyjobs"), bazen yanlış
@@ -169,18 +196,7 @@ class VocabRepository @Inject constructor(
     }
 
     /** Tekrar programındaki satırı siler; senkronda karşı tarafa da geçiyor. */
-    private suspend fun forgetProgress(word: String) {
-        val existing = vocabDao.get(word) ?: return
-        val timestamp = now.millis()
-        val cleared = existing.copy(deletedAt = timestamp, updatedAt = timestamp)
-        vocabDao.upsert(cleared)
-        changeRecorder.record(
-            entityType = ChangeEntityType.VOCAB,
-            entityUuid = word,
-            operation = ChangeOperation.DELETE,
-            payload = json.encodeToString(VocabProgressEntity.serializer(), cleared),
-        )
-    }
+    private suspend fun forgetProgress(word: String) = progressStore.forget(word)
 
     /** Kullanıcının elle düzenlediği ya da çoğalttığı kelime bilgisi. */
     fun saveEdit(word: VocabWord) {

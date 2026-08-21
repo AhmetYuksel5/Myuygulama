@@ -3,6 +3,7 @@ package com.ahmety.uygulama.feature.ebook
 import android.content.Context
 import android.net.Uri
 import com.ahmety.uygulama.core.database.repository.EntryRepository
+import com.ahmety.uygulama.core.database.repository.VocabProgressRepository
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightColor
@@ -34,6 +35,7 @@ sealed interface ImportResult {
 class BookRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val entryRepository: EntryRepository,
+    private val progressStore: VocabProgressRepository,
 ) {
 
     private val readerPrefs = context.getSharedPreferences("merkez_kitap", Context.MODE_PRIVATE)
@@ -233,7 +235,33 @@ class BookRepository @Inject constructor(
         readerPrefs.edit().putInt("paragraph_$bookId", index).apply()
     }
 
-    suspend fun deleteBook(entry: Entry) {
+    /**
+     * Esere ait işaretleme sayısı: silme kutusunda "kaç kelime gidecek"
+     * yazabilmek için. Sayı olmadan seçim körlemesine yapılıyor.
+     */
+    suspend fun highlightCount(bookId: Long): Int =
+        entryRepository.listByType(EntryType.HIGHLIGHT)
+            .count { HighlightRef.sourceId(it.source) == bookId }
+
+    /**
+     * Kitabı ya da filmi siler.
+     *
+     * [withHighlights] işaretlemeleri de kaldırıyor. Eskiden hep kalıyorlardı
+     * ve kaynağı silinmiş kelimeler listede adsız olarak birikiyordu; tek tek
+     * silmekten başka çareleri yoktu. Tekrar programındaki satırları da
+     * temizliyoruz, yoksa kelime bir daha işaretlendiğinde eski damgasıyla
+     * geri geliyor.
+     *
+     * Renge bakmıyoruz: kitap gidiyorsa üzerindeki sarı ya da yeşil işaretin
+     * de dayanağı kalmıyor.
+     */
+    suspend fun deleteBook(entry: Entry, withHighlights: Boolean = false) {
+        if (withHighlights) {
+            val marks = entryRepository.listByType(EntryType.HIGHLIGHT)
+                .filter { HighlightRef.sourceId(it.source) == entry.id }
+            marks.forEach { entryRepository.deleteEntry(it.id) }
+            progressStore.forgetAll(marks.map { it.title })
+        }
         withContext(Dispatchers.IO) {
             entry.source?.let { path ->
                 val json = File(path)

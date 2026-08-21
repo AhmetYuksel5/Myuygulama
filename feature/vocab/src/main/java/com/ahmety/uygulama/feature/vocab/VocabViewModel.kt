@@ -76,6 +76,14 @@ data class VocabFilter(
     val source: VocabSource? = null,
     val sourceName: String = "",
     val pen: VocabPen = VocabPen.BOTH,
+    /**
+     * Yalnız kaynağı silinmiş kelimeler.
+     *
+     * Kitap ya da film silindiğinde işaretlemeleri kalıyordu; o kelimeler
+     * listede adsız duruyor ve hiçbir kaynak çipine düşmüyordu. Toplu
+     * silinebilmeleri için önce görülebilmeleri gerekiyor.
+     */
+    val orphan: Boolean = false,
 )
 
 /** Kart hakkında sorulan sorunun durumu. */
@@ -102,6 +110,8 @@ data class VocabUiState(
     val bookCount: Int = 0,
     val subtitleCount: Int = 0,
     val selectionCount: Int = 0,
+    /** Kaynağı silinmiş kelime sayısı; sıfırsa çip hiç görünmüyor. */
+    val orphanCount: Int = 0,
     /** Seçili kaynakta hiç karar verilmemiş kelime sayısı. */
     val newCount: Int = 0,
     /** Seçili kaynaktaki toplam kelime sayısı. */
@@ -339,6 +349,10 @@ class VocabViewModel @Inject constructor(
         val scoped = words.filter { word ->
             val filter = sessionState.filter
             when {
+                // Kaynağı silinmişlerde başlık boş kalıyor; kelimenin
+                // kendisiyle seçtiklerim karışmasın diye tür de bakılıyor.
+                filter.orphan -> word.sourceName.isBlank() &&
+                    word.source != VocabSource.SELECTION
                 filter.sourceName.isNotBlank() -> word.sourceName == filter.sourceName
                 filter.source != null -> word.source == filter.source
                 else -> true
@@ -466,6 +480,9 @@ class VocabViewModel @Inject constructor(
             bookCount = penWords.count { it.source == VocabSource.BOOK },
             subtitleCount = penWords.count { it.source == VocabSource.SUBTITLE },
             selectionCount = penWords.count { it.source == VocabSource.SELECTION },
+            orphanCount = penWords.count {
+                it.sourceName.isBlank() && it.source != VocabSource.SELECTION
+            },
             sources = penWords
                 .filter { it.sourceName.isNotBlank() }
                 .map { it.source to it.sourceName }
@@ -510,6 +527,19 @@ class VocabViewModel @Inject constructor(
     fun delete(word: VocabWord) {
         advance(word)
         viewModelScope.launch { repository.deleteWord(word) }
+    }
+
+    /**
+     * Listede görünen ne varsa hepsini siler.
+     *
+     * Süzgeç ne gösteriyorsa o siliniyor — "şu filmden gelenler", "kaynağı
+     * silinmişler", "yalnız kırmızılar". Yüz kelimeyi tek tek silmenin
+     * karşılığı bu; kapsamı daraltmak süzgecin işi.
+     */
+    fun deleteListed() {
+        val targets = uiState.value.list.map { it.word }
+        if (targets.isEmpty()) return
+        viewModelScope.launch { repository.deleteWords(targets) }
     }
 
     /**
