@@ -46,7 +46,6 @@ import kotlin.math.atan2
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.ahmety.uygulama.launcher.loadLaunchableApps
 import com.ahmety.uygulama.feature.gestures.GestureAction
 import com.ahmety.uygulama.feature.gestures.GestureFeedback
 import com.ahmety.uygulama.feature.gestures.GestureSettings
