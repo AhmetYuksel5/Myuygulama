@@ -10,16 +10,16 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 /**
- * Uygulamanın kendi çizdiği birkaç simge.
+ * Uygulamanın kendi çizdiği simgeler.
  *
- * `material-icons-extended` iki binden fazla simge taşıyor; biz üçünü
+ * `material-icons-extended` iki binden fazla simge taşıyor; biz yedisini
  * kullanıyorduk ve küçültme kapalı olduğu için tamamı APK'ya giriyordu —
- * paketin en büyük parçası oydu. Kalan üç simgeyi burada kendimiz
- * çiziyoruz, kütüphane de bağımlılıklardan çıktı.
+ * paketin en büyük parçası oydu.
  *
- * Geri kalan simgeler (Add, Check, CheckCircle, MoreVert) çekirdek
- * `material-icons-core` paketinde zaten var; onlar için bir şey yapmaya
- * gerek yok.
+ * Küçük kardeşi `material-icons-core`'a düşmek de bir seçenekti ama
+ * Material3 1.4 onu artık kendiliğinden getirmiyor; ayrıca eklemek yerine
+ * yedi simgeyi burada çizmek hem bağımlılığı tamamen kaldırıyor hem de
+ * hepsini aynı çizgi kalınlığında tutuyor.
  */
 object MerkezIcons {
 
@@ -58,6 +58,48 @@ object MerkezIcons {
             lineTo(22f, 21f)
             moveTo(14.6f, 17.6f)
             lineTo(20.4f, 17.6f)
+        }
+    }
+
+    /** Ekle: artı. */
+    val Add: ImageVector by lazy {
+        outlined("MerkezAdd") {
+            moveTo(12f, 5f)
+            lineTo(12f, 19f)
+            moveTo(5f, 12f)
+            lineTo(19f, 12f)
+        }
+    }
+
+    /** Onay: tik. */
+    val Check: ImageVector by lazy {
+        outlined("MerkezCheck") {
+            moveTo(5f, 12.8f)
+            lineTo(9.8f, 17.6f)
+            lineTo(19f, 6.6f)
+        }
+    }
+
+    /** Verilmiş izin: daire içinde tik. */
+    val CheckCircle: ImageVector by lazy {
+        outlined("MerkezCheckCircle") {
+            // Daire: iki yarım yay. Yol komutlarında hazır bir çember yok.
+            moveTo(3f, 12f)
+            arcToRelative(9f, 9f, 0f, true, true, 18f, 0f)
+            arcToRelative(9f, 9f, 0f, true, true, -18f, 0f)
+            close()
+            moveTo(7.6f, 12.3f)
+            lineTo(10.8f, 15.5f)
+            lineTo(16.4f, 8.9f)
+        }
+    }
+
+    /** Satır menüsü: alt alta üç nokta. */
+    val MoreVert: ImageVector by lazy {
+        filled("MerkezMoreVert") {
+            dot(12f, 6f)
+            dot(12f, 12f)
+            dot(12f, 18f)
         }
     }
 

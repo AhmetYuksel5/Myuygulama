@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +27,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.feature.calendar.AgendaSection
 import com.ahmety.uygulama.feature.calendar.AgendaViewModel
 import com.ahmety.uygulama.feature.habits.AddHabitDialog
@@ -104,7 +103,7 @@ fun TodayScreen(
             // Eklenecek tek şey kaldı, o yüzden menü yok: düğme doğrudan
             // alışkanlık ekleme kutusunu açıyor.
             FloatingActionButton(onClick = { showAddHabit = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Alışkanlık ekle")
+                Icon(MerkezIcons.Add, contentDescription = "Alışkanlık ekle")
             }
         }
     }
