@@ -11,8 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,38 +34,30 @@ import com.ahmety.uygulama.feature.calendar.AgendaViewModel
 import com.ahmety.uygulama.feature.habits.AddHabitDialog
 import com.ahmety.uygulama.feature.habits.HabitsSection
 import com.ahmety.uygulama.feature.habits.HabitsViewModel
-import com.ahmety.uygulama.feature.tasks.AddTaskDialog
-import com.ahmety.uygulama.feature.tasks.TasksViewModel
-import com.ahmety.uygulama.feature.tasks.TodayTasksSection
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 
 /**
- * Günün tek ekranı: alışkanlıklar, bugünün görevleri ve ajanda bir arada.
- * Widget’lar da bu ekranın küçültülmüş hâli olacak.
+ * Günün tek ekranı: alışkanlıklar ve ajanda bir arada. Görev bölümü,
+ * görevler modülüyle birlikte çıkarıldı.
  */
 @Composable
 fun TodayScreen(
     modifier: Modifier = Modifier,
     habitsViewModel: HabitsViewModel = hiltViewModel(),
-    tasksViewModel: TasksViewModel = hiltViewModel(),
     agendaViewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val habitsState by habitsViewModel.uiState.collectAsStateWithLifecycle()
-    val tasksState by tasksViewModel.todayState.collectAsStateWithLifecycle()
     val agendaState by agendaViewModel.uiState.collectAsStateWithLifecycle()
 
-    var fabMenuOpen by remember { mutableStateOf(false) }
     var showAddHabit by remember { mutableStateOf(false) }
-    var showAddTask by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 habitsViewModel.refreshToday()
-                tasksViewModel.refreshToday()
                 agendaViewModel.refresh()
             }
         }
@@ -103,11 +93,6 @@ fun TodayScreen(
                 onDelete = { habitsViewModel.deleteHabit(it.habit.uuid) },
             )
 
-            TodayTasksSection(
-                state = tasksState,
-                onToggle = tasksViewModel::setCompleted,
-            )
-
             AgendaSection(state = agendaState)
         }
 
@@ -116,24 +101,10 @@ fun TodayScreen(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         ) {
-            FloatingActionButton(onClick = { fabMenuOpen = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Ekle")
-            }
-            DropdownMenu(expanded = fabMenuOpen, onDismissRequest = { fabMenuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text("Görev ekle") },
-                    onClick = {
-                        fabMenuOpen = false
-                        showAddTask = true
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Alışkanlık ekle") },
-                    onClick = {
-                        fabMenuOpen = false
-                        showAddHabit = true
-                    },
-                )
+            // Eklenecek tek şey kaldı, o yüzden menü yok: düğme doğrudan
+            // alışkanlık ekleme kutusunu açıyor.
+            FloatingActionButton(onClick = { showAddHabit = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "Alışkanlık ekle")
             }
         }
     }
@@ -148,16 +119,6 @@ fun TodayScreen(
         )
     }
 
-    if (showAddTask) {
-        AddTaskDialog(
-            today = tasksState.today,
-            onDismiss = { showAddTask = false },
-            onConfirm = { title, due, priority, recurrence ->
-                tasksViewModel.addTask(title, due, priority, recurrence)
-                showAddTask = false
-            },
-        )
-    }
 }
 
 @Composable

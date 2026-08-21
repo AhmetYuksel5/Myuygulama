@@ -117,32 +117,6 @@ class TextActionViewModel @Inject constructor(
         }
     }
 
-    /** Not defterine, seçilen metin ve (getirildiyse) anlamıyla birlikte. */
-    fun addToNotes() {
-        val text = _state.value.text
-        if (text.isBlank()) return
-        viewModelScope.launch {
-            withContext(NonCancellable) {
-                entryRepository.createEntry(
-                    type = EntryType.NOTE,
-                    title = text.take(60).substringBefore('\n'),
-                    body = noteBody(text, _state.value.info),
-                )
-                _state.value = _state.value.copy(saved = "Notlara eklendi.")
-            }
-        }
-    }
-
-    private fun noteBody(text: String, info: WordInfo?): String = buildString {
-        append("“").append(text).append("”")
-        if (info == null) return@buildString
-        if (info.meaning.isNotBlank()) append("\n\n").append(info.meaning)
-        if (info.definition.isNotBlank()) append("\n").append(info.definition)
-        info.examples.forEachIndexed { index, example ->
-            if (index == 0) append("\n")
-            append("\n").append(index + 1).append(". ").append(example)
-        }
-    }
 
     /**
      * Seçim genelde satır sonları ve fazladan boşluk taşıyor; sözlüğe de

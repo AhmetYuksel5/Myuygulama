@@ -5,8 +5,7 @@ import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
 import com.ahmety.uygulama.feature.ebook.BookRepository
-import com.ahmety.uygulama.feature.vocab.LevelTestStore
-import com.ahmety.uygulama.feature.vocab.estimateLevel
+import com.ahmety.uygulama.feature.vocab.WordFrequencyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -26,7 +25,7 @@ data class SubtitlePair(
 class SubtitleRepository @Inject constructor(
     private val client: OpenSubtitlesClient,
     private val entryRepository: EntryRepository,
-    private val levelTest: LevelTestStore,
+    private val frequency: WordFrequencyStore,
     private val bookRepository: BookRepository,
 ) {
 
@@ -101,25 +100,11 @@ class SubtitleRepository @Inject constructor(
         // Sıklık listesi metnin dilinden seçiliyor: Arapça altyazıya
         // İngilizce liste tutulursa her kelime "listede yok" çıkar.
         val arabic = ArabicText.isArabic(pair.englishText.take(SCRIPT_SAMPLE))
-        val vocabulary = if (arabic) levelTest.arabicWords() else levelTest.words()
+        val vocabulary = if (arabic) frequency.arabicWords() else frequency.words()
         val ranks = vocabulary.withIndex().associate { (index, word) -> word to index + 1 }
-        val estimate = estimateLevel(levelTest.answers, ranks.size.coerceAtLeast(1))
-        val knownUpToRank = estimate.knownUpToRank
-
         val seen = entryRepository.listByType(EntryType.HIGHLIGHT)
             .map { it.title.trim().lowercase() }
             .toSet()
-
-        // Sınavdan gelen "bunları biliyorum" aralığı zorluk eşiğinden
-        // bağımsız: eşik düşük olsa bile bildiğin kelimeyi göstermenin
-        // anlamı yok.
-        // Seviye sınavı şimdilik yalnız İngilizce; Arapçada bu eşiği
-        // uygulamak yanlış listeye bakmak olurdu.
-        val known = if (knownUpToRank > 0 && !arabic) {
-            ranks.filterValues { it <= knownUpToRank }.keys
-        } else {
-            emptySet()
-        }
 
         val properNouns = SubtitleText.properNouns(pair.englishText)
         val words = SubtitleText.selectWords(
@@ -127,7 +112,7 @@ class SubtitleRepository @Inject constructor(
             ranks = ranks,
             properNouns = properNouns,
             minDifficulty = minDifficulty,
-            alreadySeen = seen + known,
+            alreadySeen = seen,
             limit = wordLimit,
         )
         val sentences = SubtitleText.selectSentences(

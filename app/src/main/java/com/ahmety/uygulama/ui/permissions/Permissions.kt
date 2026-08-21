@@ -48,26 +48,13 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
             PermissionSpec(
                 id = "notifications",
                 title = "Bildirimler",
-                rationale = "Alışkanlık hatırlatıcıları, görev ve takvim uyarıları için.",
+                rationale = "Alışkanlık hatırlatıcıları ve takvim uyarıları için.",
                 kind = PermissionKind.RUNTIME,
                 manifestPermissions = listOf(Manifest.permission.POST_NOTIFICATIONS),
                 isGranted = { it.hasPermission(Manifest.permission.POST_NOTIFICATIONS) },
             ),
         )
     }
-
-    add(
-        PermissionSpec(
-            id = "contacts",
-            title = "Rehber",
-            rationale = "Kişi kısayolları için. İzin verilirse WhatsApp kısayolu " +
-                "doğrudan kişinin sohbetini açar; verilmezse her seferinde " +
-                "numarayı doğrulayan ara ekrandan geçer.",
-            kind = PermissionKind.RUNTIME,
-            manifestPermissions = listOf(Manifest.permission.READ_CONTACTS),
-            isGranted = { it.hasPermission(Manifest.permission.READ_CONTACTS) },
-        ),
-    )
 
     add(
         PermissionSpec(
