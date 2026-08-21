@@ -100,6 +100,7 @@ dependencies {
     implementation(project(":core:ai"))
     implementation(project(":feature:habits"))
     implementation(project(":feature:calendar"))
+    implementation(project(":feature:gestures"))
     implementation(project(":feature:vocab"))
     implementation(project(":feature:ebook"))
     implementation(project(":feature:subtitles"))

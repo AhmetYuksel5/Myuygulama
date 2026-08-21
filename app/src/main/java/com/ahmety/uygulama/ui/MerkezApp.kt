@@ -31,6 +31,8 @@ import com.ahmety.uygulama.feature.ebook.BookShelfRoute
 import com.ahmety.uygulama.feature.subtitles.SubtitleRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
+import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
+import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
 import com.ahmety.uygulama.ui.update.UpdateDialog
@@ -128,6 +130,8 @@ fun MerkezApp() {
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
                     onOpenAi = { navController.navigate(AI_ROUTE) },
+                    onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
+                    onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenSubtitles = { navController.navigate(SUBTITLE_ROUTE) },
                 )
             }
@@ -152,6 +156,12 @@ fun MerkezApp() {
             composable(AI_ROUTE) {
                 AiSettingsScreen()
             }
+            composable(GESTURES_ROUTE) {
+                GestureSettingsScreen()
+            }
+            composable(CURSOR_ROUTE) {
+                QuickCursorScreen()
+            }
             composable(SUBTITLE_ROUTE) {
                 SubtitleRoute()
             }
@@ -165,6 +175,8 @@ private const val AI_ROUTE = "ai"
 private const val SUBTITLE_ROUTE = "altyazi"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
+private const val GESTURES_ROUTE = "gestures"
+private const val CURSOR_ROUTE = "cursor"
 
 @Composable
 private fun MoreScreen(
@@ -173,6 +185,8 @@ private fun MoreScreen(
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenAi: () -> Unit,
+    onOpenGestures: () -> Unit,
+    onOpenCursor: () -> Unit,
     onOpenSubtitles: () -> Unit,
 ) {
     Column(
@@ -200,6 +214,19 @@ private fun MoreScreen(
             headlineContent = { Text("Film hazırlığı") },
             supportingContent = { Text("Altyazıyı indir, bilmediğin kelimeleri çıkar") },
             modifier = Modifier.clickable(onClick = onOpenSubtitles),
+        )
+
+        // Araçlar: ekranın üstüne binen, uygulamadan bağımsız çalışan şeyler.
+        Text(text = "Araçlar", style = MaterialTheme.typography.titleMedium)
+        ListItem(
+            headlineContent = { Text("Kenar hareketleri") },
+            supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
+            modifier = Modifier.clickable(onClick = onOpenGestures),
+        )
+        ListItem(
+            headlineContent = { Text("Tek elle imleç") },
+            supportingContent = { Text("Ulaşılamayan köşelere basmak için sanal imleç") },
+            modifier = Modifier.clickable(onClick = onOpenCursor),
         )
 
         Text(text = "Ayarlar", style = MaterialTheme.typography.titleMedium)

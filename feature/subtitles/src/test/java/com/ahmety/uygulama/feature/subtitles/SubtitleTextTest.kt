@@ -249,13 +249,64 @@ class SubtitleTextTest {
             Let's go.
         """.trimIndent()
 
-        // Okuma ekranı için birim replik: bir repliğin iki satırı birleşiyor
-        // ama iki replik birleşmiyor. Cümle birleştirme burada yanlış olurdu,
-        // noktası olmayan altyazılarda metin tek duvara dönüşüyordu.
+        // Okuma ekranı için birim replik: iki replik birleşmiyor. Cümle
+        // birleştirme burada yanlış olurdu, noktası olmayan altyazılarda
+        // metin tek duvara dönüşüyordu.
         val cues = SubtitleText.cues(srt)
         assertEquals(2, cues.size)
-        assertEquals("I had to straighten out her boss at the diner.", cues.first())
+        // Repliğin kendi satır sonu da duruyor: altyazının biçimi bilgi
+        // taşıyor, onu düzleştirmek okuyanı yanıltıyordu.
+        assertEquals("I had to straighten out\nher boss at the diner.", cues.first())
         assertEquals("Let's go.", cues.last())
+    }
+
+    @Test
+    fun `karsilikli konusma tek cumleye donusmuyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            - Yes, if I'm not mistaken.
+            - Do you know how to read a map?
+        """.trimIndent()
+
+        // Eskiden satırlar boşlukla birleşip baştaki tireler siliniyordu;
+        // iki kişinin konuşması tek bir cümle gibi görünüyordu.
+        val cue = SubtitleText.cues(srt).single()
+        assertEquals("- Yes, if I'm not mistaken.\n- Do you know how to read a map?", cue)
+    }
+
+    @Test
+    fun `italik kaliyor diger etiketler gidiyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            <i>Have you ever looked at a map?</i>
+
+            2
+            00:00:04,000 --> 00:00:06,000
+            <b>Bold</b> and {\an8}positioned.
+        """.trimIndent()
+
+        val cues = SubtitleText.cues(srt)
+        // İtalik "bu ses sahnede değil" demek; okurken gerekiyor.
+        assertEquals("<i>Have you ever looked at a map?</i>", cues.first())
+        // Kalın yazı ve konumlandırma yalnızca biçim.
+        assertEquals("Bold and positioned.", cues.last())
+    }
+
+    @Test
+    fun `italik kelime cikarmayi bozmuyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            <i>Peculiar</i> circumstances.
+        """.trimIndent()
+
+        // Kelime ve cümle akışı etiketsiz metin görmeye devam ediyor:
+        // italik yalnızca okuma ekranına gidiyor.
+        val words = SubtitleText.words(srt).map { it.word }
+        assertTrue("peculiar" in words)
+        assertTrue("circumstances" in words)
     }
 
     @Test

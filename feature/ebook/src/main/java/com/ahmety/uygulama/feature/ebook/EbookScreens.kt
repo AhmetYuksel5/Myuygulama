@@ -61,6 +61,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
@@ -479,7 +480,7 @@ fun BookReaderRoute(
                 ) {
                     items(chapter?.paragraphs.orEmpty()) { paragraph ->
                         HighlightableParagraph(
-                            paragraph = paragraph,
+                            raw = paragraph,
                             colors = state.highlightColors,
                             textColor = theme.text,
                             fontSizeSp = fontSize,
@@ -768,7 +769,7 @@ private const val TRIPLE_TAP_WINDOW_MS = 420L
  */
 @Composable
 private fun HighlightableParagraph(
-    paragraph: String,
+    raw: String,
     colors: Map<String, HighlightColor>,
     textColor: Color,
     fontSizeSp: Int,
@@ -776,6 +777,13 @@ private fun HighlightableParagraph(
     onSelection: (text: String, context: String) -> Unit,
     onPreview: (String?) -> Unit,
 ) {
+    // Altyazıdan gelen metinde `<i>` etiketleri duruyor: eğik yazı, sesin
+    // sahnede olmadığını söylüyor. Etiketleri burada metinden çıkarıp yerine
+    // gerçek eğik yazı koyuyoruz. Bundan sonrası tek bir düz metin üzerinde
+    // çalışıyor — seçim ve işaretleme konumları etiket görmüyor.
+    val italic = remember(raw) { extractItalics(raw) }
+    val paragraph = italic.text
+
     var layout by remember(paragraph) { mutableStateOf<TextLayoutResult?>(null) }
     // Seçim: uzun basınca kelimede başlar, parmak sürüklendikçe genişler.
     var selection by remember(paragraph) { mutableStateOf<IntRange?>(null) }
@@ -800,6 +808,10 @@ private fun HighlightableParagraph(
     val painted: AnnotatedString = remember(paragraph, colors, selection, selectionTint) {
         buildAnnotatedString {
             append(paragraph)
+
+            italic.spans.forEach { span ->
+                addStyle(SpanStyle(fontStyle = FontStyle.Italic), span.first, span.last + 1)
+            }
 
             // Önce çok kelimeli işaretlemeler: metinde geçtiği her yeri boya.
             colors.forEach { (text, color) ->
@@ -1192,4 +1204,46 @@ internal fun paintOf(color: HighlightColor): Color = when (color) {
     HighlightColor.BLUE -> Color(0xFF90CAF9)
     HighlightColor.GREEN -> Color(0xFFA5D6A7)
     HighlightColor.RED -> Color(0xFFEF9A9A)
+}
+
+/** Düz metin ve içindeki eğik yazı aralıkları. */
+private data class ItalicText(val text: String, val spans: List<IntRange>)
+
+/**
+ * `<i>…</i>` etiketlerini metinden çıkarır, yerlerini aralık olarak verir.
+ *
+ * Altyazıda eğik yazı "bu ses sahnede değil" demek: dış ses, telefondaki
+ * karşı taraf, radyo. Okurken bunu görmek gerekiyor ama etiketin kendisini
+ * görmek gerekmiyor. Kapanışı olmayan `<i>` satırın sonuna kadar sayılıyor;
+ * altyazılarda kapanış unutulması sık.
+ *
+ * Kitaplarda etiket geçmiyor: ilk `<` yoksa metin olduğu gibi dönüyor.
+ */
+private fun extractItalics(raw: String): ItalicText {
+    if (!raw.contains('<')) return ItalicText(raw, emptyList())
+    val out = StringBuilder(raw.length)
+    val spans = mutableListOf<IntRange>()
+    var open = -1
+    var index = 0
+    while (index < raw.length) {
+        when {
+            raw.startsWith("<i>", index, ignoreCase = true) -> {
+                if (open < 0) open = out.length
+                index += 3
+            }
+
+            raw.startsWith("</i>", index, ignoreCase = true) -> {
+                if (open in 0 until out.length) spans += open until out.length
+                open = -1
+                index += 4
+            }
+
+            else -> {
+                out.append(raw[index])
+                index++
+            }
+        }
+    }
+    if (open in 0 until out.length) spans += open until out.length
+    return ItalicText(out.toString(), spans)
 }

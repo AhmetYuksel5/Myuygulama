@@ -79,6 +79,40 @@ object SubtitleText {
     }
 
     /**
+     * Etiketleri atar ama italiği bırakır.
+     *
+     * Okuma ekranı için: `<i>` altyazıda "bu ses sahnede değil" demek —
+     * dış ses, telefondaki karşı taraf, radyo. Okurken bilinmesi gereken
+     * bir şey, dolayısıyla metinde kalıyor ve okuyucu onu eğik yazıya
+     * çeviriyor. `<b>`, `<font …>` ve `{…}` ise yalnızca biçim; gidiyorlar.
+     */
+    internal fun stripTagsExceptItalic(line: String): String {
+        if (!line.contains('<') && !line.contains('{')) return line
+        val out = StringBuilder(line.length)
+        var index = 0
+        while (index < line.length) {
+            val char = line[index]
+            val closing = when (char) {
+                '<' -> '>'
+                '{' -> '}'
+                else -> null
+            }
+            val end = closing?.let { line.indexOf(it, index + 1) } ?: -1
+            if (end < 0) {
+                out.append(char)
+                index++
+                continue
+            }
+            val tag = line.substring(index, end + 1)
+            if (tag.equals("<i>", ignoreCase = true) || tag.equals("</i>", ignoreCase = true)) {
+                out.append(tag.lowercase())
+            }
+            index = end + 1
+        }
+        return out.toString()
+    }
+
+    /**
      * Satırdaki kelimeler. Harfle başlayan, harf/kesme/tire ile süren
      * diziler. Rakam ve noktalama kelime değil.
      */
@@ -194,9 +228,17 @@ object SubtitleText {
      * dönüşüyor ve ekranda tek bir duvar gibi duruyor. Repliğin kendisi
      * zaten doğru birim — filmi izlerken ekranda gördüğün parça o.
      *
-     * Bir repliğin birden çok satırı boşlukla birleştiriliyor; replikler
-     * arasındaki sınır boş satırdan ya da yeni bir zaman satırından
-     * anlaşılıyor.
+     * Repliğin **içine dokunmuyoruz**. Eskiden satırları boşlukla birleştirip
+     * baştaki tireleri de siliyorduk; sonuç, iki kişinin karşılıklı
+     * konuşmasının tek bir cümleye dönüşmesiydi ve kimin konuştuğu
+     * anlaşılmıyordu. Altyazının kendi biçimi zaten bu bilgiyi taşıyor:
+     * satır sonu ayrı satır demek, baştaki tire "burada başkası konuşuyor"
+     * demek, italik ise sesin sahnede olmadığını (dış ses, telefon, radyo)
+     * söylüyor. Üçü de olduğu gibi kalıyor.
+     *
+     * Atılan tek şey sıra numaraları ve zaman damgaları — okurken işe
+     * yaramıyorlar. İtalik dışındaki etiketler de gidiyor; onlar biçimlendirme
+     * artığı, anlam taşımıyorlar.
      */
     fun cues(srt: String): List<String> {
         val out = mutableListOf<String>()
@@ -216,9 +258,11 @@ object SubtitleText {
                 isTimeLine(line) -> flush()
                 line.all { it.isDigit() } -> flush()
                 else -> {
-                    val text = stripTags(line).replace("- ", "").trim()
+                    val text = stripTagsExceptItalic(line).trim()
                     if (text.isNotEmpty()) {
-                        if (current.isNotEmpty()) current.append(' ')
+                        // Satır sonu korunuyor: repliğin ikinci satırı
+                        // çoğu zaman ikinci kişinin repliği.
+                        if (current.isNotEmpty()) current.append('\n')
                         current.append(text)
                     }
                 }
