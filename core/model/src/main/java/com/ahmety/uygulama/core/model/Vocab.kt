@@ -12,6 +12,12 @@ data class VocabWord(
     val meaning: String,
     /** Kısa İngilizce tanım. */
     val definition: String = "",
+    /**
+     * Okunuş künyesi. Arapçada kelimenin harekeli yazımı, Latin okunuşu ve
+     * ezberlenmesi gereken biçimleri (isimde çoğul, fiilde mastar ve
+     * muzari). Latin alfabeli dillerde boş: orada yazım okunuşu veriyor.
+     */
+    val reading: String = "",
     val examples: List<String> = emptyList(),
     /** Aynı anlam alanından kelimeler — aynı konuda doğal olarak geçenler. */
     val related: List<String> = emptyList(),

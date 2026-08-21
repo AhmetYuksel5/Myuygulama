@@ -86,13 +86,13 @@ object SubtitleText {
         val found = ArrayList<String>()
         var index = 0
         while (index < line.length) {
-            if (!line[index].isAsciiLetter()) {
+            if (!line[index].isWordLetter()) {
                 index++
                 continue
             }
             val start = index
             while (index < line.length &&
-                (line[index].isAsciiLetter() || line[index] == '\'' || line[index] == '-')
+                (line[index].isWordLetter() || line[index] == '\'' || line[index] == '-')
             ) {
                 index++
             }
@@ -101,7 +101,12 @@ object SubtitleText {
         return found
     }
 
-    private fun Char.isAsciiLetter(): Boolean = this in 'a'..'z' || this in 'A'..'Z'
+    /**
+     * Kelime harfi. Latin alfabesi ve Arap alfabesi; ikisi de aynı altyazı
+     * akışından geçiyor, ayrı bir ayrıştırıcı yazmak gerekmiyor.
+     */
+    private fun Char.isWordLetter(): Boolean = this in 'a'..'z' || this in 'A'..'Z' ||
+        ArabicText.isArabicLetter(this)
 
     /** Altyazıdaki konuşma satırları, sırayla. */
     fun lines(srt: String): List<String> = srt
@@ -136,7 +141,14 @@ object SubtitleText {
             ).joinToString(" ")
             tokensOf(line).forEach { raw ->
                 if (raw.contains('\'')) return@forEach
-                val word = raw.lowercase().trim('-')
+                // Arapça harekeli/harekesiz aynı kelime iki ayrı satır
+                // olmasın diye yazım sadeleştiriliyor; Latin harflerinde
+                // karşılığı küçük harfe indirmek.
+                val word = if (ArabicText.isArabic(raw)) {
+                    ArabicText.normalize(raw)
+                } else {
+                    raw.lowercase().trim('-')
+                }
                 if (word.length < 3) return@forEach
                 counts[word] = (counts[word] ?: 0) + 1
                 contexts.putIfAbsent(word, sentence)
@@ -232,7 +244,13 @@ object SubtitleText {
         .filter { it.word !in properNouns }
         .filter { it.word !in alreadySeen }
         .filter { it.word.length >= 3 }
-        .map { it to SubtitleDifficulty.ofRank(SubtitleDifficulty.rankOf(it.word, ranks)) }
+        // Arapçada özel adı büyük harften ayırt edemiyoruz — öyle bir şey yok.
+        // Yerine şu kural: on beş binlik listede hiç geçmeyen bir yazım büyük
+        // ihtimalle bir addır ya da yazım hatasıdır, gerçek ama nadir bir
+        // kelime değil. İngilizcede tersi geçerli, orada listede olmamak
+        // kelimeyi zor yapan şeyin ta kendisi.
+        .filter { !ArabicText.isArabic(it.word) || SubtitleDifficulty.rankOf(it.word, ranks) != null }
+        .map { it to SubtitleDifficulty.ofRank(SubtitleDifficulty.rankOf(it.word, ranks), ranks.size) }
         .filter { (_, difficulty) -> difficulty >= minDifficulty }
         .sortedWith(
             compareByDescending<Pair<SubtitleWord, Int>> { it.second }
@@ -267,7 +285,7 @@ object SubtitleText {
         .filter { it.length in MIN_SENTENCE_CHARS..MAX_SENTENCE_CHARS }
         .distinctBy { it.lowercase() }
         .filter { it.lowercase() !in alreadySeen }
-        .map { it to SubtitleDifficulty.ofSentence(it, ranks) }
+        .map { it to SubtitleDifficulty.ofSentence(it, ranks, ranks.size) }
         .filter { (_, difficulty) -> difficulty >= minDifficulty }
         .sortedByDescending { it.second }
         .take(limit)

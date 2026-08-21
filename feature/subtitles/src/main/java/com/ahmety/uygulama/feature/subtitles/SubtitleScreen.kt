@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +74,19 @@ fun SubtitleRoute(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
             )
+        }
+
+        // Öğrenilen dil: altyazının hangi dilde indirileceği. Türkçe tarafı
+        // sabit, karşılaştırmak için o duruyor.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SubtitleLanguage.entries.forEach { option ->
+                FilterChip(
+                    selected = state.language == option,
+                    onClick = { viewModel.onLanguageChange(option) },
+                    enabled = !state.busy,
+                    label = { Text(option.label) },
+                )
+            }
         }
 
         OutlinedTextField(
@@ -147,7 +161,7 @@ fun SubtitleRoute(
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        text = "İngilizce: ${pair.english.release}",
+                        text = "${state.language.label}: ${pair.english.release}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Text(

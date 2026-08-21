@@ -18,6 +18,8 @@ data class WordInfo(
     val word: String,
     val meaning: String,
     val definition: String,
+    /** Arapçada harekeli yazım, okunuş ve ezberlenecek biçimler. */
+    val reading: String = "",
     val examples: List<String>,
     val related: List<String>,
     val synonyms: List<String>,
@@ -74,7 +76,15 @@ class OpenAiClient @Inject constructor(
         val key = settings.apiKey
         if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
 
-        val instruction = if (passage) passageInstruction() else wordInstruction()
+        // Dili kelimenin kendisinden anlıyoruz: Arap harfi varsa Arapça
+        // yönergesi. Böylece iki dil aynı destede yan yana durabiliyor ve
+        // kayıtlara bir "dil" alanı eklemek gerekmiyor.
+        val arabic = word.any { it in '\u0600'..'\u06FF' }
+        val instruction = when {
+            passage -> passageInstruction(arabic)
+            arabic -> arabicWordInstruction()
+            else -> wordInstruction()
+        }
         // Kitabın ya da filmin adı da gidiyor: aynı cümle bir mafya filminde
         // ve bir iş kitabında farklı şey demek olabiliyor, argo ve göndermeler
         // ancak eseri bilerek çözülüyor.
@@ -301,6 +311,89 @@ class OpenAiClient @Inject constructor(
         }
     }
 
+    /**
+     * Arapça kelime maddesi.
+     *
+     * İngilizcedekinin çevirisi değil: Arapçada öğrencinin ezberlediği şey
+     * başka. Harekesiz yazım okunuşu vermiyor, isimde çoğul ve fiilde mastar
+     * kuralsız, kök üç sessizden oluşuyor ve aynı kökten türeyenler gerçek
+     * bir aile kuruyor — İngilizcedeki köken bölümünün Arapçada karşılığı
+     * çok daha güçlü. Şekil benzerliği de burada daha kritik: noktası
+     * değişen iki harf ayrı kelime yapıyor.
+     */
+    private fun arabicWordInstruction(): String = buildString {
+        append("You are a bilingual Arabic-Turkish lexicographer writing a study ")
+        append("card for a Turkish learner of Arabic. The input may be a single ")
+        append("word or a phrase; treat it as one unit. Modern Standard Arabic is ")
+        append("the default, but if the input is dialect, say so and give the MSA ")
+        append("equivalent. ")
+        append("Return STRICT JSON with keys: ")
+
+        append("t (Turkish meanings, 1-3, comma separated. Write the Turkish a ")
+        append("Turkish speaker would actually say, not a word-by-word gloss), ")
+
+        append("y (the memorisation line, in exactly this order separated by ")
+        append("\" — \": the input FULLY VOWELLED with harakat; its Latin ")
+        append("transcription; then for a noun its plural, for a verb its ")
+        append("maṣdar and present tense. Example for كتاب: ")
+        append("\"كِتَاب — kitāb — ج. كُتُب\". Example for كتب: ")
+        append("\"كَتَبَ — kataba — يَكْتُب، الكِتَابَة\". This line is the single ")
+        append("most useful thing on the card: unvowelled Arabic does not show ")
+        append("its own pronunciation and Arabic plurals are irregular), ")
+
+        append("d (a short definition in SIMPLE Arabic, max 12 words, fully ")
+        append("understandable to an intermediate learner), ")
+
+        append("e (array of exactly 3 natural Arabic example sentences using it, ")
+        append("6-14 words each, with harakat on the input word only), ")
+
+        append("s (SYNONYMS: 2-4 Arabic words that could replace the input with ")
+        append("roughly the same meaning), ")
+
+        append("a (ANTONYMS: 1-3 Arabic opposites; empty only if there is none), ")
+
+        append("r (RELATED: 3-5 Arabic words from the same topic that are NOT ")
+        append("interchangeable with the input), ")
+
+        append("k (ROOT: the triliteral (or quadriliteral) root, written with ")
+        append("spaces between the radicals and then its core sense in Turkish, ")
+        append("in exactly this shape: \"ك ت ب (yazmak)\". Empty string only for ")
+        append("borrowed words with no Arabic root, and then say so), ")
+
+        append("f (WORD FAMILY: 4-8 OTHER words built on that SAME root, the ")
+        append("place where Arabic rewards a learner most. Give the derived ")
+        append("forms a learner actually meets — the maṣdar, the active and ")
+        append("passive participle, the noun of place, the instrument noun — ")
+        append("not a mechanical list. Write each as \"kelime — Türkçe\": ")
+        append("\"مَكْتَب — yazıhane, ofis\". Never repeat the input), ")
+
+        append("x (LOOK-ALIKES: 2-3 Arabic words that LOOK like the input on the ")
+        append("page even though their meaning and root are unrelated. In Arabic ")
+        append("this matters more than in Latin script: words differ by a single ")
+        append("dot or by letters that share a shape (ب ت ث، ج ح خ، د ذ، ر ز، ")
+        append("س ش، ص ض، ط ظ، ع غ). Look for exactly that kind of pair — ")
+        append("بَحَث/بَحَت، ضَلَّ/ظَلَّ. Write each as \"kelime — Türkçe\" and ")
+        append("nothing else; do not spell out which letter differs, the reader ")
+        append("sees it. Never list the input itself or a form of it), ")
+
+        append("c (COLLOCATIONS grouped by grammatical pattern: array of objects ")
+        append("with g and w. Decide the input's part of speech first, then use ")
+        append("only these groups: for a NOUN \"fiil +\" (verbs that take it as ")
+        append("object), \"sıfat +\" (adjectives that describe it), ")
+        append("\"tamlama\" (the nouns it is commonly annexed to, iḍāfa); ")
+        append("for a VERB \"+ isim\" (its typical objects), \"+ harf-i cer\" ")
+        append("(the preposition it governs — in Arabic this changes the meaning ")
+        append("and must be learned with the verb), \"zarf +\"; ")
+        append("for an ADJECTIVE \"+ isim\", \"zarf +\". ")
+        append("w is an array of 3-6 collocates, Arabic only, no translation. ")
+        append("Give 2-4 groups), ")
+
+        append("Never pad a section to reach a count: fewer good items beat ")
+        append("filler. This does not apply to x — give the 2-3 closest ")
+        append("look-alikes you found. ")
+        append("No markdown, no extra keys, no commentary.")
+    }
+
     /** Tek kelime ya da öbek için sözlük maddesi. */
     private fun wordInstruction(): String = buildString {
         append("You are a bilingual English-Turkish lexicographer writing a study ")
@@ -413,8 +506,16 @@ class OpenAiClient @Inject constructor(
      * burada gereken çeviri, sade bir İngilizce karşılık ve cümleyi zor
      * kılan yapının açıklaması.
      */
-    private fun passageInstruction(): String = buildString {
-        append("You are a bilingual English-Turkish teacher. ")
+    private fun passageInstruction(arabic: Boolean = false): String = buildString {
+        if (arabic) {
+            append("You are a bilingual Arabic-Turkish teacher. ")
+            append("The input is an Arabic sentence or clause a Turkish learner ")
+            append("did not understand. Subtitles are often in a dialect rather ")
+            append("than Modern Standard Arabic; when the line is dialect, say ")
+            append("which one and give the MSA equivalent. ")
+        } else {
+            append("You are a bilingual English-Turkish teacher. ")
+        }
         append("The input is a sentence or clause a Turkish learner did not understand. ")
         append("Any surrounding text is context only — explain THE INPUT itself. ")
         append("If you are told which book or film it comes from, use that: the ")
@@ -498,6 +599,7 @@ class OpenAiClient @Inject constructor(
         val synonyms = json.optJSONArray("s").toStringList()
         val antonyms = json.optJSONArray("a").toStringList()
         val root = json.optString("k").trim()
+        val reading = json.optString("y").trim()
         val family = json.optJSONArray("f").toStringList()
             .filterNot { sameWord(it.headWord(), word.trim()) }
         // Kelimenin kendisi ve çekimleri ("discard / discarded") benzeyen
@@ -514,6 +616,7 @@ class OpenAiClient @Inject constructor(
                 word = word,
                 meaning = meaning,
                 definition = json.optString("d").trim(),
+                reading = reading,
                 examples = examples,
                 related = related,
                 synonyms = synonyms,

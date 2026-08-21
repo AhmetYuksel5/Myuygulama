@@ -71,6 +71,7 @@ class VocabRepository @Inject constructor(
                     word = word,
                     meaning = filled?.meaning.orEmpty(),
                     definition = filled?.definition.orEmpty(),
+                    reading = filled?.reading.orEmpty(),
                     examples = filled?.examples.orEmpty(),
                     related = filled?.related.orEmpty(),
                     synonyms = filled?.synonyms.orEmpty(),
@@ -188,6 +189,7 @@ class VocabRepository @Inject constructor(
                 word = word.word,
                 meaning = word.meaning,
                 definition = word.definition,
+                reading = word.reading,
                 examples = word.examples,
                 related = word.related,
                 synonyms = word.synonyms,
@@ -229,6 +231,7 @@ class VocabRepository @Inject constructor(
         word.copy(
             meaning = filled.meaning,
             definition = filled.definition,
+            reading = filled.reading,
             examples = filled.examples,
             related = filled.related,
             synonyms = filled.synonyms,

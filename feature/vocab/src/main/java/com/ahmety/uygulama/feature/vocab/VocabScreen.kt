@@ -1276,7 +1276,21 @@ private fun WordCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                } else if (word.isPassage) {
+                }
+
+                // Arapçada harekesiz yazım okunuşu vermiyor; okunuş künyesi
+                // kelimenin hemen altında, kapalıyken de görünüyor.
+                if (word.reading.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = word.reading,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                if (revealed && word.isPassage) {
                     // Kırmızı işaret bir cümle: sıralama kelimeninkinden
                     // başka. Önce cümlenin geçtiği yer, sonra aynı şeyin
                     // kolay İngilizcesi, çizginin altında Türkçesi, en sonda
@@ -1337,7 +1351,7 @@ private fun WordCard(
                     }
 
                     SavedAnswers(word.answers)
-                } else {
+                } else if (revealed) {
                     Spacer(Modifier.height(10.dp))
 
                     if (word.meaning.isNotBlank()) {

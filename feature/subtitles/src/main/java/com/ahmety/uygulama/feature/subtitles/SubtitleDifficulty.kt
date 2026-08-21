@@ -11,36 +11,37 @@ package com.ahmety.uygulama.feature.subtitles
 object SubtitleDifficulty {
 
     /**
-     * Sıklık sırası → zorluk.
+     * Sıklık listesindeki *oran* → zorluk.
      *
-     * Doğrusal değil: bir dilin ilk bin kelimesi metnin dörtte üçünü
-     * kaplıyor, yani 500. kelimeyle 600. kelime arasındaki fark 5000. ile
-     * 6000. arasındakinden çok daha küçük. Çapa noktaları arasında doğrusal
-     * ara değer alıyoruz.
+     * Doğrusal değil: bir dilin ilk yüzde beşi metnin çoğunu kaplıyor, yani
+     * 500. kelimeyle 600. arasındaki fark 5000. ile 6000. arasındakinden çok
+     * daha küçük. Oran üzerinden tanımlı olması listenin uzunluğundan
+     * bağımsız kılıyor — İngilizce listesi on bin, Arapça listesi on beş bin
+     * kelime ve ikisi de aynı ölçeği kullanabiliyor.
      */
     private val ANCHORS = listOf(
-        1 to 0,
-        500 to 20,
-        1000 to 30,
-        2000 to 40,
-        4000 to 60,
-        7000 to 75,
-        10_000 to 85,
+        0.0f to 0,
+        0.05f to 20,
+        0.10f to 30,
+        0.20f to 40,
+        0.40f to 60,
+        0.70f to 75,
+        1.00f to 85,
     )
 
     /** Sıklık listesinde hiç geçmeyen kelimenin zorluğu. */
     private const val UNLISTED = 95
 
-    fun ofRank(rank: Int?): Int {
-        if (rank == null || rank <= 0) return UNLISTED
-        if (rank >= ANCHORS.last().first) return UNLISTED
+    fun ofRank(rank: Int?, listSize: Int): Int {
+        if (rank == null || rank <= 0 || listSize <= 0) return UNLISTED
+        val position = rank.toFloat() / listSize
+        if (position >= 1f) return UNLISTED
         for (index in 1 until ANCHORS.size) {
-            val (highRank, highScore) = ANCHORS[index]
-            if (rank > highRank) continue
-            val (lowRank, lowScore) = ANCHORS[index - 1]
-            val span = (highRank - lowRank).toFloat()
-            val position = (rank - lowRank) / span
-            return (lowScore + position * (highScore - lowScore)).toInt()
+            val (high, highScore) = ANCHORS[index]
+            if (position > high) continue
+            val (low, lowScore) = ANCHORS[index - 1]
+            val span = (high - low).coerceAtLeast(0.0001f)
+            return (lowScore + (position - low) / span * (highScore - lowScore)).toInt()
         }
         return UNLISTED
     }
@@ -53,8 +54,14 @@ object SubtitleDifficulty {
      * içinde listede geçen en sık olanı alıyoruz: bir kelimeyi biliyorsan
      * çekimini de biliyorsundur.
      */
-    fun rankOf(word: String, ranks: Map<String, Int>): Int? =
-        stems(word).mapNotNull { ranks[it] }.minOrNull()
+    fun rankOf(word: String, ranks: Map<String, Int>): Int? {
+        val candidates = if (ArabicText.isArabic(word)) {
+            ArabicText.stems(word)
+        } else {
+            stems(word)
+        }
+        return candidates.mapNotNull { ranks[it] }.minOrNull()
+    }
 
     /**
      * Kök adayları. Gerçek bir biçimbilim çözümleyicisi değil; İngilizcenin
@@ -126,30 +133,35 @@ object SubtitleDifficulty {
      * uzunluğu ve iç içe geçmişliği, sonra parçalarından anlaşılmayan
      * kalıplar ve konuşma dili.
      */
-    fun ofSentence(sentence: String, ranks: Map<String, Int>): Int {
+    fun ofSentence(sentence: String, ranks: Map<String, Int>, listSize: Int): Int {
         val tokens = SubtitleText.tokensOf(sentence)
         if (tokens.isEmpty()) return 0
-        val words = tokens.map { it.lowercase() }
+        val arabic = ArabicText.isArabic(sentence)
+        val words = tokens.map { if (arabic) ArabicText.normalize(it) else it.lowercase() }
 
         // 1. En zor kelime. Tek bilinmeyen kelime bile cümleyi durduruyor.
         val hardestWord = words
             .filter { it.length >= 3 && !it.contains('\'') }
-            .maxOfOrNull { ofRank(rankOf(it, ranks)) } ?: 0
+            .maxOfOrNull { ofRank(rankOf(it, ranks), listSize) } ?: 0
 
         // 2. Uzunluk. Altı kelimelik replik kolay, yirmi beş kelimelik değil.
         val lengthScore = ((words.size - 6) * 100 / 19).coerceIn(0, 100)
 
         // 3. İç içe geçmişlik: yan cümle bağlayıcıları ve virgüller.
-        val clauses = words.count { it in SUBORDINATORS } + sentence.count { it == ',' }
+        val subordinators = if (arabic) ArabicText.SUBORDINATORS else SUBORDINATORS
+        val clauses = words.count { it in subordinators } +
+            sentence.count { it == ',' || it == '،' }
         val clauseScore = (clauses * 30).coerceAtMost(100)
 
         // 4. Parçalarından anlaşılmayan kalıplar.
-        val idioms = IDIOMS.count { sentence.contains(it, ignoreCase = true) }
+        // Arapça için hazır bir deyim listemiz yok; İngilizce kalıpları Arapça
+        // bir cümlede aramanın anlamı da yok.
+        val idioms = if (arabic) 0 else IDIOMS.count { sentence.contains(it, ignoreCase = true) }
         val idiomScore = (idioms * 50).coerceAtMost(100)
 
         // 5. Konuşma dili: kısaltmalar ve ağız. Yazıda görmediğin biçimler.
-        val colloquial = tokens.count { it.contains('\'') } +
-            words.count { it in COLLOQUIAL }
+        val speech = if (arabic) ArabicText.COLLOQUIAL else COLLOQUIAL
+        val colloquial = tokens.count { it.contains('\'') } + words.count { it in speech }
         val colloquialScore = (colloquial * 100 / words.size.coerceAtLeast(1)).coerceAtMost(100)
 
         val total = hardestWord * 0.50f +

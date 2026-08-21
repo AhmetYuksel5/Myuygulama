@@ -14,6 +14,17 @@ import javax.inject.Singleton
  * indirme hakkı artıyor, girilmezse arama yine çalışıyor ama indirme
  * kotası çok düşük.
  */
+/**
+ * Altyazıdan öğrenilen dil.
+ *
+ * Türkçe tarafı sabit — karşılaştırmak için o duruyor. Değişen, filmi
+ * hangi dilde izleyeceğin.
+ */
+enum class SubtitleLanguage(val code: String, val label: String) {
+    ENGLISH("en", "İngilizce"),
+    ARABIC("ar", "Arapça"),
+}
+
 @Singleton
 class SubtitleSettings @Inject constructor(
     @ApplicationContext context: Context,
@@ -54,6 +65,12 @@ class SubtitleSettings @Inject constructor(
         get() = prefs.getInt(KEY_DIFFICULTY, 60).coerceIn(0, 100)
         set(value) = prefs.edit().putInt(KEY_DIFFICULTY, value.coerceIn(0, 100)).apply()
 
+    /** Son seçilen dil; ekran açıldığında onunla başlıyor. */
+    var language: SubtitleLanguage
+        get() = runCatching { SubtitleLanguage.valueOf(prefs.getString(KEY_LANGUAGE, null).orEmpty()) }
+            .getOrDefault(SubtitleLanguage.ENGLISH)
+        set(value) = prefs.edit().putString(KEY_LANGUAGE, value.name).apply()
+
     val configured: Boolean get() = apiKey.isNotBlank()
 
     fun maskedKey(): String {
@@ -64,9 +81,11 @@ class SubtitleSettings @Inject constructor(
 
     fun clear() {
         // Zorluk eşiği hesapla ilgili değil; anahtarı silmek onu sıfırlamasın.
-        val keep = difficulty
+        val keepDifficulty = difficulty
+        val keepLanguage = language
         prefs.edit().clear().apply()
-        difficulty = keep
+        difficulty = keepDifficulty
+        language = keepLanguage
     }
 
     private companion object {
@@ -77,6 +96,7 @@ class SubtitleSettings @Inject constructor(
         const val KEY_TOKEN = "token"
         const val KEY_BASE = "base_url"
         const val KEY_DIFFICULTY = "difficulty"
+        const val KEY_LANGUAGE = "language"
         const val DEFAULT_BASE = "https://api.opensubtitles.com"
     }
 }

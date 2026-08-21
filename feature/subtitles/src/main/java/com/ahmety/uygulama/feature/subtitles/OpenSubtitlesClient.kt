@@ -52,7 +52,15 @@ class OpenSubtitlesClient @Inject constructor(
      * Filmi arar. Hem İngilizce hem Türkçe sonuçlar tek istekte geliyor;
      * eşleştirmeyi biz yapıyoruz.
      */
-    suspend fun search(query: String, year: Int? = null): SubtitleResult<List<SubtitleHit>> =
+    /**
+     * [learning] öğrenilen dilin kodu ("en" ya da "ar"). Türkçe her zaman
+     * isteniyor: karşılaştırmak için o taraf sabit.
+     */
+    suspend fun search(
+        query: String,
+        year: Int? = null,
+        learning: String = "en",
+    ): SubtitleResult<List<SubtitleHit>> =
         withContext(Dispatchers.IO) {
             val key = settings.apiKey
             if (key.isBlank()) {
@@ -67,7 +75,7 @@ class OpenSubtitlesClient @Inject constructor(
             // Adresi elle birleştirmiyoruz: film adlarında boşluk, kesme
             // işareti, iki nokta oluyor ve yanlış kodlama sunucuyu şaşırtıyor.
             val url = "$BASE/subtitles".toHttpUrl().newBuilder()
-                .addQueryParameter("languages", "en,tr")
+                .addQueryParameter("languages", "$learning,tr")
                 .addQueryParameter("order_by", "download_count")
                 .addQueryParameter("order_direction", "desc")
                 .addQueryParameter("query", query.trim().lowercase())

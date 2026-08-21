@@ -26,8 +26,22 @@ class LevelTestStore @Inject constructor(
     @Volatile
     private var cached: List<String>? = null
 
-    /** Sıklık sırasına göre 10.000 kelime. */
-    fun words(): List<String> = cached ?: load().also { cached = it }
+    @Volatile
+    private var cachedArabic: List<String>? = null
+
+    /** Sıklık sırasına göre 10.000 İngilizce kelime. */
+    fun words(): List<String> = cached ?: load(ASSET_NAME).also { cached = it }
+
+    /**
+     * Sıklık sırasına göre 15.000 Arapça kelime.
+     *
+     * Aynı derlemeden (OpenSubtitles) geliyor, yani ölçtüğü şey yine film
+     * dili. İngilizce listesinden uzun olmasının sebebi Arapçanın çekim ve
+     * ek zenginliği: aynı kelime listede birkaç yazımla görünüyor ve
+     * kısaltmak arama isabetini düşürüyor.
+     */
+    fun arabicWords(): List<String> =
+        cachedArabic ?: load(ARABIC_ASSET_NAME).also { cachedArabic = it }
 
     /**
      * Verilen cevaplar: her karakter bir kelime — '1' biliyorum, '0' bilmiyorum.
@@ -50,8 +64,8 @@ class LevelTestStore @Inject constructor(
         answers = ""
     }
 
-    private fun load(): List<String> = runCatching {
-        context.assets.open(ASSET_NAME).bufferedReader().useLines { lines ->
+    private fun load(asset: String): List<String> = runCatching {
+        context.assets.open(asset).bufferedReader().useLines { lines ->
             lines.map { it.trim() }.filter { it.isNotEmpty() }.toList()
         }
     }.getOrDefault(emptyList())
@@ -60,6 +74,7 @@ class LevelTestStore @Inject constructor(
         const val PREFS_NAME = "merkez_seviye"
         const val KEY_ANSWERS = "answers"
         const val ASSET_NAME = "vocab_level_10k.txt"
+        const val ARABIC_ASSET_NAME = "vocab_ar_15k.txt"
     }
 }
 

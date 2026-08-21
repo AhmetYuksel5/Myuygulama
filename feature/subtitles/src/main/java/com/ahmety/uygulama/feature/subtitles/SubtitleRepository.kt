@@ -37,16 +37,20 @@ class SubtitleRepository @Inject constructor(
      * [ReleaseMatch] puanıyla eşleştiriliyor. Türkçesi bulunamazsa akış
      * durmuyor — İngilizce tek başına da kelime çıkarmaya yetiyor.
      */
-    suspend fun prepare(query: String, year: Int?): SubtitleResult<SubtitlePair> {
-        val hits = when (val result = client.search(query, year)) {
+    suspend fun prepare(
+        query: String,
+        year: Int?,
+        language: SubtitleLanguage,
+    ): SubtitleResult<SubtitlePair> {
+        val hits = when (val result = client.search(query, year, language.code)) {
             is SubtitleResult.Failed -> return result
             is SubtitleResult.Ok -> result.value
         }
         if (hits.isEmpty()) return SubtitleResult.Failed("Bu isimle altyazı bulunamadı.")
 
-        val english = hits.filter { it.language.startsWith("en") }
+        val english = hits.filter { it.language.startsWith(language.code) }
             .maxByOrNull { it.downloads + if (it.fromHash) 100_000 else 0 }
-            ?: return SubtitleResult.Failed("İngilizce altyazı bulunamadı.")
+            ?: return SubtitleResult.Failed("${language.label} altyazı bulunamadı.")
 
         val turkish = hits.filter { it.language.startsWith("tr") }
             .maxByOrNull { ReleaseMatch.score(english.release, it.release) * 1000 + it.downloads }
@@ -94,7 +98,11 @@ class SubtitleRepository @Inject constructor(
         wordLimit: Int,
         sentenceLimit: Int,
     ): List<SubtitlePick> = withContext(Dispatchers.IO) {
-        val ranks = levelTest.words().withIndex().associate { (index, word) -> word to index + 1 }
+        // Sıklık listesi metnin dilinden seçiliyor: Arapça altyazıya
+        // İngilizce liste tutulursa her kelime "listede yok" çıkar.
+        val arabic = ArabicText.isArabic(pair.englishText.take(SCRIPT_SAMPLE))
+        val vocabulary = if (arabic) levelTest.arabicWords() else levelTest.words()
+        val ranks = vocabulary.withIndex().associate { (index, word) -> word to index + 1 }
         val estimate = estimateLevel(levelTest.answers, ranks.size.coerceAtLeast(1))
         val knownUpToRank = estimate.knownUpToRank
 
@@ -105,7 +113,9 @@ class SubtitleRepository @Inject constructor(
         // Sınavdan gelen "bunları biliyorum" aralığı zorluk eşiğinden
         // bağımsız: eşik düşük olsa bile bildiğin kelimeyi göstermenin
         // anlamı yok.
-        val known = if (knownUpToRank > 0) {
+        // Seviye sınavı şimdilik yalnız İngilizce; Arapçada bu eşiği
+        // uygulamak yanlış listeye bakmak olurdu.
+        val known = if (knownUpToRank > 0 && !arabic) {
             ranks.filterValues { it <= knownUpToRank }.keys
         } else {
             emptySet()
@@ -167,5 +177,8 @@ class SubtitleRepository @Inject constructor(
     private companion object {
         /** Bu kadar replik yoksa elimizdeki şey altyazı değildir. */
         const val MIN_LINES = 20
+
+        /** Metnin dilini anlamak için bakılan karakter sayısı. */
+        const val SCRIPT_SAMPLE = 4000
     }
 }

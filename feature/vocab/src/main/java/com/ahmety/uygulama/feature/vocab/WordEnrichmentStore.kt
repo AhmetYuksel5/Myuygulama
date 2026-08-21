@@ -47,6 +47,7 @@ class WordEnrichmentStore @Inject constructor(
                 word = word,
                 meaning = json.optString("t"),
                 definition = json.optString("d"),
+                reading = json.optString("y"),
                 examples = json.optJSONArray("e").toList(),
                 related = json.optJSONArray("r").toList(),
                 synonyms = json.optJSONArray("s").toList(),
@@ -64,6 +65,7 @@ class WordEnrichmentStore @Inject constructor(
         val json = JSONObject().apply {
             put("t", info.meaning)
             put("d", info.definition)
+            put("y", info.reading)
             put("e", JSONArray().apply { info.examples.forEach { put(it) } })
             put("r", JSONArray().apply { info.related.forEach { put(it) } })
             put("s", JSONArray().apply { info.synonyms.forEach { put(it) } })
@@ -92,6 +94,7 @@ class WordEnrichmentStore @Inject constructor(
             word = info.word,
             meaning = info.meaning,
             definition = info.definition,
+            reading = info.reading,
             examples = info.examples,
             related = info.related,
             synonyms = info.synonyms,

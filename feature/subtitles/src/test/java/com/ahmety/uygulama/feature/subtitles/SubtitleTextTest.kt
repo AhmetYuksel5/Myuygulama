@@ -119,11 +119,12 @@ class SubtitleTextTest {
             "come" to 40, "here" to 60, "now" to 30,
             "although" to 1200, "insisted" to 4500, "arrangement" to 5200,
         )
-        val easy = SubtitleDifficulty.ofSentence("Come here now.", ranks)
+        val easy = SubtitleDifficulty.ofSentence("Come here now.", ranks, 10_000)
         val hard = SubtitleDifficulty.ofSentence(
             "Although he insisted, the arrangement they had come up with " +
                 "was, in the long run, beside the point.",
             ranks,
+            10_000,
         )
         assertTrue("$easy < $hard", easy < hard)
     }
@@ -174,6 +175,59 @@ class SubtitleTextTest {
         assertTrue(lines.any { it.contains("believe me") })
         // İçinde ok geçen replik zaman satırı değil.
         assertTrue(lines.any { it.contains("north") })
+    }
+
+    @Test
+    fun `arapca yazim sadelestiriliyor`() {
+        // Harekeli ve harekesiz aynı kelime; elifin üç biçimi tek elif.
+        assertEquals("كتاب", ArabicText.normalize("كِتَاب"))
+        assertEquals("امر", ArabicText.normalize("أمر"))
+        assertEquals("علي", ArabicText.normalize("على"))
+        assertEquals("مدرسه", ArabicText.normalize("مدرسة"))
+    }
+
+    @Test
+    fun `arapca ekler soyuluyor`() {
+        // "ve kalemle" -> و + ب + ال + قلم
+        assertTrue("قلم" in ArabicText.stems("وبالقلم"))
+        assertTrue("كتاب" in ArabicText.stems("الكتاب"))
+        assertTrue("معلم" in ArabicText.stems("المعلمون"))
+    }
+
+    @Test
+    fun `arapca kelimeler ayiklaniyor`() {
+        val srt = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            هذا الكتاب جميل جدا.
+        """.trimIndent()
+
+        val words = SubtitleText.words(srt).map { it.word }
+        assertTrue("الكتاب" in words)
+        assertTrue("جميل" in words)
+        // Latin harf yok, tek karakterli parçalar kelime sayılmıyor.
+        assertTrue(words.none { it.any { char -> char in 'a'..'z' } })
+    }
+
+    @Test
+    fun `arapcada listede olmayan yazim eleniyor`() {
+        // Arapçada büyük harf yok, özel adı oradan ayırt edemiyoruz; listede
+        // hiç geçmeyen yazımı eliyoruz.
+        val words = listOf(
+            SubtitleWord("مدرسه", 3, "هذه مدرسه"),
+            SubtitleWord("جوزيبينا", 2, "اسمها جوزيبينا"),
+        )
+        val ranks = mapOf("مدرسه" to 9000)
+        val picked = SubtitleText.selectWords(
+            words = words,
+            ranks = ranks,
+            properNouns = emptySet(),
+            minDifficulty = 0,
+            alreadySeen = emptySet(),
+            limit = 10,
+        ).map { it.text }
+        assertTrue("مدرسه" in picked)
+        assertTrue("جوزيبينا" !in picked)
     }
 
     @Test

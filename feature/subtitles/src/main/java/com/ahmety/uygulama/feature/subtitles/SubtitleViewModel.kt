@@ -20,6 +20,8 @@ data class SubtitleUiState(
     val chosen: Set<String> = emptySet(),
     /** Zorluk eşiği, 0-100. */
     val difficulty: Int = 60,
+    /** Öğrenilen dil: altyazının hangi dilde indirileceği. */
+    val language: SubtitleLanguage = SubtitleLanguage.ENGLISH,
     val message: String? = null,
     val failed: Boolean = false,
     val configured: Boolean = false,
@@ -32,7 +34,11 @@ class SubtitleViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
-        SubtitleUiState(configured = settings.configured, difficulty = settings.difficulty),
+        SubtitleUiState(
+            configured = settings.configured,
+            difficulty = settings.difficulty,
+            language = settings.language,
+        ),
     )
     val state: StateFlow<SubtitleUiState> = _state.asStateFlow()
 
@@ -56,6 +62,20 @@ class SubtitleViewModel @Inject constructor(
     fun onDifficultyChange(value: Int) {
         settings.difficulty = value
         _state.value = _state.value.copy(difficulty = value)
+    }
+
+    /** Dil değişince eldeki seçim geçersiz: yeni altyazı indirmek gerekiyor. */
+    fun onLanguageChange(value: SubtitleLanguage) {
+        if (_state.value.busy || _state.value.language == value) return
+        settings.language = value
+        _state.value = _state.value.copy(
+            language = value,
+            picks = emptyList(),
+            chosen = emptySet(),
+            pair = null,
+            message = null,
+            failed = false,
+        )
     }
 
     fun applyDifficulty() {
@@ -88,7 +108,7 @@ class SubtitleViewModel @Inject constructor(
             // Beklenmedik bir hata ekranı kapatmasın: ne olduğunu yazıp
             // duruyoruz, kullanıcı yeniden deneyebiliyor.
             val outcome = runCatching {
-                repository.prepare(current.query, current.year.toIntOrNull())
+                repository.prepare(current.query, current.year.toIntOrNull(), current.language)
             }.getOrElse { error ->
                 SubtitleResult.Failed("Beklenmedik hata: ${describe(error)}")
             }
