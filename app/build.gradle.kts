@@ -48,8 +48,14 @@ android {
             isMinifyEnabled = false
         }
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Kod küçültme açık: kullanılmayan sınıflar ve kaynaklar atılıyor.
+            // Kurallar ve adların neden karıştırılmadığı proguard-rules.pro'da.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = if (System.getenv("SIGNING_KEYSTORE_PATH").isNullOrBlank()) {
                 signingConfigs.getByName("debug")
             } else {
