@@ -166,12 +166,21 @@ class SubtitleRepository @Inject constructor(
         if (pair.year > 0) append(" (").append(pair.year).append(")")
     }
 
+    /**
+     * Kaydın sonucu: kaç madde eklendi ve film hangi kayda gitti.
+     *
+     * Kimliği geri veriyoruz ki ekran filmin artık kitaplıkta olduğunu
+     * bilsin; bilmezse "Altyazıyı ekle" düğmesi hâlâ açık kalıyor ve aynı
+     * film ikinci kez ekleniyordu.
+     */
+    data class SaveResult(val count: Int, val movieId: Long?)
+
     suspend fun save(
         pair: SubtitlePair,
         picks: List<SubtitlePick>,
         existingMovieId: Long? = null,
-    ): Int {
-        if (picks.isEmpty()) return 0
+    ): SaveResult {
+        if (picks.isEmpty()) return SaveResult(0, existingMovieId)
         // Film zaten eklendiyse ikinci bir kayıt açmıyoruz.
         val movieId = existingMovieId ?: bookRepository.importFilm(
             title = titleOf(pair),
@@ -192,7 +201,7 @@ class SubtitleRepository @Inject constructor(
                 ),
             )
         }
-        return picks.size
+        return SaveResult(picks.size, movieId)
     }
 
     private companion object {

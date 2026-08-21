@@ -198,15 +198,18 @@ class SubtitleViewModel @Inject constructor(
         if (current.busy || picks.isEmpty()) return
         _state.value = current.copy(busy = true, step = "Ekleniyor…")
         viewModelScope.launch {
-            val count = runCatching {
+            val result = runCatching {
                 repository.save(pair, picks, current.savedMovieId)
-            }.getOrElse { 0 }
+            }.getOrElse { SubtitleRepository.SaveResult(0, current.savedMovieId) }
             _state.value = _state.value.copy(
                 busy = false,
                 step = "",
                 picks = emptyList(),
                 chosen = emptySet(),
-                message = "$count madde eklendi. Film artık Kitaplık'ta da okunabilir.",
+                // Film bu adımda kaydedildiyse kimliğini tutuyoruz: aynı
+                // film "Altyazıyı ekle" ile ikinci kez eklenmesin.
+                savedMovieId = result.movieId ?: current.savedMovieId,
+                message = "${result.count} madde eklendi. Film artık Kitaplık'ta da okunabilir.",
                 failed = false,
             )
         }
