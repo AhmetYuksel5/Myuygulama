@@ -206,7 +206,7 @@ private fun TextActionDialog(
                 )
             }
 
-            // Sorulan sorunun cevabı: kutuda duruyor ve "Kelimelere"
+            // Sorulan sorunun cevabı: kutuda duruyor ve "Ekle"
             // basıldığında kartın altına da yazılıyor.
             if (state.answer.isNotBlank()) {
                 Text(
@@ -247,7 +247,7 @@ private fun TextActionDialog(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(top = 18.dp),
             ) {
-                Button(onClick = viewModel::addToVocab) { Text("Kelimelere") }
+                Button(onClick = viewModel::addToVocab) { Text("Ekle") }
                 if (state.aiConfigured) {
                     TextButton(onClick = viewModel::toggleQuestion) {
                         Text(if (state.asking) "Soruyu kapat" else "Soru sor")
