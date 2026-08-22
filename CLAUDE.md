@@ -35,8 +35,32 @@ taşımayan bir istek gelirse, o gönderim `[skip ci]` taşımaz ve tek bir
 derleme o ana kadar biriken her şeyi birden yayınlar.
 
 Önemli ayrıntı: GitHub yalnızca **en son commit'in** iletisine bakar. Bu
-yüzden biriken commit'lerin hepsinde `[skip ci]` bulunması gerekmez; yeter ki
+yüzden biriken commit'lerin hepsinde işaretin bulunması gerekmez; yeter ki
 biriktirme sırasındaki son commit taşısın, yayınlama sırasındaki taşımasın.
+
+**Tuzak:** GitHub işareti iletinin *herhangi bir yerinde* arıyor, yalnızca
+son satırında değil. Bu yüzden işaretten söz eden bir cümle bile derlemeyi
+iptal ediyor — bir kez oldu, "künye satırları (… ) nota ait değil" diye
+yazan bir madde yüzünden sürüm çıkmadı. İşaretten bahsedilecekse adı
+yazılmadan bahsedilmeli.
+
+## Commit iletisi = sürüm notu
+
+Sürüm notu doğrudan commit iletisinden geliyor ve uygulamanın içindeki
+güncelleme penceresinde okunuyor. Bu yüzden ileti gövdesi **maddeli**
+yazılıyor:
+
+```
+Kısa başlık
+
+- Ne değişti, tek cümle.
+- Bir şey neden öyle yapıldı.
+```
+
+Pencere tek satır sonlarını geri açıyor (sarma sayıyor), boş satırı
+paragraf ayırıcı sayıyor ve `- ` ile başlayan satırı madde yapıyor.
+Künye satırları (yardımcı yazar, oturum bağlantısı, `[skip ci]`)
+gösterilmiyor.
 
 ## Çalışma biçimi
 
