@@ -126,18 +126,6 @@ private fun TextActionDialog(
                 fontStyle = FontStyle.Italic,
             )
 
-            // Elimize yalnızca seçilen metin geliyor: Android paylaşırken
-            // sayfanın gerisini vermiyor. Bağlamı büyütmenin tek yolu daha
-            // geniş seçmek, o yüzden tek kelimede bunu hatırlatıyoruz.
-            if (!state.text.any { it.isWhitespace() }) {
-                Text(
-                    text = "Cümlenin tamamını seçersen kart bağlamıyla birlikte gelir.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-
             if (state.loading) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
