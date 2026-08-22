@@ -8,8 +8,8 @@ import com.ahmety.uygulama.core.ai.OpenAiClient
 import com.ahmety.uygulama.core.ai.WordInfo
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.model.EntryType
-import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
+import com.ahmety.uygulama.core.model.penFor
 import com.ahmety.uygulama.feature.vocab.VocabRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.NonCancellable
@@ -29,6 +29,11 @@ data class TextActionUiState(
     val error: String? = null,
     /** Kaydedildikten sonra kutuda görünen kısa bilgi. */
     val saved: String? = null,
+    /** Soru kutusu açık mı. */
+    val asking: Boolean = false,
+    val question: String = "",
+    val answer: String = "",
+    val answering: Boolean = false,
 )
 
 /**
@@ -73,7 +78,7 @@ class TextActionViewModel @Inject constructor(
             // Dört kelimeden uzun bir seçim sözlük maddesi değil, anlamadığın
             // bir cümledir; yapay zekâdan çeviri ve açıklama isteniyor.
             val passage = text.split(' ').count { it.isNotBlank() } >= PASSAGE_WORDS
-            when (val result = client.describeWord(text, passage = passage)) {
+            when (val result = client.describeWord(text, context = text, passage = passage)) {
                 is AiResult.Ok -> _state.value = _state.value.copy(
                     loading = false,
                     info = result.value,
@@ -100,16 +105,31 @@ class TextActionViewModel @Inject constructor(
                     entryRepository.createEntry(
                         type = EntryType.HIGHLIGHT,
                         title = text,
-                        body = "",
+                        // Seçilen metin bağlam olarak da duruyor: kartta
+                        // kelimenin geçtiği yeri göstermek için elimizdeki
+                        // tek şey bu. Tek kelime seçildiyse bağlam da o
+                        // kelime oluyor ve kart onu ayrıca yazmıyor.
+                        body = text,
                         source = HighlightRef.encode(
                             kind = HighlightRef.KIND_SELECTION,
                             sourceId = 0L,
-                            color = HighlightColor.BLUE,
+                            // Tek kelime mavi, ifade kırmızı — yüklenen
+                            // listeyle ve kitapla aynı kural.
+                            color = penFor(text),
                         ),
                     )
                 }
-                // Yapay zekâ zaten getirdiyse kartta hazır dursun.
-                _state.value.info?.let { vocabRepository.saveEnrichment(it.copy(word = text)) }
+                // Yapay zekâ zaten getirdiyse kartta hazır dursun; sorulan
+                // soru varsa cevabı da kartın altına yazılıyor.
+                val note = savedAnswer()
+                _state.value.info?.let { info ->
+                    vocabRepository.saveEnrichment(
+                        info.copy(
+                            word = text,
+                            answers = info.answers + listOfNotNull(note),
+                        ),
+                    )
+                }
                 _state.value = _state.value.copy(
                     saved = if (already) "Bu zaten kelimelerde vardı." else "Kelimelere eklendi.",
                 )
@@ -117,6 +137,65 @@ class TextActionViewModel @Inject constructor(
         }
     }
 
+
+    /** Kutunun altındaki soru alanını açar/kapatır. */
+    fun toggleQuestion() {
+        _state.value = _state.value.copy(asking = !_state.value.asking)
+    }
+
+    fun setQuestion(value: String) {
+        _state.value = _state.value.copy(question = value)
+    }
+
+    /**
+     * Metin hakkında ek soru.
+     *
+     * Gelen açıklama her zaman yetmiyor; "burada neden bu anlama geliyor"
+     * diye sorabilmek gerekiyor. Kartın o anki hâli de gönderiliyor ki
+     * cevap kendisiyle çelişmesin.
+     */
+    fun sendQuestion() {
+        val current = _state.value
+        val text = current.text
+        val question = current.question.trim()
+        if (text.isBlank() || question.isBlank() || current.answering) return
+        if (!settings.configured) {
+            _state.value = current.copy(error = "Önce Araçlar → Yapay zekâ'dan anahtarı gir.")
+            return
+        }
+        _state.value = current.copy(answering = true, error = null)
+        viewModelScope.launch {
+            when (val result = client.askAbout(text, question, context = text, card = cardSummary())) {
+                is AiResult.Ok -> _state.value = _state.value.copy(
+                    answering = false,
+                    answer = result.value,
+                )
+
+                is AiResult.Failed -> _state.value = _state.value.copy(
+                    answering = false,
+                    error = result.reason,
+                )
+            }
+        }
+    }
+
+    /** Kartın o anki özeti; soruyu bağlamıyla birlikte sormak için. */
+    private fun cardSummary(): String {
+        val info = _state.value.info ?: return ""
+        return listOf(info.meaning, info.definition)
+            .filter { it.isNotBlank() }
+            .joinToString(" — ")
+    }
+
+    /** Soruldu ve cevaplandıysa karta yazılacak not. */
+    private fun savedAnswer(): String? {
+        val current = _state.value
+        if (current.answer.isBlank()) return null
+        return buildString {
+            if (current.question.isNotBlank()) append(current.question.trim()).append("\n")
+            append(current.answer.trim())
+        }
+    }
 
     /**
      * Seçim genelde satır sonları ve fazladan boşluk taşıyor; sözlüğe de

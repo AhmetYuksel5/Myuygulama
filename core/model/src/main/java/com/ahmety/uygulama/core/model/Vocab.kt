@@ -79,8 +79,12 @@ data class Collocation(
 
 /** Kelimenin nereden geldiği. */
 enum class VocabSource(val label: String) {
-    /** Başka bir uygulamada seçip gönderdiğin metin. */
-    SELECTION("Seçtiklerim"),
+    /**
+     * Başka bir uygulamada seçip gönderdiğin metin: tarayıcı, sohbet, PDF,
+     * ne olursa. Adı uygulamanın dışını gösteriyor — "Kitaptan", "Filmden"
+     * ve "Listeden" ile aynı kalıpta.
+     */
+    SELECTION("Dışarıdan"),
 
     /** Kitapta işaretlenen kelime ya da cümle. */
     BOOK("Kitaptan"),

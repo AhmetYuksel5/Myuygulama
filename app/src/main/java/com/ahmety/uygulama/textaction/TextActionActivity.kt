@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,10 +69,9 @@ class TextActionActivity : ComponentActivity() {
         selected = text
         setContent {
             MerkezTheme {
-                TextActionDialog(
-                    selected = selected,
-                    onClose = { finish() },
-                )
+                // Kapatma düğmesi yok: kutu kayan pencere, dışına dokununca
+                // sistem zaten kapatıyor.
+                TextActionDialog(selected = selected)
             }
         }
     }
@@ -103,7 +103,6 @@ class TextActionActivity : ComponentActivity() {
 @Composable
 private fun TextActionDialog(
     selected: String,
-    onClose: () -> Unit,
     viewModel: TextActionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -126,6 +125,18 @@ private fun TextActionDialog(
                 style = MaterialTheme.typography.titleMedium,
                 fontStyle = FontStyle.Italic,
             )
+
+            // Elimize yalnızca seçilen metin geliyor: Android paylaşırken
+            // sayfanın gerisini vermiyor. Bağlamı büyütmenin tek yolu daha
+            // geniş seçmek, o yüzden tek kelimede bunu hatırlatıyoruz.
+            if (!state.text.any { it.isWhitespace() }) {
+                Text(
+                    text = "Cümlenin tamamını seçersen kart bağlamıyla birlikte gelir.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
 
             if (state.loading) {
                 Row(
@@ -207,21 +218,53 @@ private fun TextActionDialog(
                 )
             }
 
+            // Sorulan sorunun cevabı: kutuda duruyor ve "Kelimelere"
+            // basıldığında kartın altına da yazılıyor.
+            if (state.answer.isNotBlank()) {
+                Text(
+                    text = state.answer,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            }
+
+            if (state.asking) {
+                OutlinedTextField(
+                    value = state.question,
+                    onValueChange = viewModel::setQuestion,
+                    label = { Text("Sorun") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 6.dp),
+                ) {
+                    Button(
+                        enabled = !state.answering && state.question.isNotBlank(),
+                        onClick = viewModel::sendQuestion,
+                    ) { Text("Gönder") }
+                    if (state.answering) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+
+            // Tek satır, iki düğme. "Kapat" yok: kutunun dışına dokunmak
+            // zaten kapatıyor, ikinci bir yol gereksiz yer kaplıyordu.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(top = 18.dp),
             ) {
                 Button(onClick = viewModel::addToVocab) { Text("Kelimelere") }
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 4.dp),
-            ) {
-                if (!state.loading && state.info == null && state.aiConfigured) {
-                    TextButton(onClick = viewModel::ask) { Text("Anlamını getir") }
+                if (state.aiConfigured) {
+                    TextButton(onClick = viewModel::toggleQuestion) {
+                        Text(if (state.asking) "Soruyu kapat" else "Soru sor")
+                    }
                 }
-                TextButton(onClick = onClose) { Text("Kapat") }
             }
         }
     }

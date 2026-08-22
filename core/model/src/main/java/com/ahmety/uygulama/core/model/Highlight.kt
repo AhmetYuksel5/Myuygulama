@@ -13,6 +13,17 @@ enum class HighlightColor(val label: String) {
 }
 
 /**
+ * Bir maddenin kalemi: tek kelime mavi, boşluk içeren her şey kırmızı.
+ *
+ * Kart ikisine başka türlü davranıyor — kelimeye sözlük maddesi, ifadeye
+ * bağlam, sade İngilizce, çeviri ve içindeki kalıplar. Kural tek yerde
+ * duruyor çünkü aynı ayrım üç ayrı kapıdan giriyor: yüklenen liste, başka
+ * uygulamadan paylaşılan metin ve kitapta elle işaretleme.
+ */
+fun penFor(text: String): HighlightColor =
+    if (text.trim().any { it.isWhitespace() }) HighlightColor.RED else HighlightColor.BLUE
+
+/**
  * İşaretlemenin nereden geldiğini ve rengini kaydın serbest metin alanında
  * (`Entry.source`) taşıyoruz; böylece veritabanı şeması değişmiyor.
  *

@@ -4,8 +4,8 @@ import android.content.Context
 import android.net.Uri
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.model.EntryType
-import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
+import com.ahmety.uygulama.core.model.penFor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -83,16 +83,6 @@ object WordListFile {
         }
         return out.toString().trim()
     }
-
-    /**
-     * Maddenin rengi: tek kelime mavi, gerisi kırmızı.
-     *
-     * Mavi "bilmediğim kelime", kırmızı "anlamadığım ifade" demek ve kart
-     * ikisine başka türlü davranıyor — kelimeye sözlük, ifadeye bağlam ve
-     * çeviri. Boşluk içeren her şey ikinci gruba giriyor.
-     */
-    fun colorOf(entry: String): HighlightColor =
-        if (entry.any { it.isWhitespace() }) HighlightColor.RED else HighlightColor.BLUE
 }
 
 /**
@@ -145,7 +135,7 @@ class WordListRepository @Inject constructor(
                 source = HighlightRef.encode(
                     kind = HighlightRef.KIND_LIST,
                     sourceId = document,
-                    color = WordListFile.colorOf(entry),
+                    color = penFor(entry),
                 ),
             )
             added++

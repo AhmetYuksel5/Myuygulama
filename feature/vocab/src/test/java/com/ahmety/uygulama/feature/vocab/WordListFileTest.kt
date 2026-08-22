@@ -1,6 +1,7 @@
 package com.ahmety.uygulama.feature.vocab
 
 import com.ahmety.uygulama.core.model.HighlightColor
+import com.ahmety.uygulama.core.model.penFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -49,8 +50,10 @@ class WordListFileTest {
 
     @Test
     fun `tek kelime mavi digerleri kirmizi`() {
-        assertEquals(HighlightColor.BLUE, WordListFile.colorOf("choker"))
-        assertEquals(HighlightColor.RED, WordListFile.colorOf("plump flesh"))
-        assertEquals(HighlightColor.RED, WordListFile.colorOf("I will hold you to that."))
+        // Aynı kural üç kapıdan giriyor: yüklenen liste, dışarıdan
+        // paylaşılan metin ve kitapta elle işaretleme.
+        assertEquals(HighlightColor.BLUE, penFor("choker"))
+        assertEquals(HighlightColor.RED, penFor("plump flesh"))
+        assertEquals(HighlightColor.RED, penFor("I will hold you to that."))
     }
 }
