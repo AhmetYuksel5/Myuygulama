@@ -110,6 +110,7 @@ data class VocabUiState(
     val bookCount: Int = 0,
     val subtitleCount: Int = 0,
     val selectionCount: Int = 0,
+    val listCount: Int = 0,
     /** Kaynağı silinmiş kelime sayısı; sıfırsa çip hiç görünmüyor. */
     val orphanCount: Int = 0,
     /** Seçili kaynakta hiç karar verilmemiş kelime sayısı. */
@@ -480,6 +481,7 @@ class VocabViewModel @Inject constructor(
             bookCount = penWords.count { it.source == VocabSource.BOOK },
             subtitleCount = penWords.count { it.source == VocabSource.SUBTITLE },
             selectionCount = penWords.count { it.source == VocabSource.SELECTION },
+            listCount = penWords.count { it.source == VocabSource.LIST },
             orphanCount = penWords.count {
                 it.sourceName.isBlank() && it.source != VocabSource.SELECTION
             },

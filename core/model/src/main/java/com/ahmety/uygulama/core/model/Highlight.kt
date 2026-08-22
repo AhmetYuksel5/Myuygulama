@@ -29,6 +29,9 @@ object HighlightRef {
     /** Film altyazısından çıkarılan kelime. */
     const val KIND_SUBTITLE = "subtitle"
 
+    /** Dışarıdan yüklenen bir listeden gelen kelime ya da ifade. */
+    const val KIND_LIST = "list"
+
     /**
      * Filmler de kitaplarla aynı kayıt türünü kullanıyor (kelimeyi kaynağına
      * göre süzebilmek için); kitaplıkta görünmesinler diye kaydın serbest
@@ -47,6 +50,17 @@ object HighlightRef {
         return value == SUBTITLE_SOURCE_MARKER ||
             value.startsWith("$SUBTITLE_SOURCE_MARKER:")
     }
+
+    /**
+     * Yüklenen kelime listesinin kaydında duran işaret.
+     *
+     * Listeler de kitaplarla aynı kayıt türünü kullanıyor (kelimeyi kaynağına
+     * göre süzebilmek için) ama okunacak bir metinleri yok; kitaplıkta
+     * görünmesinler diye ayırt ediliyorlar.
+     */
+    const val WORDLIST_SOURCE_MARKER = "liste"
+
+    fun isListDocument(source: String?): Boolean = source == WORDLIST_SOURCE_MARKER
 
     fun encode(kind: String, sourceId: Long, color: HighlightColor): String =
         "$kind:$sourceId;color=${color.name}"

@@ -47,7 +47,12 @@ class BookRepository @Inject constructor(
      * Kitaplık. Filmler de burada: altyazı da okunacak bir metin, kitaptan
      * farkı yalnızca nereden geldiği. Süzgeç ekranda.
      */
+    /**
+     * Kitaplıktakiler. Yüklenen kelime listeleri de aynı kayıt türünü
+     * kullanıyor ama okunacak bir metinleri yok; rafta görünmüyorlar.
+     */
     fun observeBooks(): Flow<List<Entry>> = entryRepository.observeByType(EntryType.DOCUMENT)
+        .map { documents -> documents.filterNot { HighlightRef.isListDocument(it.source) } }
 
     fun observeHighlights(): Flow<List<Entry>> = entryRepository.observeByType(EntryType.HIGHLIGHT)
 

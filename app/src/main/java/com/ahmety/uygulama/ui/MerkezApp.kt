@@ -30,6 +30,7 @@ import com.ahmety.uygulama.feature.ebook.BookReaderRoute
 import com.ahmety.uygulama.feature.ebook.BookShelfRoute
 import com.ahmety.uygulama.feature.subtitles.SubtitleRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
+import com.ahmety.uygulama.feature.vocab.WordListImportRoute
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
@@ -133,6 +134,7 @@ fun MerkezApp() {
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenSubtitles = { navController.navigate(SUBTITLE_ROUTE) },
+                    onOpenWordList = { navController.navigate(WORDLIST_ROUTE) },
                 )
             }
             composable(TopLevelDestination.VOCAB.route) {
@@ -165,6 +167,9 @@ fun MerkezApp() {
             composable(SUBTITLE_ROUTE) {
                 SubtitleRoute()
             }
+            composable(WORDLIST_ROUTE) {
+                WordListImportRoute()
+            }
         }
     }
 }
@@ -173,6 +178,7 @@ private const val TODAY_ROUTE = "today"
 private const val BOOK_ROUTE = "book"
 private const val AI_ROUTE = "ai"
 private const val SUBTITLE_ROUTE = "altyazi"
+private const val WORDLIST_ROUTE = "liste"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
@@ -188,6 +194,7 @@ private fun MoreScreen(
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
     onOpenSubtitles: () -> Unit,
+    onOpenWordList: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -214,6 +221,11 @@ private fun MoreScreen(
             headlineContent = { Text("Film hazırlığı") },
             supportingContent = { Text("Altyazıyı indir, bilmediğin kelimeleri çıkar") },
             modifier = Modifier.clickable(onClick = onOpenSubtitles),
+        )
+        ListItem(
+            headlineContent = { Text("Kelime listesi yükle") },
+            supportingContent = { Text("Kendi topladığın listeyi .txt ya da .csv olarak ekle") },
+            modifier = Modifier.clickable(onClick = onOpenWordList),
         )
 
         // Araçlar: ekranın üstüne binen, uygulamadan bağımsız çalışan şeyler.

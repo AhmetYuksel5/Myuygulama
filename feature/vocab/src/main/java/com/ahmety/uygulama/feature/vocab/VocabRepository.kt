@@ -100,6 +100,7 @@ class VocabRepository @Inject constructor(
                     // ve eski işaretler de kendiliğinden düzeliyor.
                     source = when {
                         kind == HighlightRef.KIND_SELECTION -> VocabSource.SELECTION
+                        kind == HighlightRef.KIND_LIST -> VocabSource.LIST
                         documentId != null && documentId in filmIds -> VocabSource.SUBTITLE
                         kind == HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
                         else -> VocabSource.BOOK

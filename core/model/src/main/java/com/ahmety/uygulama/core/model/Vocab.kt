@@ -87,6 +87,9 @@ enum class VocabSource(val label: String) {
 
     /** Film altyazısından çıkarılan kelime. */
     SUBTITLE("Filmden"),
+
+    /** Dışarıdan yüklenen bir listeden gelen kelime ya da ifade. */
+    LIST("Listeden"),
 }
 
 /**

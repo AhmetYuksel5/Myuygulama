@@ -189,6 +189,13 @@ fun VocabRoute(
                             filter.sourceName.isBlank(),
                     ) { viewModel.setFilter(VocabFilter(source = VocabSource.SUBTITLE)) }
                 }
+                if (state.listCount > 0) {
+                    ModeChip(
+                        label = "Listeden (${state.listCount})",
+                        selected = filter.source == VocabSource.LIST &&
+                            filter.sourceName.isBlank(),
+                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.LIST)) }
+                }
                 if (state.selectionCount > 0) {
                     ModeChip(
                         label = "Seçtiklerim (${state.selectionCount})",
