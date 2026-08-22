@@ -8,6 +8,7 @@ import com.ahmety.uygulama.core.ai.OpenAiClient
 import com.ahmety.uygulama.core.ai.WordInfo
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.model.EntryType
+import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
 import com.ahmety.uygulama.core.model.penFor
 import com.ahmety.uygulama.feature.vocab.VocabRepository
@@ -27,6 +28,11 @@ data class TextActionUiState(
     val loading: Boolean = false,
     val info: WordInfo? = null,
     val error: String? = null,
+    /**
+     * Eklenirken kullanılacak kalem. Seçime bakarak kendiliğinden
+     * belirleniyor ama kullanıcı çevirebiliyor.
+     */
+    val pen: HighlightColor = HighlightColor.BLUE,
     /** Kaydedildikten sonra kutuda görünen kısa bilgi. */
     val saved: String? = null,
     /** Soru kutusu açık mı. */
@@ -60,7 +66,13 @@ class TextActionViewModel @Inject constructor(
         if (started) return
         started = true
         val text = normalize(raw)
-        _state.value = TextActionUiState(text = text, aiConfigured = settings.configured)
+        _state.value = TextActionUiState(
+            text = text,
+            aiConfigured = settings.configured,
+            // Tek kelime mavi, ifade kırmızı. Başlangıç değeri; kutunun
+            // üstündeki daireden çevrilebiliyor.
+            pen = penFor(text),
+        )
         // Anahtar varsa kullanıcıyı bir tuşa daha bastırmıyoruz: metni seçip
         // uygulamayı açmak zaten "bunu sorgula" demek.
         if (settings.configured && text.isNotBlank()) ask()
@@ -75,9 +87,10 @@ class TextActionViewModel @Inject constructor(
         }
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
-            // Dört kelimeden uzun bir seçim sözlük maddesi değil, anlamadığın
-            // bir cümledir; yapay zekâdan çeviri ve açıklama isteniyor.
-            val passage = text.split(' ').count { it.isNotBlank() } >= PASSAGE_WORDS
+            // Kalem hangisiyse sorgu da o kalıpta: kırmızı "anlamadığım
+            // ifade" demek ve çeviri, sade İngilizce, içindeki kalıplar
+            // isteniyor; mavi ise sözlük maddesi.
+            val passage = _state.value.pen == HighlightColor.RED
             when (val result = client.describeWord(text, context = text, passage = passage)) {
                 is AiResult.Ok -> _state.value = _state.value.copy(
                     loading = false,
@@ -113,9 +126,7 @@ class TextActionViewModel @Inject constructor(
                         source = HighlightRef.encode(
                             kind = HighlightRef.KIND_SELECTION,
                             sourceId = 0L,
-                            // Tek kelime mavi, ifade kırmızı — yüklenen
-                            // listeyle ve kitapla aynı kural.
-                            color = penFor(text),
+                            color = _state.value.pen,
                         ),
                     )
                 }
@@ -137,6 +148,24 @@ class TextActionViewModel @Inject constructor(
         }
     }
 
+
+    /**
+     * Kalemi çevirir: kırmızı ↔ mavi.
+     *
+     * Elde bir açıklama varsa atılıp yenisi isteniyor. Çevirmenin sebebi
+     * zaten "bu yanlış kalıpta geldi" olduğu için eski metni bırakmak
+     * kartın kendisiyle çelişmesi demek olurdu.
+     */
+    fun togglePen() {
+        val current = _state.value
+        val next = if (current.pen == HighlightColor.RED) {
+            HighlightColor.BLUE
+        } else {
+            HighlightColor.RED
+        }
+        _state.value = current.copy(pen = next, info = null, error = null)
+        if (settings.configured && current.text.isNotBlank()) ask()
+    }
 
     /** Kutunun altındaki soru alanını açar/kapatır. */
     fun toggleQuestion() {
@@ -207,8 +236,5 @@ class TextActionViewModel @Inject constructor(
     private companion object {
         /** Yanlışlıkla bütün bir yazının seçilmesine karşı üst sınır. */
         const val MAX_LENGTH = 400
-
-        /** Bu kadar kelimeden uzun seçim, sözlük maddesi değil cümle sayılıyor. */
-        const val PASSAGE_WORDS = 4
     }
 }

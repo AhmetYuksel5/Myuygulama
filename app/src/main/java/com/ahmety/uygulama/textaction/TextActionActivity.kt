@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,13 +35,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.designsystem.MerkezTheme
+import com.ahmety.uygulama.core.model.HighlightColor
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -120,11 +126,38 @@ private fun TextActionDialog(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
-            Text(
-                text = "“${state.text}”",
-                style = MaterialTheme.typography.titleMedium,
-                fontStyle = FontStyle.Italic,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "“${state.text}”",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontStyle = FontStyle.Italic,
+                    modifier = Modifier.weight(1f),
+                )
+                // Kalem: kırmızı ifade, mavi kelime. Seçime bakarak
+                // kendiliğinden geliyor, dokununca öbürüne çevriliyor.
+                // Eklemeden önce burada durması gerekiyor çünkü rengi
+                // sonradan değiştirmek kartın bilgisini attırıyor.
+                Box(
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (state.pen == HighlightColor.RED) PEN_RED else PEN_BLUE,
+                        )
+                        .clickable(onClick = viewModel::togglePen)
+                        .semantics {
+                            contentDescription = if (state.pen == HighlightColor.RED) {
+                                "Kırmızı: ifade. Dokunup maviye çevir."
+                            } else {
+                                "Mavi: kelime. Dokunup kırmızıya çevir."
+                            }
+                        },
+                )
+            }
 
             if (state.loading) {
                 Row(
@@ -319,3 +352,7 @@ private fun Chip(text: String, background: Color, content: Color) {
 
 private val CHIP_BLUE = Color(0xFF1565C0)
 private val CHIP_RED = Color(0xFFB3261E)
+
+/** Kelime listesindeki kalem şeridiyle aynı tonlar. */
+private val PEN_BLUE = Color(0xFF1565C0)
+private val PEN_RED = Color(0xFFB3261E)
