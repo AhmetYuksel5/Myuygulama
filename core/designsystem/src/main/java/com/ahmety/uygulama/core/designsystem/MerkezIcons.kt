@@ -61,6 +61,20 @@ object MerkezIcons {
         }
     }
 
+    /** Güncelleme: aşağı ok, altında tabla. */
+    val Download: ImageVector by lazy {
+        outlined("MerkezDownload") {
+            moveTo(12f, 3.5f)
+            lineTo(12f, 14.5f)
+            moveTo(7.5f, 10.5f)
+            lineTo(12f, 15f)
+            lineTo(16.5f, 10.5f)
+            // Tabla: okun indiği yer.
+            moveTo(4.5f, 18.5f)
+            lineTo(19.5f, 18.5f)
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

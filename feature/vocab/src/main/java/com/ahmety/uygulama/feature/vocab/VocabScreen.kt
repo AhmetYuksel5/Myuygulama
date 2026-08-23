@@ -35,10 +35,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -93,9 +96,16 @@ import kotlin.math.abs
 fun VocabRoute(
     modifier: Modifier = Modifier,
     viewModel: VocabViewModel = hiltViewModel(),
+    wordListViewModel: WordListImportViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val threshold by viewModel.swipeThreshold.collectAsStateWithLifecycle()
+    val importState by wordListViewModel.state.collectAsStateWithLifecycle()
+    // Dosya türü serbest: .csv cihazdan cihaza farklı türlerle geliyor ve
+    // daraltmak kendi dosyanı seçememene yol açıyor.
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let(wordListViewModel::load) }
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val enrichingWord by viewModel.enriching.collectAsStateWithLifecycle()
     val aiMessage by viewModel.aiMessage.collectAsStateWithLifecycle()
@@ -322,6 +332,8 @@ fun VocabRoute(
 
     if (showAdd) {
         AddWordDialog(
+            importState = importState,
+            onPickFile = { filePicker.launch(arrayOf("*/*")) },
             onDismiss = { showAdd = false },
             onAdd = { text, passage ->
                 viewModel.addWord(text, passage)
@@ -782,6 +794,8 @@ private fun WordEditDialog(
  */
 @Composable
 private fun AddWordDialog(
+    importState: WordListImportUiState,
+    onPickFile: () -> Unit,
     onDismiss: () -> Unit,
     onAdd: (text: String, passage: Boolean) -> Unit,
 ) {
@@ -794,7 +808,10 @@ private fun AddWordDialog(
         onDismissRequest = onDismiss,
         title = { Text("Kelime ekle") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -814,6 +831,41 @@ private fun AddWordDialog(
                         text = if (passage) "Kırmızı: ifade" else "Mavi: kelime",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // Toplu ekleme aynı kapıdan: "ekle" bir tane de olabilir yüz
+                // tane de. Ayrı bir menü satırında dururken kimse bakmıyordu.
+                HorizontalDivider()
+                Text(
+                    text = "Dosyadan liste",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = ".txt ya da .csv — her satır bir madde, ilk satır " +
+                        "listenin adı. Tırnaklı da olur tırnaksız da.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        enabled = !importState.busy,
+                        onClick = onPickFile,
+                    ) { Text("Dosya seç") }
+                    if (importState.busy) {
+                        Spacer(Modifier.width(8.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                    }
+                }
+                importState.message?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (importState.failed) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
                     )
                 }
             }

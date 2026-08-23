@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -30,7 +32,6 @@ import com.ahmety.uygulama.feature.ebook.BookReaderRoute
 import com.ahmety.uygulama.feature.ebook.BookShelfRoute
 import com.ahmety.uygulama.feature.subtitles.SubtitleRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
-import com.ahmety.uygulama.feature.vocab.WordListImportRoute
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
@@ -126,7 +127,6 @@ fun MerkezApp() {
             }
             composable(TopLevelDestination.MORE.route) {
                 MoreScreen(
-                    onOpenToday = { navController.navigate(TODAY_ROUTE) },
                     onCheckUpdate = { showUpdate = true },
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
@@ -134,7 +134,6 @@ fun MerkezApp() {
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenSubtitles = { navController.navigate(SUBTITLE_ROUTE) },
-                    onOpenWordList = { navController.navigate(WORDLIST_ROUTE) },
                 )
             }
             composable(TopLevelDestination.VOCAB.route) {
@@ -167,9 +166,6 @@ fun MerkezApp() {
             composable(SUBTITLE_ROUTE) {
                 SubtitleRoute()
             }
-            composable(WORDLIST_ROUTE) {
-                WordListImportRoute()
-            }
         }
     }
 }
@@ -178,7 +174,6 @@ private const val TODAY_ROUTE = "today"
 private const val BOOK_ROUTE = "book"
 private const val AI_ROUTE = "ai"
 private const val SUBTITLE_ROUTE = "altyazi"
-private const val WORDLIST_ROUTE = "liste"
 private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
@@ -186,7 +181,6 @@ private const val CURSOR_ROUTE = "cursor"
 
 @Composable
 private fun MoreScreen(
-    onOpenToday: () -> Unit,
     onCheckUpdate: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
@@ -194,7 +188,6 @@ private fun MoreScreen(
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
     onOpenSubtitles: () -> Unit,
-    onOpenWordList: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -203,29 +196,24 @@ private fun MoreScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(text = "Daha", style = MaterialTheme.typography.headlineMedium)
+        // Başlık satırının sağında güncelleme: bir liste satırı olarak
+        // durduğunda öbür ayarların arasında kayboluyordu, oysa en sık
+        // dokunulan şey o.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Daha",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onCheckUpdate) {
+                Icon(MerkezIcons.Download, contentDescription = "Güncellemeyi kontrol et")
+            }
+        }
 
-        // Güncelleme en üstte: tıklayınca pencere açılıp hemen kontrol ediyor.
         ListItem(
-            headlineContent = { Text("Güncelleme") },
-            supportingContent = { Text("Yeni sürümü kontrol et ve kur") },
-            modifier = Modifier.clickable(onClick = onCheckUpdate),
-        )
-
-        ListItem(
-            headlineContent = { Text("Bugün") },
-            supportingContent = { Text("Alışkanlıklar, ajanda, günün özeti") },
-            modifier = Modifier.clickable(onClick = onOpenToday),
-        )
-        ListItem(
-            headlineContent = { Text("Film hazırlığı") },
+            headlineContent = { Text("Altyazı arama") },
             supportingContent = { Text("Altyazıyı indir, bilmediğin kelimeleri çıkar") },
             modifier = Modifier.clickable(onClick = onOpenSubtitles),
-        )
-        ListItem(
-            headlineContent = { Text("Kelime listesi yükle") },
-            supportingContent = { Text("Kendi topladığın listeyi .txt ya da .csv olarak ekle") },
-            modifier = Modifier.clickable(onClick = onOpenWordList),
         )
 
         // Araçlar: ekranın üstüne binen, uygulamadan bağımsız çalışan şeyler.
