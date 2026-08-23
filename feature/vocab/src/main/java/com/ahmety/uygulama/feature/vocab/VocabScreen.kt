@@ -565,7 +565,13 @@ private fun WordCardDialog(
                     enriching = enriching,
                     onEnrich = onEnrich,
                     onAsk = onAsk,
-                    scrollState = rememberScrollState(),
+                    // Aynı pencere her kelime için yeniden kullanılıyor;
+                    // konum kelimeye bağlanmazsa yeni kart öncekinin
+                    // bıraktığı yerden açılıyor.
+                    scrollState = rememberSaveable(
+                        word.word,
+                        saver = ScrollState.Saver,
+                    ) { ScrollState(0) },
                 )
             }
             TextButton(
@@ -1240,7 +1246,12 @@ private fun SwipeableCard(
     var flyToX by remember(key) { mutableFloatStateOf(0f) }
     var flyToY by remember(key) { mutableFloatStateOf(0f) }
     var decision by remember(key) { mutableStateOf<(() -> Unit)?>(null) }
-    val scrollState = rememberScrollState()
+    // Yeni kartın arkası baştan okunsun: konum hem karta hem de kartın açık
+    // olmasına bağlı. Bağlı olmasaydı sıradaki kart, bir öncekinin bıraktığı
+    // yerden — metnin ortasından — açılıyordu.
+    val scrollState = rememberSaveable(key, revealed, saver = ScrollState.Saver) {
+        ScrollState(0)
+    }
     // Bu parmak hareketinde metin kaydırıldı mı. Kaydırıldıysa artan dikey
     // hareket karta geçmiyor.
     var scrolled by remember(key) { mutableStateOf(false) }
@@ -1278,6 +1289,12 @@ private fun SwipeableCard(
                 source: NestedScrollSource,
             ): Offset {
                 if (dismissed) return Offset.Zero
+                // Kart yalnız parmak ekrandayken hareket ediyor. Parmağı
+                // kaldırdıktan sonraki atalet metnin sonuna çarpınca artığı
+                // karta veriliyordu: kart yukarı kayıp orada kalıyor, sonraki
+                // hareket de onu "öğrendim" sayıyordu. Kaydırma bayrağı bunu
+                // engellemiyordu çünkü bayrak ataletten önce sıfırlanıyor.
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
                 // Bu harekette metin kaydırıldıysa artığı karta vermiyoruz.
                 // Uzun bir kartı okuyup sonuna gelince parmağını kaldırmak
                 // "yukarı fırlattım" sayılıyor ve kelime öğrenildiye
@@ -1302,6 +1319,16 @@ private fun SwipeableCard(
                     }
                 }
                 // Bir sonraki hareket temiz başlasın.
+                scrolled = false
+                return Velocity.Zero
+            }
+
+            /** Atalet bittiğinde kart mutlaka yerinde olsun. */
+            override suspend fun onPostFling(
+                consumed: Velocity,
+                available: Velocity,
+            ): Velocity {
+                if (!dismissed) offsetY = 0f
                 scrolled = false
                 return Velocity.Zero
             }
@@ -1352,6 +1379,10 @@ private fun SwipeableCard(
             .nestedScroll(verticalGestures)
             .pointerInput(key) {
                 detectDragGestures(
+                    // Metin kaydırıcısı parmağı kapınca "bitti" değil "iptal"
+                    // geliyor; yatay artık sıfırlanmazsa kart eğik kalıyor ve
+                    // sonraki her hareket yatay sanılıyor.
+                    onDragCancel = { offsetX = 0f },
                     onDragEnd = {
                         when {
                             offsetX < -threshold -> {
@@ -1396,7 +1427,10 @@ private fun SwipeableCard(
                 if (revealed && empty && !enriching) onEnrich?.invoke()
             },
             onLongPress = onLongPress,
-            scrollState = if (revealed) scrollState else null,
+            // Kapalı yüzde de kaydırıcı duruyor. Dikey jestler yalnız
+            // kaydırılabilir bir katmandan geçtiği için, kaydırıcı yokken
+            // "öğrendim" ve "önemsiz" hiç çalışmıyordu.
+            scrollState = scrollState,
         )
     }
 }
@@ -1493,7 +1527,14 @@ private fun WordCard(
                             Modifier
                         },
                     )
-                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                    // Dipteki düğme metnin üstünde duruyor; son satırlar
+                    // altında kalmasın diye ona yer ayrılıyor.
+                    .padding(
+                        start = 20.dp,
+                        end = 20.dp,
+                        top = 18.dp,
+                        bottom = if (revealed) 64.dp else 18.dp,
+                    ),
                 verticalArrangement = Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
