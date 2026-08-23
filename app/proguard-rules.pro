@@ -34,5 +34,12 @@
 # jsoup: EPUB ayrıştırma. Kendi kuralları yok.
 -dontwarn org.jsoup.**
 
+# slf4j: readability4j (makale okuyucu) günlükleme için slf4j arayüzünü
+# kullanıyor ama yanında bir bağlayıcı getirmiyor. StaticLoggerBinder
+# yalnızca LoggerFactory'nin bağlayıcı arama koduyla anılıyor; çalışma
+# zamanında bulunamayınca slf4j sessizce devre dışı kalıyor, ki bizim
+# için doğrusu bu. Uyarı olmasa R8 eksik sınıfı hata sayıp duruyor.
+-dontwarn org.slf4j.**
+
 # Compose ve Hilt kendi kurallarını kütüphaneleriyle birlikte getiriyor;
 # burada tekrar etmeye gerek yok.
