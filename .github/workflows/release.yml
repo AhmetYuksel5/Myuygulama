@@ -122,6 +122,9 @@ jobs:
             head -40 || true
           echo "===== AYRINTI ====="
           grep -E "^\s+> |AssertionError|tests completed" derleme.log | head -40 || true
+          echo "===== BELLEK / R8 ====="
+          grep -iE "OutOfMemory|GC overhead|heap space|daemon has terminated|Caused by" \
+            derleme.log | head -20 || true
 
       - name: Anahtarı sil
         if: always()
