@@ -5,6 +5,8 @@ package com.ahmety.uygulama.feature.vocab
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -13,6 +15,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -60,8 +64,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -89,7 +96,9 @@ import com.ahmety.uygulama.core.model.Collocation
 import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 @Composable
@@ -108,6 +117,8 @@ fun VocabRoute(
     ) { uri -> uri?.let(wordListViewModel::load) }
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val enrichingWord by viewModel.enriching.collectAsStateWithLifecycle()
+    val imagingWord by viewModel.imaging.collectAsStateWithLifecycle()
+    val imageTurn by viewModel.imageTurn.collectAsStateWithLifecycle()
     val aiMessage by viewModel.aiMessage.collectAsStateWithLifecycle()
     val question by viewModel.question.collectAsStateWithLifecycle()
     // remember ile sarmıyoruz: anahtar Ayarlar'dan yeni girildiyse bu ekrana
@@ -293,6 +304,16 @@ fun VocabRoute(
                         // gelse bile kart sıfırdan kuruluyor.
                         key = "${top.word}#${state.turn}",
                         word = top,
+                        image = wordImage(top.word, imageTurn, viewModel::imageOf),
+                        imaging = imagingWord == top.word,
+                        onGenerateImage = if (aiReady) {
+                            {
+                                viewModel.forgetImage(top)
+                                viewModel.generateImage(top)
+                            }
+                        } else {
+                            null
+                        },
                         threshold = with(density) { threshold.dp.toPx() },
                         fontScale = fontScale,
                         enriching = enrichingWord == top.word,
@@ -399,6 +420,16 @@ fun VocabRoute(
         WordCardDialog(
             word = fresh,
             fontScale = fontScale,
+            image = wordImage(fresh.word, imageTurn, viewModel::imageOf),
+            imaging = imagingWord == fresh.word,
+            onGenerateImage = if (aiReady) {
+                {
+                    viewModel.forgetImage(fresh)
+                    viewModel.generateImage(fresh)
+                }
+            } else {
+                null
+            },
             enriching = enrichingWord == fresh.word,
             onEnrich = if (aiReady) {
                 { viewModel.enrich(fresh) }
@@ -541,6 +572,9 @@ private fun QuestionDialog(
 private fun WordCardDialog(
     word: VocabWord,
     fontScale: Int,
+    image: ImageBitmap? = null,
+    imaging: Boolean = false,
+    onGenerateImage: (() -> Unit)? = null,
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
     onAsk: (() -> Unit)?,
@@ -560,6 +594,9 @@ private fun WordCardDialog(
                     word = word,
                     tint = Color.Transparent,
                     fontScale = fontScale,
+                    image = image,
+                    imaging = imaging,
+                    onGenerateImage = onGenerateImage,
                     interactive = false,
                     revealed = true,
                     enriching = enriching,
@@ -1228,6 +1265,9 @@ private fun SwipeableCard(
     word: VocabWord,
     threshold: Float,
     fontScale: Int,
+    image: ImageBitmap? = null,
+    imaging: Boolean = false,
+    onGenerateImage: (() -> Unit)? = null,
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
     onAsk: (() -> Unit)?,
@@ -1415,6 +1455,9 @@ private fun SwipeableCard(
             word = word,
             tint = tint,
             fontScale = fontScale,
+            image = image,
+            imaging = imaging,
+            onGenerateImage = onGenerateImage,
             enriching = enriching,
             onEnrich = onEnrich,
             onAsk = onAsk,
@@ -1464,6 +1507,9 @@ private fun WordCard(
     word: VocabWord,
     tint: Color,
     fontScale: Int = 100,
+    image: ImageBitmap? = null,
+    imaging: Boolean = false,
+    onGenerateImage: (() -> Unit)? = null,
     interactive: Boolean = true,
     enriching: Boolean = false,
     onEnrich: (() -> Unit)? = null,
@@ -1576,6 +1622,31 @@ private fun WordCard(
                         color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center,
                     )
+                }
+
+                // Hatırlatıcı görsel. Görsel bellek sözlük tanımından daha
+                // iyi tutuyor; kelimeyi bir sahneye bağlıyor.
+                if (revealed && onGenerateImage != null) {
+                    Spacer(Modifier.height(12.dp))
+                    image?.let { bitmap ->
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth(0.72f)
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(16.dp)),
+                        )
+                    }
+                    if (imaging) {
+                        Spacer(Modifier.height(8.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    } else {
+                        TextButton(onClick = onGenerateImage) {
+                            Text(if (image == null) "Görsel üret" else "Görseli yenile")
+                        }
+                    }
                 }
 
                 if (revealed && word.isPassage) {
@@ -2000,4 +2071,23 @@ private fun LabeledBlock(label: String, text: String) {
             )
         }
     }
+}
+
+/**
+ * Kartın görselini dosyadan okur.
+ *
+ * Okuma arka planda: dosya erişimi bileşim sırasında yapılırsa kaydırma
+ * takılıyor. [turn] değişince yeniden okunuyor — görsel veritabanında
+ * durmadığı için akış kendiliğinden tetiklenmiyor.
+ */
+@Composable
+private fun wordImage(
+    word: String,
+    turn: Int,
+    load: (String) -> Bitmap?,
+): ImageBitmap? {
+    val state = produceState<ImageBitmap?>(null, word, turn) {
+        value = withContext(Dispatchers.IO) { load(word)?.asImageBitmap() }
+    }
+    return state.value
 }

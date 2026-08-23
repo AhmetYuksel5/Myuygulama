@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -715,8 +716,72 @@ class OpenAiClient @Inject constructor(
         }
     }
 
+    /**
+     * Kelime için küçük bir hatırlatıcı görsel üretir.
+     *
+     * Amaç sanat değil, kelimeyi bir sahneye bağlamak: görsel bellek sözlük
+     * tanımından daha iyi tutuyor. Bu yüzden en ucuz model, en düşük kalite
+     * ve tek görsel — bir kelimeye bir kez üretiliyor ve dosyada kalıyor.
+     *
+     * Görselde yazı istemiyoruz: bu modeller harfleri güvenilmez çiziyor ve
+     * yanlış yazılmış bir kelime öğrenirken zarar veriyor.
+     */
+    suspend fun generateImage(word: String, meaning: String = ""): AiResult<ByteArray> {
+        val key = settings.apiKey
+        if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
+        if (word.isBlank()) return AiResult.Failed("Kelime boş.")
+
+        val prompt = buildString {
+            append("Simple flat illustration that helps a language learner ")
+            append("remember the English expression \"").append(word).append("\"")
+            if (meaning.isNotBlank()) append(" (meaning: ").append(meaning).append(")")
+            append(". One clear subject, plain background, soft colours. ")
+            append("No text, no letters, no numbers, no captions, no watermark.")
+        }
+
+        val payload = JSONObject().apply {
+            put("model", IMAGE_MODEL)
+            put("prompt", prompt)
+            put("size", "1024x1024")
+            put("quality", "low")
+            put("n", 1)
+        }
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder()
+                    .url(IMAGE_ENDPOINT)
+                    .addHeader("Authorization", "Bearer $key")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA))
+                    .build()
+
+                http.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        return@use AiResult.Failed(readableError(response.code, body))
+                    }
+                    val encoded = JSONObject(body)
+                        .getJSONArray("data")
+                        .getJSONObject(0)
+                        .getString("b64_json")
+                    AiResult.Ok(Base64.getDecoder().decode(encoded))
+                }
+            }.getOrElse { error ->
+                AiResult.Failed(error.message ?: "Görsel üretilemedi.")
+            }
+        }
+    }
+
     private companion object {
         const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
+
+        const val IMAGE_ENDPOINT = "https://api.openai.com/v1/images/generations"
+
+        /**
+         * Ailenin en ucuzu. Düşük kalitede kare bir görsel, görsel başına birkaç
+         * kuruş; kart başına bir kez üretildiği için toplam da küçük kalıyor.
+         */
+        const val IMAGE_MODEL = "gpt-image-1-mini"
 
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     }

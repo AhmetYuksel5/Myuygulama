@@ -150,12 +150,60 @@ class VocabViewModel @Inject constructor(
     private val aiSettings: AiSettings,
     private val briefs: WorkBriefStore,
     private val books: BookRepository,
+    private val images: WordImageStore,
     @ApplicationContext context: Context,
 ) : ViewModel() {
 
     /** Anlamı getirilen kelime (yükleniyor göstergesi için). */
     private val _enriching = MutableStateFlow<String?>(null)
     val enriching: StateFlow<String?> = _enriching
+
+    /** Görseli üretilen kelime. */
+    private val _imaging = MutableStateFlow<String?>(null)
+    val imaging: StateFlow<String?> = _imaging
+
+    /**
+     * Görsel dosyaya yazılıyor, veritabanına değil; akış kendiliğinden
+     * tetiklenmiyor. Sayaç artınca kart görseli yeniden okuyor.
+     */
+    private val _imageTurn = MutableStateFlow(0)
+    val imageTurn: StateFlow<Int> = _imageTurn
+
+    /** Kartın göstereceği görsel; yoksa null. Dosya okuması arka planda. */
+    fun imageOf(word: String): android.graphics.Bitmap? = images.load(word)
+
+    /**
+     * Kelime için hatırlatıcı görsel üretir.
+     *
+     * İsteğe bağlı: her kart açılışında kendiliğinden üretilse hem para
+     * yakardı hem beklerdin. Bir kez üretiliyor, sonra dosyadan geliyor.
+     */
+    fun generateImage(word: VocabWord) {
+        if (_imaging.value != null) return
+        if (!aiSettings.configured) {
+            _aiMessage.value = "Önce Daha → Yapay zekâ'dan anahtarı gir."
+            return
+        }
+        _imaging.value = word.word
+        viewModelScope.launch {
+            when (val result = openAi.generateImage(word.word, word.meaning)) {
+                is AiResult.Ok -> {
+                    val saved = images.save(word.word, result.value)
+                    _aiMessage.value = if (saved) null else "Görsel kaydedilemedi."
+                    if (saved) _imageTurn.value = _imageTurn.value + 1
+                }
+
+                is AiResult.Failed -> _aiMessage.value = result.reason
+            }
+            _imaging.value = null
+        }
+    }
+
+    /** Görseli beğenmediysen at; bir daha istersen yenisi üretilir. */
+    fun forgetImage(word: VocabWord) {
+        images.delete(word.word)
+        _imageTurn.value = _imageTurn.value + 1
+    }
 
     private val _aiMessage = MutableStateFlow<String?>(null)
     val aiMessage: StateFlow<String?> = _aiMessage
