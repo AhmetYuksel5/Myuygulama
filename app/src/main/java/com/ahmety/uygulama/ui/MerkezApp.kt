@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.feature.ebook.BookReaderRoute
 import com.ahmety.uygulama.feature.ebook.BookShelfRoute
+import com.ahmety.uygulama.feature.habits.HabitsRoute
 import com.ahmety.uygulama.feature.library.PocketRoute
 import com.ahmety.uygulama.feature.reader.ArticleRoute
 import com.ahmety.uygulama.feature.reader.SaveArticleDialog
@@ -137,12 +138,13 @@ fun MerkezApp() {
             startDestination = TopLevelDestination.BOOKS.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(TODAY_ROUTE) {
-                TodayScreen()
+            composable(HABITS_ROUTE) {
+                HabitsRoute()
             }
             composable(TopLevelDestination.MORE.route) {
                 MoreScreen(
                     onCheckUpdate = { showUpdate = true },
+                    onOpenHabits = { navController.navigate(HABITS_ROUTE) },
                     onOpenPermissions = { navController.navigate(PERMISSIONS_ROUTE) },
                     onOpenSync = { navController.navigate(SYNC_ROUTE) },
                     onOpenAi = { navController.navigate(AI_ROUTE) },
@@ -197,7 +199,7 @@ fun MerkezApp() {
     }
 }
 
-private const val TODAY_ROUTE = "today"
+private const val HABITS_ROUTE = "aliskanliklar"
 private const val BOOK_ROUTE = "book"
 private const val ARTICLE_ROUTE = "article"
 private const val AI_ROUTE = "ai"
@@ -210,6 +212,7 @@ private const val CURSOR_ROUTE = "cursor"
 @Composable
 private fun MoreScreen(
     onCheckUpdate: () -> Unit,
+    onOpenHabits: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenAi: () -> Unit,
@@ -238,6 +241,11 @@ private fun MoreScreen(
             }
         }
 
+        ListItem(
+            headlineContent = { Text("Alışkanlıklar") },
+            supportingContent = { Text("Günlük takip, seriler, haftalık şerit") },
+            modifier = Modifier.clickable(onClick = onOpenHabits),
+        )
         ListItem(
             headlineContent = { Text("Altyazı arama") },
             supportingContent = { Text("Altyazıyı indir, bilmediğin kelimeleri çıkar") },

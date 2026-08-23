@@ -105,7 +105,6 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:ai"))
     implementation(project(":feature:habits"))
-    implementation(project(":feature:calendar"))
     implementation(project(":feature:gestures"))
     implementation(project(":feature:library"))
     implementation(project(":feature:reader"))

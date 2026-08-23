@@ -6,7 +6,6 @@ import com.ahmety.uygulama.core.database.repository.HabitRepository
 import com.ahmety.uygulama.core.model.Habit
 import com.ahmety.uygulama.core.model.HabitCheck
 import com.ahmety.uygulama.core.model.HabitSchedule
-import com.ahmety.uygulama.core.model.HabitProgress
 import com.ahmety.uygulama.core.model.HabitStreaks
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,7 +45,6 @@ data class HabitsUiState(
     val today: Int,
     val items: List<HabitUiItem> = emptyList(),
     val loaded: Boolean = false,
-    val level: HabitProgress.Level = HabitProgress.levelFor(0),
 ) {
     val dueToday: List<HabitUiItem> get() = items.filter { it.isDueToday }
     val doneCount: Int get() = dueToday.count { it.isDoneToday }
@@ -69,10 +67,9 @@ class HabitsViewModel @Inject constructor(
     val uiState: StateFlow<HabitsUiState> = combine(
         repository.observeHabits(),
         repository.observeChecksBetween(windowStart, windowEnd),
-        repository.observeTotalCompletions(),
         todayFlow,
-    ) { habits, checks, totalCompletions, today ->
-        buildState(today, habits, checks, totalCompletions)
+    ) { habits, checks, today ->
+        buildState(today, habits, checks)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -134,7 +131,6 @@ private fun buildState(
     today: Int,
     habits: List<Habit>,
     checks: List<HabitCheck>,
-    totalCompletions: Int,
 ): HabitsUiState {
     val checksByHabit: Map<String, List<HabitCheck>> = checks.groupBy { it.habitUuid }
     val items = habits.map { habit ->
@@ -158,9 +154,7 @@ private fun buildState(
             },
         )
     }
-    val activeStreakSum = items.sumOf { it.currentStreak }
-    val level = HabitProgress.levelFor(HabitProgress.score(totalCompletions, activeStreakSum))
-    return HabitsUiState(today = today, items = items, loaded = true, level = level)
+    return HabitsUiState(today = today, items = items, loaded = true)
 }
 
 internal fun currentEpochDay(): Int =
