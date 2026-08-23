@@ -43,6 +43,9 @@ object HighlightRef {
     /** Dışarıdan yüklenen bir listeden gelen kelime ya da ifade. */
     const val KIND_LIST = "list"
 
+    /** Uygulamanın içinde elle yazılan kelime ya da ifade. */
+    const val KIND_MANUAL = "manual"
+
     /**
      * Filmler de kitaplarla aynı kayıt türünü kullanıyor (kelimeyi kaynağına
      * göre süzebilmek için); kitaplıkta görünmesinler diye kaydın serbest

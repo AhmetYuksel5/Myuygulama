@@ -101,6 +101,7 @@ class VocabRepository @Inject constructor(
                     source = when {
                         kind == HighlightRef.KIND_SELECTION -> VocabSource.SELECTION
                         kind == HighlightRef.KIND_LIST -> VocabSource.LIST
+                        kind == HighlightRef.KIND_MANUAL -> VocabSource.MANUAL
                         documentId != null && documentId in filmIds -> VocabSource.SUBTITLE
                         kind == HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
                         else -> VocabSource.BOOK
@@ -133,6 +134,36 @@ class VocabRepository @Inject constructor(
             .filter { HighlightRef.color(it.source) in STUDIED_COLORS }
             .forEach { entryRepository.deleteEntry(it.id) }
         forgetProgress(target)
+    }
+
+    /**
+     * Elle yazılan kelimeyi ekler.
+     *
+     * Kaynağı yok: bir kitaptan ya da filmden gelmiyor, aklına geldiği için
+     * ekleniyor. Zaten listendeyse ikinci kayıt açılmıyor — kelime listesi
+     * aynı yazımı tek satır gösterdiği için görünmeyen bir artık kalırdı.
+     *
+     * Geriye eklenip eklenmediği dönüyor.
+     */
+    suspend fun addWord(text: String, color: HighlightColor): Boolean {
+        val target = text.trim()
+        if (target.isBlank()) return false
+
+        val already = entryRepository.listByType(EntryType.HIGHLIGHT)
+            .any { it.title.trim().equals(target, ignoreCase = true) }
+        if (already) return false
+
+        entryRepository.createEntry(
+            type = EntryType.HIGHLIGHT,
+            title = target,
+            body = "",
+            source = HighlightRef.encode(
+                kind = HighlightRef.KIND_MANUAL,
+                sourceId = 0L,
+                color = color,
+            ),
+        )
+        return true
     }
 
     /**

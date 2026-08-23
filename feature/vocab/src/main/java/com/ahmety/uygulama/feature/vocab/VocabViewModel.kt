@@ -10,6 +10,7 @@ import com.ahmety.uygulama.core.ai.WorkBriefStore
 import com.ahmety.uygulama.feature.ebook.BookRepository
 import com.ahmety.uygulama.core.model.Collocation
 import com.ahmety.uygulama.core.model.VocabDecision
+import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
@@ -111,6 +112,7 @@ data class VocabUiState(
     val subtitleCount: Int = 0,
     val selectionCount: Int = 0,
     val listCount: Int = 0,
+    val manualCount: Int = 0,
     /** Kaynağı silinmiş kelime sayısı; sıfırsa çip hiç görünmüyor. */
     val orphanCount: Int = 0,
     /** Seçili kaynakta hiç karar verilmemiş kelime sayısı. */
@@ -482,6 +484,7 @@ class VocabViewModel @Inject constructor(
             subtitleCount = penWords.count { it.source == VocabSource.SUBTITLE },
             selectionCount = penWords.count { it.source == VocabSource.SELECTION },
             listCount = penWords.count { it.source == VocabSource.LIST },
+            manualCount = penWords.count { it.source == VocabSource.MANUAL },
             orphanCount = penWords.count {
                 it.sourceName.isBlank() && it.source != VocabSource.SELECTION
             },
@@ -521,6 +524,25 @@ class VocabViewModel @Inject constructor(
             session.value = session.value.copy(
                 refresh = session.value.refresh + 1,
                 turn = session.value.turn + 1,
+            )
+        }
+    }
+
+    /**
+     * Elle kelime ekler.
+     *
+     * Eklenen kelime destede en başa geliyor: yazdığın şeyi hemen karşında
+     * görmek, listede aramaktan iyi.
+     */
+    fun addWord(text: String, passage: Boolean) {
+        val target = text.trim()
+        if (target.isBlank()) return
+        viewModelScope.launch {
+            val color = if (passage) HighlightColor.RED else HighlightColor.BLUE
+            repository.addWord(target, color)
+            session.value = session.value.copy(
+                pinned = target,
+                refresh = session.value.refresh + 1,
             )
         }
     }

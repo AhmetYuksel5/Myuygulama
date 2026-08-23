@@ -94,6 +94,12 @@ enum class VocabSource(val label: String) {
 
     /** Dışarıdan yüklenen bir listeden gelen kelime ya da ifade. */
     LIST("Listeden"),
+
+    /**
+     * Uygulamanın içinde elle yazılan. Bir kitaba, filme ya da listeye
+     * bağlı değil: aklına gelen kelimeyi olduğun yerde eklemek için.
+     */
+    MANUAL("Kendim"),
 }
 
 /**

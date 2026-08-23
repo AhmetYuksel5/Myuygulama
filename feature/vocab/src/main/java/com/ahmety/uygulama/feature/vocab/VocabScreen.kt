@@ -33,6 +33,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -114,6 +115,8 @@ fun VocabRoute(
     var editWord by remember { mutableStateOf<VocabWord?>(null) }
     // Listedekilerin toplu silinmesi için onay kutusu.
     var confirmPurge by remember { mutableStateOf(false) }
+    // Elle kelime ekleme kutusu.
+    var showAdd by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -153,6 +156,7 @@ fun VocabRoute(
                     Text("Sil (${state.list.size})")
                 }
             }
+            TextButton(onClick = { showAdd = true }) { Text("Ekle") }
             TextButton(onClick = { listView = !listView }) {
                 Text(if (listView) "Kart" else "Liste")
             }
@@ -188,6 +192,13 @@ fun VocabRoute(
                         selected = filter.source == VocabSource.SUBTITLE &&
                             filter.sourceName.isBlank(),
                     ) { viewModel.setFilter(VocabFilter(source = VocabSource.SUBTITLE)) }
+                }
+                if (state.manualCount > 0) {
+                    ModeChip(
+                        label = "Kendim (${state.manualCount})",
+                        selected = filter.source == VocabSource.MANUAL &&
+                            filter.sourceName.isBlank(),
+                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.MANUAL)) }
                 }
                 if (state.listCount > 0) {
                     ModeChip(
@@ -307,6 +318,16 @@ fun VocabRoute(
                     .padding(top = 4.dp),
             )
         }
+    }
+
+    if (showAdd) {
+        AddWordDialog(
+            onDismiss = { showAdd = false },
+            onAdd = { text, passage ->
+                viewModel.addWord(text, passage)
+                showAdd = false
+            },
+        )
     }
 
     if (confirmPurge) {
@@ -752,6 +773,63 @@ private fun WordEditDialog(
 }
 
 /** Kelime ekranının ayarları. Yeni ayar eklenirse buraya giriyor. */
+/**
+ * Elle kelime ekleme.
+ *
+ * Kaynağı olmayan kelimeler için: aklına gelen, birinden duyduğun, uygulama
+ * dışında bir yerde gördüğün. Kalem yazdıkça kendiliğinden belirleniyor —
+ * tek kelime mavi, boşluklu kırmızı — ama daireye dokunup çevirebiliyorsun.
+ */
+@Composable
+private fun AddWordDialog(
+    onDismiss: () -> Unit,
+    onAdd: (text: String, passage: Boolean) -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    // Kullanıcı daireye dokunmadıysa kalem yazılana bakarak belirleniyor.
+    var override by remember { mutableStateOf<Boolean?>(null) }
+    val passage = override ?: text.trim().any { it.isWhitespace() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Kelime ekle") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Kelime ya da ifade") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(if (passage) CHIP_RED else CHIP_BLUE)
+                            .clickable { override = !passage },
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = if (passage) "Kırmızı: ifade" else "Mavi: kelime",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = text.isNotBlank(),
+                onClick = { onAdd(text, passage) },
+            ) { Text("Ekle") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Vazgeç") }
+        },
+    )
+}
+
 @Composable
 private fun VocabSettingsDialog(
     threshold: Int,
