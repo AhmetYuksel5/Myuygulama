@@ -75,6 +75,28 @@ object MerkezIcons {
         }
     }
 
+    /** Kapat: çarpı. */
+    val Close: ImageVector by lazy {
+        outlined("MerkezClose") {
+            moveTo(6f, 6f)
+            lineTo(18f, 18f)
+            moveTo(18f, 6f)
+            lineTo(6f, 18f)
+        }
+    }
+
+    /** Pocket sekmesi: yer imi. */
+    val Bookmark: ImageVector by lazy {
+        outlined("MerkezBookmark") {
+            moveTo(6.5f, 3.8f)
+            lineTo(17.5f, 3.8f)
+            lineTo(17.5f, 20.2f)
+            lineTo(12f, 15.6f)
+            lineTo(6.5f, 20.2f)
+            close()
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

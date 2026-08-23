@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.feature.ebook.BookReaderRoute
 import com.ahmety.uygulama.feature.ebook.BookShelfRoute
+import com.ahmety.uygulama.feature.library.PocketRoute
+import com.ahmety.uygulama.feature.reader.ArticleRoute
+import com.ahmety.uygulama.feature.reader.SaveArticleDialog
 import com.ahmety.uygulama.feature.subtitles.SubtitleRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
@@ -61,6 +64,7 @@ private enum class TopLevelDestination(
 ) {
     BOOKS("books", "Kitaplık", MerkezIcons.Book),
     VOCAB("vocab", "Kelimeler", MerkezIcons.Translate),
+    POCKET("pocket", "Pocket", MerkezIcons.Bookmark),
     MORE("more", "Daha", MerkezIcons.MoreHoriz),
 }
 
@@ -71,9 +75,20 @@ fun MerkezApp() {
     val currentDestination = backStackEntry?.destination
 
     var showUpdate by remember { mutableStateOf(false) }
+    var showSaveArticle by remember { mutableStateOf(false) }
 
     if (showUpdate) {
         UpdateDialog(onDismiss = { showUpdate = false })
+    }
+
+    if (showSaveArticle) {
+        SaveArticleDialog(
+            onDismiss = { showSaveArticle = false },
+            onSaved = { id ->
+                showSaveArticle = false
+                navController.navigate("$ARTICLE_ROUTE/$id")
+            },
+        )
     }
 
     // Okuma ekranında alt sekme çubuğu metni sıkıştırıyor ve sağ alt köşedeki
@@ -139,6 +154,18 @@ fun MerkezApp() {
             composable(TopLevelDestination.VOCAB.route) {
                 VocabRoute()
             }
+            composable(TopLevelDestination.POCKET.route) {
+                PocketRoute(
+                    onOpenArticle = { navController.navigate("$ARTICLE_ROUTE/$it") },
+                    onAddArticle = { showSaveArticle = true },
+                )
+            }
+            composable(
+                route = "$ARTICLE_ROUTE/{articleId}",
+                arguments = listOf(navArgument("articleId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                ArticleRoute(entryId = backStackEntry.arguments?.getLong("articleId") ?: 0L)
+            }
             composable(TopLevelDestination.BOOKS.route) {
                 BookShelfRoute(onOpenBook = { navController.navigate("$BOOK_ROUTE/$it") })
             }
@@ -172,6 +199,7 @@ fun MerkezApp() {
 
 private const val TODAY_ROUTE = "today"
 private const val BOOK_ROUTE = "book"
+private const val ARTICLE_ROUTE = "article"
 private const val AI_ROUTE = "ai"
 private const val SUBTITLE_ROUTE = "altyazi"
 private const val PERMISSIONS_ROUTE = "permissions"
