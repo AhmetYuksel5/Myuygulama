@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -49,6 +50,7 @@ import com.ahmety.uygulama.core.designsystem.MerkezPalette
 @Composable
 fun HabitsSection(
     state: HabitsUiState,
+    onOpen: (HabitUiItem) -> Unit,
     onAdvance: (HabitUiItem) -> Unit,
     onToggleDay: (HabitUiItem, Int) -> Unit,
     onArchive: (HabitUiItem) -> Unit,
@@ -91,6 +93,7 @@ fun HabitsSection(
         ordered.forEach { item ->
             HabitRow(
                 item = item,
+                onOpen = { onOpen(item) },
                 onAdvance = { onAdvance(item) },
                 onToggleDay = { date -> onToggleDay(item, date) },
                 onArchive = { onArchive(item) },
@@ -103,6 +106,7 @@ fun HabitsSection(
 @Composable
 private fun HabitRow(
     item: HabitUiItem,
+    onOpen: () -> Unit,
     onAdvance: () -> Unit,
     onToggleDay: (Int) -> Unit,
     onArchive: () -> Unit,
@@ -114,12 +118,11 @@ private fun HabitRow(
         ?: MerkezPalette.colorFor(item.habit.uuid)
 
     Card(
+        // Gövdeye dokunmak detayı açıyor, tamamlama rozetin kendisinde.
+        // Bütün kart "tamamla" iken geçmişe bakmanın hiçbir yolu yoktu.
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = item.isDueToday) {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onAdvance()
-            },
+            .clickable(onClick = onOpen),
         colors = CardDefaults.cardColors(
             containerColor = if (item.isDoneToday) {
                 accent.copy(alpha = 0.10f)
@@ -140,6 +143,10 @@ private fun HabitRow(
                 done = item.isDoneToday,
                 enabled = item.isDueToday,
                 accent = accent,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onAdvance()
+                },
             )
 
             Column(
@@ -245,6 +252,7 @@ private fun ProgressBadge(
     done: Boolean,
     enabled: Boolean,
     accent: Color,
+    onClick: () -> Unit = {},
 ) {
     // Tamamlanınca küçük bir "pop": Streaks'in en övülen hissi.
     val scale by animateFloatAsState(
@@ -263,7 +271,9 @@ private fun ProgressBadge(
     Box(
         modifier = Modifier
             .size(44.dp)
-            .scale(scale),
+            .scale(scale)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         when {

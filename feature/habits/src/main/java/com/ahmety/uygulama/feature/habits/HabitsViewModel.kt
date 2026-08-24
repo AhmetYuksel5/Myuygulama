@@ -8,6 +8,7 @@ import com.ahmety.uygulama.core.model.HabitCheck
 import com.ahmety.uygulama.core.model.HabitSchedule
 import com.ahmety.uygulama.core.model.HabitStreaks
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -100,6 +101,23 @@ class HabitsViewModel @Inject constructor(
             val target = item.habit.targetPerDay.coerceAtLeast(1)
             val done = item.week.firstOrNull { it.date == date }?.isComplete == true
             repository.setCheckCount(item.habit.uuid, date, if (done) 0 else target)
+        }
+    }
+
+    /** Tek bir alışkanlığın bütün geçmişi; detaydaki yıllık ızgara için. */
+    fun historyOf(uuid: String): Flow<List<HabitCheck>> =
+        repository.observeChecksForHabit(uuid)
+
+    /**
+     * Geçmiş bir günü işaretler ya da işareti kaldırır.
+     *
+     * Satırdaki şerit yalnız son yedi günü kapsıyor; detaydaki ızgarada
+     * bir yıl geriye gidebildiğimiz için ayrı bir yol gerekiyor.
+     */
+    fun setDay(item: HabitUiItem, date: Int, done: Boolean) {
+        viewModelScope.launch {
+            val target = item.habit.targetPerDay.coerceAtLeast(1)
+            repository.setCheckCount(item.habit.uuid, date, if (done) target else 0)
         }
     }
 

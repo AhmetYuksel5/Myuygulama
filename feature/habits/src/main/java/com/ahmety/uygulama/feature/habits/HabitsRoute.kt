@@ -46,6 +46,9 @@ fun HabitsRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
+    // Detayı açık olan alışkanlık. Kimlikle tutuluyor ki işaretleme
+    // yapıldığında penceredeki sayılar da tazelensin.
+    var detailUuid by remember { mutableStateOf<String?>(null) }
 
     // Gün dönmüş olabilir: uygulamaya her dönüşte bugünü tazeliyoruz.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -82,6 +85,7 @@ fun HabitsRoute(
 
             HabitsSection(
                 state = state,
+                onOpen = { detailUuid = it.habit.uuid },
                 onAdvance = viewModel::advance,
                 onToggleDay = viewModel::toggleDay,
                 onArchive = { viewModel.setArchived(it.habit.uuid, !it.habit.archived) },
@@ -96,6 +100,23 @@ fun HabitsRoute(
                 .padding(16.dp),
         ) {
             Icon(MerkezIcons.Add, contentDescription = "Alışkanlık ekle")
+        }
+    }
+
+    detailUuid?.let { uuid ->
+        val item = state.items.firstOrNull { it.habit.uuid == uuid }
+        if (item == null) {
+            detailUuid = null
+        } else {
+            val history by remember(uuid) { viewModel.historyOf(uuid) }
+                .collectAsStateWithLifecycle(initialValue = emptyList())
+            HabitDetailDialog(
+                item = item,
+                checks = history,
+                today = state.today,
+                onToggleDay = { date, done -> viewModel.setDay(item, date, done) },
+                onDismiss = { detailUuid = null },
+            )
         }
     }
 
