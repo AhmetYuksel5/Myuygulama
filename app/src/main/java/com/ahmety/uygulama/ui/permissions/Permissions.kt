@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import com.ahmety.uygulama.feature.gestures.EdgeGestureService
+import com.ahmety.uygulama.feature.gestures.QuickCursorService
 import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
@@ -116,6 +118,58 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
         ),
     )
 
+    // Erişilebilirlik servisleri. Sistem bunları kendiliğinden kapatabiliyor
+    // (üreticinin pil temizleyicisi, uzun süre kullanılmayan uygulama), o
+    // yüzden durumlarını burada görüp tek dokunuşla geri açabilmek gerekiyor.
+    add(
+        PermissionSpec(
+            id = "edge_gestures",
+            title = "Kenar hareketleri",
+            rationale = "Ekranın kenarından kaydırarak son uygulamalar ve bildirim " +
+                "paneli. Erişilebilirlik servisi olarak çalışıyor.",
+            kind = PermissionKind.SPECIAL,
+            isGranted = { it.isAccessibilityServiceOn(EdgeGestureService::class.java.name) },
+            settingsIntent = { Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS) },
+        ),
+    )
+
+    add(
+        PermissionSpec(
+            id = "quick_cursor",
+            title = "Tek elle imleç",
+            rationale = "Ulaşılamayan köşelere basmak için sanal imleç. " +
+                "Erişilebilirlik servisi olarak çalışıyor.",
+            kind = PermissionKind.SPECIAL,
+            isGranted = { it.isAccessibilityServiceOn(QuickCursorService::class.java.name) },
+            settingsIntent = { Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS) },
+        ),
+    )
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        add(
+            PermissionSpec(
+                id = "auto_revoke",
+                title = "Kullanılmayınca izinleri kaldırma",
+                rationale = "Android, uzun süre açılmayan uygulamanın izinlerini " +
+                    "kendiliğinden geri alıyor. Bu telefonu seyrek kullanıyorsan " +
+                    "erişilebilirlik servisleri de bu yüzden düşebilir. Kapalı " +
+                    "olması gerekiyor: ayarlarda \"kullanılmıyorsa izinleri " +
+                    "kaldır\" anahtarını kapat.",
+                kind = PermissionKind.SPECIAL,
+                isGranted = { context ->
+                    runCatching { context.packageManager.isAutoRevokeWhitelisted }
+                        .getOrDefault(false)
+                },
+                settingsIntent = { context ->
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    )
+                },
+            ),
+        )
+    }
+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         add(
             PermissionSpec(
@@ -135,6 +189,22 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
             ),
         )
     }
+}
+
+/**
+ * Erişilebilirlik servisi açık mı.
+ *
+ * Sistem açık servisleri iki nokta üst üste ile ayrılmış tek bir dizide
+ * tutuyor; kendi servisimizi orada arıyoruz. Adlar karıştırılmadığı için
+ * (R8 kuralında `-dontobfuscate`) sınıf adı çalışma zamanında da aynı.
+ */
+fun Context.isAccessibilityServiceOn(serviceClassName: String): Boolean {
+    val enabled = Settings.Secure.getString(
+        contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+    ).orEmpty()
+    val target = "$packageName/$serviceClassName"
+    return enabled.split(':').any { it.trim().equals(target, ignoreCase = true) }
 }
 
 fun Context.hasPermission(permission: String): Boolean =
