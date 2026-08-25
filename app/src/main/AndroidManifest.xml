@@ -84,6 +84,19 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Takvim bildirimindeki ileri/geri okları ve yeniden başlatma.
+            BOOT_COMPLETED sistemden geldiği için dışa açık olmak zorunda;
+            okların kendi eylemleri açık niyetle geliyor, filtre gerekmiyor.
+        -->
+        <receiver
+            android:name=".takvim.TakvimBildirimAlicisi"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

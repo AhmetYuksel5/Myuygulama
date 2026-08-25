@@ -19,6 +19,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
@@ -37,6 +39,7 @@ import com.ahmety.uygulama.feature.reader.ArticleRoute
 import com.ahmety.uygulama.feature.reader.SaveArticleDialog
 import com.ahmety.uygulama.feature.subtitles.SubtitleRoute
 import com.ahmety.uygulama.feature.vocab.VocabRoute
+import com.ahmety.uygulama.takvim.TakvimBildirimi
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
@@ -221,6 +224,8 @@ private fun MoreScreen(
     onOpenCursor: () -> Unit,
     onOpenSubtitles: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -242,6 +247,25 @@ private fun MoreScreen(
             }
         }
 
+        // Takvim bildirimi: açık kalınca bildirim çubuğunda duruyor.
+        var takvimAcik by remember { mutableStateOf(TakvimBildirimi.acikMi(context)) }
+        ListItem(
+            headlineContent = { Text("Takvim bildirimi") },
+            supportingContent = { Text("Bildirim çubuğunda duran ay takvimi") },
+            trailingContent = {
+                Switch(
+                    checked = takvimAcik,
+                    onCheckedChange = { acik ->
+                        takvimAcik = acik
+                        TakvimBildirimi.ayarla(context, acik)
+                    },
+                )
+            },
+            modifier = Modifier.clickable {
+                takvimAcik = !takvimAcik
+                TakvimBildirimi.ayarla(context, takvimAcik)
+            },
+        )
         ListItem(
             headlineContent = { Text("Alışkanlıklar") },
             supportingContent = { Text("Günlük takip, seriler, haftalık şerit") },

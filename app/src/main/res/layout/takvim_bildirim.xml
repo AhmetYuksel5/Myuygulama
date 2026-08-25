@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Bildirim çubuğundaki ay takvimi.
+
+    Compose değil RemoteViews: bildirim görünümünü sistem kendi sürecinde
+    çiziyor, oraya yalnızca XML ve sınırlı bir görünüm kümesi geçebiliyor.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/takvim_geri"
+            android:layout_width="44dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:text="‹"
+            android:textSize="22sp"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+
+        <TextView
+            android:id="@+id/takvim_baslik"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+
+        <TextView
+            android:id="@+id/takvim_bugun_dugme"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="Bugün"
+            android:textAppearance="@style/TextAppearance.Compat.Notification" />
+
+        <TextView
+            android:id="@+id/takvim_ileri"
+            android:layout_width="44dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:text="›"
+            android:textSize="22sp"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/takvim_gun_adlari"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal" />
+
+    <LinearLayout
+        android:id="@+id/takvim_gunler"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+</LinearLayout>
