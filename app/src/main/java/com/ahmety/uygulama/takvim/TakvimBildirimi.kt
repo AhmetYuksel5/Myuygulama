@@ -8,7 +8,6 @@ import android.content.Intent
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.ahmety.uygulama.MainActivity
 import com.ahmety.uygulama.R
 import java.time.LocalDate
 import java.time.YearMonth
@@ -34,8 +33,6 @@ object TakvimBildirimi {
     const val ACTION_GERI = "com.ahmety.uygulama.TAKVIM_GERI"
     const val ACTION_ILERI = "com.ahmety.uygulama.TAKVIM_ILERI"
     const val ACTION_BUGUN = "com.ahmety.uygulama.TAKVIM_BUGUN"
-
-    private val GUN_ADLARI = listOf("Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz")
 
     private val AYLAR = listOf(
         "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -69,21 +66,9 @@ object TakvimBildirimi {
         val ay = YearMonth.from(bugun).plusMonths(kayma.toLong())
 
         val govde = RemoteViews(context.packageName, R.layout.takvim_bildirim)
-        govde.setTextViewText(
-            R.id.takvim_baslik,
-            "${AYLAR[ay.monthValue - 1]} ${ay.year}",
-        )
         govde.setOnClickPendingIntent(R.id.takvim_geri, yayin(context, ACTION_GERI))
         govde.setOnClickPendingIntent(R.id.takvim_ileri, yayin(context, ACTION_ILERI))
         govde.setOnClickPendingIntent(R.id.takvim_bugun_dugme, yayin(context, ACTION_BUGUN))
-
-        // Gün adları satırı.
-        govde.removeAllViews(R.id.takvim_gun_adlari)
-        GUN_ADLARI.forEach { ad ->
-            val hucre = RemoteViews(context.packageName, R.layout.takvim_hucre)
-            hucre.setTextViewText(R.id.takvim_hucre_yazi, ad)
-            govde.addView(R.id.takvim_gun_adlari, hucre)
-        }
 
         // Günler. Ay pazartesiyle başlamıyorsa baştaki hücreler boş kalıyor.
         govde.removeAllViews(R.id.takvim_gunler)
@@ -117,12 +102,25 @@ object TakvimBildirimi {
             govde.addView(R.id.takvim_gunler, satirGorunum)
         }
 
-        val ac = PendingIntent.getActivity(
-            context,
-            0,
-            Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        // Kapalı hâlde sistem yalnızca bir satırlık yer veriyor; bütün ay
+        // oraya sığmıyor. Sığan şey içinde bulunulan hafta: çubuğu indirir
+        // indirmez, açmadan görülüyor.
+        val kapali = RemoteViews(context.packageName, R.layout.takvim_satir)
+        val haftaBasi = bugun.minusDays((bugun.dayOfWeek.value - 1).toLong())
+        for (gun in 0..6) {
+            val tarih = haftaBasi.plusDays(gun.toLong())
+            val hucre = RemoteViews(context.packageName, R.layout.takvim_hucre)
+            hucre.setTextViewText(R.id.takvim_hucre_yazi, tarih.dayOfMonth.toString())
+            if (tarih == bugun) {
+                hucre.setInt(
+                    R.id.takvim_hucre_yazi,
+                    "setBackgroundResource",
+                    R.drawable.takvim_bugun,
+                )
+                hucre.setTextColor(R.id.takvim_hucre_yazi, 0xFFFFFFFF.toInt())
+            }
+            kapali.addView(R.id.takvim_satir, hucre)
+        }
 
         val bildirim = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
@@ -131,8 +129,10 @@ object TakvimBildirimi {
             // Kapalı hâlde başlık, açılınca takvim. Kapalı hâl için ayrı bir
             // düzen çizmiyoruz: sistemin kendi satırı zaten yeterli.
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(kapali)
             .setCustomBigContentView(govde)
-            .setContentIntent(ac)
+            // Dokununca uygulama açılmıyor: takvim burada duruyor, başka
+            // bir yere gitmek için bir sebep yok.
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
