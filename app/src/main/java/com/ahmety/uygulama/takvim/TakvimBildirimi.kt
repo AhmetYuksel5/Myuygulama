@@ -24,7 +24,16 @@ import java.time.YearMonth
  */
 object TakvimBildirimi {
 
-    private const val CHANNEL_ID = "takvim"
+    /**
+     * Kanal kimliği sürüm taşıyor.
+     *
+     * Bir kanalın önem düzeyi kurulduktan sonra değiştirilemiyor — o ayar
+     * artık kullanıcıya ait ve sistem uygulamanın değiştirmesini yok
+     * sayıyor. Sırayı yükseltmenin tek yolu yeni bir kanal açmak; eskisi
+     * de siliniyor ki ayarlarda iki "Takvim" satırı kalmasın.
+     */
+    private const val CHANNEL_ID = "takvim_v2"
+    private const val ESKI_CHANNEL_ID = "takvim"
     private const val NOTIFICATION_ID = 4201
     private const val PREFS = "merkez_takvim"
     private const val KEY_KAYMA = "ay_kaymasi"
@@ -137,6 +146,11 @@ object TakvimBildirimi {
             .setSilent(true)
             .setShowWhen(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // Çubuğun en üstünde dursun: telefonun en üstteki bildirimi
+            // kendiliğinden açık göstermesi tek şansımız, aşağıda kalırsa
+            // o ihtimal de yok.
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setSortKey("0")
             .build()
 
         runCatching {
@@ -154,15 +168,25 @@ object TakvimBildirimi {
 
     private fun kanalKur(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        // Düşük önem: ses yok, titreşim yok, ekranda belirme yok. Takvim
-        // bir bildirim değil, orada duran bir şey.
+        runCatching { manager.deleteNotificationChannel(ESKI_CHANNEL_ID) }
+
+        // Varsayılan önem, çünkü sıralamayı o belirliyor: düşük önemli
+        // bildirimler çubuğun dibine iniyor ve telefon hiçbir zaman
+        // kendiliğinden açmıyor. Üstte durursa açık gösterilme ihtimali
+        // doğuyor.
+        //
+        // Sesi ve titreşimi kanalın kendisinden kapatıyoruz: yükseltilen
+        // şey yalnızca sıra olsun, takvim ses çıkarmasın.
         val kanal = NotificationChannel(
             CHANNEL_ID,
             "Takvim",
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = "Bildirim çubuğunda duran ay takvimi"
             setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
+            enableLights(false)
         }
         manager.createNotificationChannel(kanal)
     }
