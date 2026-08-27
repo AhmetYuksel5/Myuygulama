@@ -27,13 +27,18 @@ object TakvimBildirimi {
     /**
      * Kanal kimliği sürüm taşıyor.
      *
-     * Bir kanalın önem düzeyi kurulduktan sonra değiştirilemiyor — o ayar
-     * artık kullanıcıya ait ve sistem uygulamanın değiştirmesini yok
-     * sayıyor. Sırayı yükseltmenin tek yolu yeni bir kanal açmak; eskisi
-     * de siliniyor ki ayarlarda iki "Takvim" satırı kalmasın.
+     * Bir kanalın önem düzeyi kurulduktan sonra değiştirilemiyor — ne
+     * yükseltilebiliyor ne düşürülebiliyor, o ayar artık kullanıcıya ait ve
+     * sistem uygulamanın değiştirmesini yok sayıyor. Düzeyi değiştirmenin
+     * tek yolu yeni bir kanal açmak. Eskiler siliniyor ki ayarlarda üst
+     * üste "Takvim" satırları birikmesin.
+     *
+     * Bir tur sırayı yükseltmeyi denedik (varsayılan önem, çubuğun üstü);
+     * telefonun bildirimi kendiliğinden açık göstermesini sağlamadı ve
+     * karşılığında durum çubuğunda simge bıraktı. Geri alındı.
      */
-    private const val CHANNEL_ID = "takvim_v2"
-    private const val ESKI_CHANNEL_ID = "takvim"
+    private const val CHANNEL_ID = "takvim_v3"
+    private val ESKI_CHANNEL_IDS = listOf("takvim", "takvim_v2")
     private const val NOTIFICATION_ID = 4201
     private const val PREFS = "merkez_takvim"
     private const val KEY_KAYMA = "ay_kaymasi"
@@ -146,11 +151,6 @@ object TakvimBildirimi {
             .setSilent(true)
             .setShowWhen(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            // Çubuğun en üstünde dursun: telefonun en üstteki bildirimi
-            // kendiliğinden açık göstermesi tek şansımız, aşağıda kalırsa
-            // o ihtimal de yok.
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setSortKey("0")
             .build()
 
         runCatching {
@@ -168,19 +168,16 @@ object TakvimBildirimi {
 
     private fun kanalKur(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        runCatching { manager.deleteNotificationChannel(ESKI_CHANNEL_ID) }
+        ESKI_CHANNEL_IDS.forEach { eski ->
+            runCatching { manager.deleteNotificationChannel(eski) }
+        }
 
-        // Varsayılan önem, çünkü sıralamayı o belirliyor: düşük önemli
-        // bildirimler çubuğun dibine iniyor ve telefon hiçbir zaman
-        // kendiliğinden açmıyor. Üstte durursa açık gösterilme ihtimali
-        // doğuyor.
-        //
-        // Sesi ve titreşimi kanalın kendisinden kapatıyoruz: yükseltilen
-        // şey yalnızca sıra olsun, takvim ses çıkarmasın.
+        // Düşük önem: ses yok, titreşim yok, ekranda belirme yok. Takvim
+        // bir bildirim değil, orada duran bir şey.
         val kanal = NotificationChannel(
             CHANNEL_ID,
             "Takvim",
-            NotificationManager.IMPORTANCE_DEFAULT,
+            NotificationManager.IMPORTANCE_LOW,
         ).apply {
             description = "Bildirim çubuğunda duran ay takvimi"
             setShowBadge(false)
