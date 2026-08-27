@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Tek bir gün. Genişlik ağırlıkla: yedi hücre satırı tam bölüyor.
-    Yükseklik kısa tutuldu — bildirimin açık hâlinde kullanabileceğimiz
-    yer sınırlı ve altı satırlık ayların hepsi sığmalı.
+    Yükseklik yazının sığdığı en küçük değere indirildi; satır arası
+    boşluk diye ayrı bir şey yok, satırlar bitişik duruyor.
 -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/takvim_hucre_yazi"
     android:layout_width="0dp"
-    android:layout_height="26dp"
+    android:layout_height="22dp"
     android:layout_weight="1"
     android:gravity="center"
     android:includeFontPadding="false"

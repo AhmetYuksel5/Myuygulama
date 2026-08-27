@@ -18,6 +18,7 @@ class TakvimBildirimAlicisi : BroadcastReceiver() {
             TakvimBildirimi.ACTION_GERI -> TakvimBildirimi.kaydir(context, -1)
             TakvimBildirimi.ACTION_ILERI -> TakvimBildirimi.kaydir(context, 1)
             TakvimBildirimi.ACTION_BUGUN -> TakvimBildirimi.kaydir(context, 0)
+            TakvimBildirimi.ACTION_GUN_DONDU -> TakvimBildirimi.gunDondu(context)
             // Yeniden başlatmada bildirim kayboluyor; açıksa geri koyuyoruz.
             Intent.ACTION_BOOT_COMPLETED ->
                 if (TakvimBildirimi.acikMi(context)) TakvimBildirimi.goster(context)

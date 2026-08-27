@@ -1,5 +1,6 @@
 package com.ahmety.uygulama.takvim
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.ahmety.uygulama.R
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.YearMonth
 
 /**
@@ -48,6 +50,9 @@ object TakvimBildirimi {
     const val ACTION_ILERI = "com.ahmety.uygulama.TAKVIM_ILERI"
     const val ACTION_BUGUN = "com.ahmety.uygulama.TAKVIM_BUGUN"
 
+    /** Gece yarısı: gösterilen ay bugüne dönsün, daire doğru güne kaysın. */
+    const val ACTION_GUN_DONDU = "com.ahmety.uygulama.TAKVIM_GUN_DONDU"
+
     private val AYLAR = listOf(
         "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
         "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
@@ -69,11 +74,26 @@ object TakvimBildirimi {
     }
 
     fun kaldir(context: Context) {
+        alarmIptal(context)
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+    }
+
+    /**
+     * Gece yarısı tetiklenen yenileme.
+     *
+     * İki işi birden görüyor: gösterilen ayı bugüne döndürüyor ve bugünün
+     * dairesini doğru güne kaydırıyor. Olmasaydı bir kez ileri sarıp
+     * bıraktığın ay orada kalır, sabah baktığında da daire dünün üstünde
+     * dururdu.
+     */
+    fun gunDondu(context: Context) {
+        prefs(context).edit().putInt(KEY_KAYMA, 0).apply()
+        if (acikMi(context)) goster(context)
     }
 
     fun goster(context: Context) {
         kanalKur(context)
+        alarmKur(context)
 
         val bugun = LocalDate.now()
         val kayma = prefs(context).getInt(KEY_KAYMA, 0)
@@ -100,13 +120,24 @@ object TakvimBildirimi {
                 val hucre = RemoteViews(context.packageName, R.layout.takvim_hucre)
                 if (gun in 1..gunSayisi) {
                     hucre.setTextViewText(R.id.takvim_hucre_yazi, gun.toString())
-                    if (buAy && gun == bugun.dayOfMonth) {
-                        hucre.setInt(
+                    when {
+                        // Bugün her zaman öne çıkıyor: hafta sonuna denk
+                        // gelse bile daire kazanıyor.
+                        buAy && gun == bugun.dayOfMonth -> {
+                            hucre.setInt(
+                                R.id.takvim_hucre_yazi,
+                                "setBackgroundResource",
+                                R.drawable.takvim_bugun,
+                            )
+                            hucre.setTextColor(R.id.takvim_hucre_yazi, 0xFFFFFFFF.toInt())
+                        }
+
+                        // Son iki sütun cumartesi ve pazar.
+                        sutun >= 5 -> hucre.setInt(
                             R.id.takvim_hucre_yazi,
                             "setBackgroundResource",
-                            R.drawable.takvim_bugun,
+                            R.drawable.takvim_haftasonu,
                         )
-                        hucre.setTextColor(R.id.takvim_hucre_yazi, 0xFFFFFFFF.toInt())
                     }
                 } else {
                     hucre.setTextViewText(R.id.takvim_hucre_yazi, "")
@@ -125,13 +156,21 @@ object TakvimBildirimi {
             val tarih = haftaBasi.plusDays(gun.toLong())
             val hucre = RemoteViews(context.packageName, R.layout.takvim_hucre)
             hucre.setTextViewText(R.id.takvim_hucre_yazi, tarih.dayOfMonth.toString())
-            if (tarih == bugun) {
-                hucre.setInt(
+            when {
+                tarih == bugun -> {
+                    hucre.setInt(
+                        R.id.takvim_hucre_yazi,
+                        "setBackgroundResource",
+                        R.drawable.takvim_bugun,
+                    )
+                    hucre.setTextColor(R.id.takvim_hucre_yazi, 0xFFFFFFFF.toInt())
+                }
+
+                gun >= 5 -> hucre.setInt(
                     R.id.takvim_hucre_yazi,
                     "setBackgroundResource",
-                    R.drawable.takvim_bugun,
+                    R.drawable.takvim_haftasonu,
                 )
-                hucre.setTextColor(R.id.takvim_hucre_yazi, 0xFFFFFFFF.toInt())
             }
             kapali.addView(R.id.takvim_satir, hucre)
         }
@@ -156,6 +195,34 @@ object TakvimBildirimi {
         runCatching {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, bildirim)
         }
+    }
+
+    /**
+     * Bir sonraki gece yarısı için günlük yenileme kurar.
+     *
+     * Kesin alarm istemiyoruz: takvimin birkaç dakika geç tazelenmesinin
+     * zararı yok ve kesin alarmlar pili boşuna yoruyor.
+     */
+    private fun alarmKur(context: Context) {
+        val manager = context.getSystemService(AlarmManager::class.java) ?: return
+        val geceYarisi = LocalDate.now()
+            .plusDays(1)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        runCatching {
+            manager.setInexactRepeating(
+                AlarmManager.RTC,
+                geceYarisi,
+                AlarmManager.INTERVAL_DAY,
+                yayin(context, ACTION_GUN_DONDU),
+            )
+        }
+    }
+
+    private fun alarmIptal(context: Context) {
+        val manager = context.getSystemService(AlarmManager::class.java) ?: return
+        runCatching { manager.cancel(yayin(context, ACTION_GUN_DONDU)) }
     }
 
     private fun yayin(context: Context, action: String): PendingIntent =

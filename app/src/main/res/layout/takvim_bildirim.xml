@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Bildirim çubuğundaki ay takvimi: yalnızca gün ızgarası.
+    Bildirim çubuğundaki ay takvimi: önce gün ızgarası, en altta oklar.
 
-    Ay adı burada yazmıyor çünkü sistem zaten bildirimin kendi başlığında
-    yazıyor; iki kez yazmak boş yere yer kaplıyordu. Gün adları satırı da
-    kalktı — sütunların sırası zaten hep aynı.
+    Oklar üstteyken uygulama adıyla ilk gün satırı arasında bir satırlık
+    boşluk kalıyordu; alta alınca ızgara doğrudan başlığın altından
+    başlıyor. Kök düzende hiç dolgu yok — kalan boşluk sistemin kendi
+    bildirim kenarlığı, ona dokunamıyoruz.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/takvim_gunler"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -20,17 +27,17 @@
         <TextView
             android:id="@+id/takvim_geri"
             android:layout_width="0dp"
-            android:layout_height="30dp"
+            android:layout_height="28dp"
             android:layout_weight="1"
             android:gravity="center"
             android:text="‹"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
 
         <TextView
             android:id="@+id/takvim_bugun_dugme"
             android:layout_width="0dp"
-            android:layout_height="30dp"
+            android:layout_height="28dp"
             android:layout_weight="1"
             android:gravity="center"
             android:text="Bugün"
@@ -39,17 +46,11 @@
         <TextView
             android:id="@+id/takvim_ileri"
             android:layout_width="0dp"
-            android:layout_height="30dp"
+            android:layout_height="28dp"
             android:layout_weight="1"
             android:gravity="center"
             android:text="›"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
     </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/takvim_gunler"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical" />
 </LinearLayout>
