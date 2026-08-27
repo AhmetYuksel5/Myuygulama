@@ -37,10 +37,11 @@ object TakvimBildirimi {
      *
      * Bir tur sırayı yükseltmeyi denedik (varsayılan önem, çubuğun üstü);
      * telefonun bildirimi kendiliğinden açık göstermesini sağlamadı ve
-     * karşılığında durum çubuğunda simge bıraktı. Geri alındı.
+     * karşılığında durum çubuğunda simge bıraktı. Geri alındı; şimdi tam
+     * tersi yönde, en düşük öneme çekildi.
      */
-    private const val CHANNEL_ID = "takvim_v3"
-    private val ESKI_CHANNEL_IDS = listOf("takvim", "takvim_v2")
+    private const val CHANNEL_ID = "takvim_v4"
+    private val ESKI_CHANNEL_IDS = listOf("takvim", "takvim_v2", "takvim_v3")
     private const val NOTIFICATION_ID = 4201
     private const val PREFS = "merkez_takvim"
     private const val KEY_KAYMA = "ay_kaymasi"
@@ -239,12 +240,16 @@ object TakvimBildirimi {
             runCatching { manager.deleteNotificationChannel(eski) }
         }
 
-        // Düşük önem: ses yok, titreşim yok, ekranda belirme yok. Takvim
-        // bir bildirim değil, orada duran bir şey.
+        // En düşük önem. Sebebi tek başına şu: bu seviyede bildirim durum
+        // çubuğunda simge göstermiyor. Sistem simgeyi gizlemek için ayrı
+        // bir anahtar sunmuyor, önem düzeyine bağlamış.
+        //
+        // Bedeli de var: bildirim çubuğun altına iniyor ve telefon onu
+        // hiçbir zaman kendiliğinden açık göstermiyor. Bilinerek seçildi.
         val kanal = NotificationChannel(
             CHANNEL_ID,
             "Takvim",
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_MIN,
         ).apply {
             description = "Bildirim çubuğunda duran ay takvimi"
             setShowBadge(false)
