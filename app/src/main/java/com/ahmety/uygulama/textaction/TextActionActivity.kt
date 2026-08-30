@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,22 +64,22 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class TextActionActivity : ComponentActivity() {
 
-    /** Ekranda duran metin. Yeni bir seçim gelirse burası değişiyor. */
-    private var selected by mutableStateOf("")
+    /** Ekranda duran paylaşım. Yeni bir seçim gelirse burası değişiyor. */
+    private var shared by mutableStateOf<SharedText?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val text = selectedText(intent)
-        if (text.isNullOrBlank()) {
+        val incoming = sharedText(intent)
+        if (incoming == null) {
             finish()
             return
         }
-        selected = text
+        shared = incoming
         setContent {
             MerkezTheme {
                 // Kapatma düğmesi yok: kutu kayan pencere, dışına dokununca
                 // sistem zaten kapatıyor.
-                TextActionDialog(selected = selected)
+                shared?.let { TextActionDialog(shared = it) }
             }
         }
     }
@@ -90,29 +92,45 @@ class TextActionActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val text = selectedText(intent)
-        if (!text.isNullOrBlank()) selected = text
+        sharedText(intent)?.let { shared = it }
     }
 
-    private fun selectedText(intent: Intent?): String? {
+    private fun sharedText(intent: Intent?): SharedText? {
         intent ?: return null
-        return when (intent.action) {
+        val text = when (intent.action) {
             Intent.ACTION_PROCESS_TEXT ->
                 intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
 
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             else -> null
         }
+        if (text.isNullOrBlank()) return null
+        return SharedText(
+            text = text,
+            subject = intent.getStringExtra(Intent.EXTRA_SUBJECT),
+            // Yalnızca paylaş menüsünden gelen bir bağlantı sayfa sayılıyor.
+            // Metin seçim menüsü (PROCESS_TEXT) her zaman kelime demek.
+            fromShare = intent.action == Intent.ACTION_SEND,
+        )
     }
 }
 
+/** Kutuya gelen paylaşım: metin, varsa başlığı ve hangi menüden geldiği. */
+data class SharedText(
+    val text: String,
+    val subject: String?,
+    val fromShare: Boolean,
+)
+
 @Composable
 private fun TextActionDialog(
-    selected: String,
+    shared: SharedText,
     viewModel: TextActionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(selected) { viewModel.start(selected) }
+    LaunchedEffect(shared) {
+        viewModel.start(shared.text, shared.subject, shared.fromShare)
+    }
 
     Surface(
         shape = RoundedCornerShape(24.dp),
@@ -126,166 +144,254 @@ private fun TextActionDialog(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = "“${state.text}”",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontStyle = FontStyle.Italic,
-                    modifier = Modifier.weight(1f),
-                )
-                // Kalem: kırmızı ifade, mavi kelime. Seçime bakarak
-                // kendiliğinden geliyor, dokununca öbürüne çevriliyor.
-                // Eklemeden önce burada durması gerekiyor çünkü rengi
-                // sonradan değiştirmek kartın bilgisini attırıyor.
-                Box(
-                    modifier = Modifier
-                        .padding(start = 12.dp)
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (state.pen == HighlightColor.RED) PEN_RED else PEN_BLUE,
-                        )
-                        .clickable(onClick = viewModel::togglePen)
-                        .semantics {
-                            contentDescription = if (state.pen == HighlightColor.RED) {
-                                "Kırmızı: ifade. Dokunup maviye çevir."
-                            } else {
-                                "Mavi: kelime. Dokunup kırmızıya çevir."
-                            }
-                        },
-                )
+            if (state.url != null) {
+                PageContent(state = state, viewModel = viewModel)
+            } else {
+                WordContent(state = state, viewModel = viewModel)
             }
+        }
+    }
+}
 
-            if (state.loading) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 16.dp),
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text(
-                        text = "Anlamı getiriliyor…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 12.dp),
-                    )
-                }
-            }
+/**
+ * Paylaşılan şey bir sayfa bağlantısıysa çıkan kutu.
+ *
+ * Tarayıcıdan "paylaş" deyince gelen adres kelime destesine düşmemeli;
+ * oraya bir sayfanın adresini yazmanın anlamı yok. Yine de ayırma kuralı
+ * yanılabildiği için kelime tarafına geçiş kapısı duruyor.
+ */
+@Composable
+private fun ColumnScope.PageContent(
+    state: TextActionUiState,
+    viewModel: TextActionViewModel,
+) {
+    Text(
+        text = state.pageTitle,
+        style = MaterialTheme.typography.titleMedium,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+    )
+    Text(
+        text = state.url.orEmpty(),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 6.dp),
+    )
 
-            state.error?.let { error ->
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 14.dp),
+    if (state.savingPage) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 16.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Text(
+                text = "Sayfa indiriliyor…",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+        }
+    }
+
+    state.error?.let { error ->
+        Text(
+            text = error,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+    }
+
+    state.saved?.let { saved ->
+        Text(
+            text = saved,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 18.dp),
+    ) {
+        Button(
+            enabled = !state.savingPage && state.saved == null,
+            onClick = viewModel::saveToPocket,
+        ) { Text("Pocket'a kaydet") }
+        if (state.saved == null) {
+            TextButton(onClick = viewModel::useAsWord) { Text("Kelime olarak ekle") }
+        }
+    }
+}
+
+/** Seçilen metnin kelime olarak işlendiği kutu — eski davranış. */
+@Composable
+private fun ColumnScope.WordContent(
+    state: TextActionUiState,
+    viewModel: TextActionViewModel,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "“${state.text}”",
+            style = MaterialTheme.typography.titleMedium,
+            fontStyle = FontStyle.Italic,
+            modifier = Modifier.weight(1f),
+        )
+        // Kalem: kırmızı ifade, mavi kelime. Seçime bakarak
+        // kendiliğinden geliyor, dokununca öbürüne çevriliyor.
+        // Eklemeden önce burada durması gerekiyor çünkü rengi
+        // sonradan değiştirmek kartın bilgisini attırıyor.
+        Box(
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(
+                    if (state.pen == HighlightColor.RED) PEN_RED else PEN_BLUE,
                 )
-                if (state.aiConfigured) {
-                    TextButton(onClick = viewModel::ask) { Text("Yeniden dene") }
-                }
-            }
-
-            state.info?.let { info ->
-                if (info.meaning.isNotBlank()) {
-                    Text(
-                        text = info.meaning,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 14.dp),
-                    )
-                }
-                if (info.definition.isNotBlank()) {
-                    Text(
-                        text = info.definition,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-                info.examples.forEachIndexed { index, example ->
-                    LabeledLine(lead = "${index + 1}.", text = example)
-                }
-                if (info.root.isNotBlank()) {
-                    LabeledLine(lead = "Kök", text = info.root, dim = true)
-                }
-                if (info.family.isNotEmpty()) {
-                    LabeledLine(lead = "Aile", text = info.family.joinToString(" · "), dim = true)
-                }
-                if (info.synonyms.isNotEmpty() ||
-                    info.antonyms.isNotEmpty() ||
-                    info.related.isNotEmpty()
-                ) {
-                    WordChips(
-                        synonyms = info.synonyms,
-                        antonyms = info.antonyms,
-                        related = info.related,
-                    )
-                }
-                info.confusions.forEach { line ->
-                    LabeledLine(lead = "Karıştırma", text = line, dim = true)
-                }
-                info.collocations.forEach { group ->
-                    LabeledLine(lead = group.pattern, text = group.words.joinToString(" · "), dim = true)
-                }
-            }
-
-            state.saved?.let { saved ->
-                Text(
-                    text = saved,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-            }
-
-            // Sorulan sorunun cevabı: kutuda duruyor ve "Ekle"
-            // basıldığında kartın altına da yazılıyor.
-            if (state.answer.isNotBlank()) {
-                Text(
-                    text = state.answer,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-            }
-
-            if (state.asking) {
-                OutlinedTextField(
-                    value = state.question,
-                    onValueChange = viewModel::setQuestion,
-                    label = { Text("Sorun") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 14.dp),
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 6.dp),
-                ) {
-                    Button(
-                        enabled = !state.answering && state.question.isNotBlank(),
-                        onClick = viewModel::sendQuestion,
-                    ) { Text("Gönder") }
-                    if (state.answering) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                .clickable(onClick = viewModel::togglePen)
+                .semantics {
+                    contentDescription = if (state.pen == HighlightColor.RED) {
+                        "Kırmızı: ifade. Dokunup maviye çevir."
+                    } else {
+                        "Mavi: kelime. Dokunup kırmızıya çevir."
                     }
-                }
-            }
+                },
+        )
+    }
 
-            // Tek satır, iki düğme. "Kapat" yok: kutunun dışına dokunmak
-            // zaten kapatıyor, ikinci bir yol gereksiz yer kaplıyordu.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 18.dp),
-            ) {
-                Button(onClick = viewModel::addToVocab) { Text("Ekle") }
-                if (state.aiConfigured) {
-                    TextButton(onClick = viewModel::toggleQuestion) {
-                        Text(if (state.asking) "Soruyu kapat" else "Soru sor")
-                    }
-                }
+    if (state.loading) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 16.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Text(
+                text = "Anlamı getiriliyor…",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+        }
+    }
+
+    state.error?.let { error ->
+        Text(
+            text = error,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+        if (state.aiConfigured) {
+            TextButton(onClick = viewModel::ask) { Text("Yeniden dene") }
+        }
+    }
+
+    state.info?.let { info ->
+        if (info.meaning.isNotBlank()) {
+            Text(
+                text = info.meaning,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 14.dp),
+            )
+        }
+        if (info.definition.isNotBlank()) {
+            Text(
+                text = info.definition,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        info.examples.forEachIndexed { index, example ->
+            LabeledLine(lead = "${index + 1}.", text = example)
+        }
+        if (info.root.isNotBlank()) {
+            LabeledLine(lead = "Kök", text = info.root, dim = true)
+        }
+        if (info.family.isNotEmpty()) {
+            LabeledLine(lead = "Aile", text = info.family.joinToString(" · "), dim = true)
+        }
+        if (info.synonyms.isNotEmpty() ||
+            info.antonyms.isNotEmpty() ||
+            info.related.isNotEmpty()
+        ) {
+            WordChips(
+                synonyms = info.synonyms,
+                antonyms = info.antonyms,
+                related = info.related,
+            )
+        }
+        info.confusions.forEach { line ->
+            LabeledLine(lead = "Karıştırma", text = line, dim = true)
+        }
+        info.collocations.forEach { group ->
+            LabeledLine(lead = group.pattern, text = group.words.joinToString(" · "), dim = true)
+        }
+    }
+
+    state.saved?.let { saved ->
+        Text(
+            text = saved,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+    }
+
+    // Sorulan sorunun cevabı: kutuda duruyor ve "Ekle"
+    // basıldığında kartın altına da yazılıyor.
+    if (state.answer.isNotBlank()) {
+        Text(
+            text = state.answer,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+    }
+
+    if (state.asking) {
+        OutlinedTextField(
+            value = state.question,
+            onValueChange = viewModel::setQuestion,
+            label = { Text("Sorun") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 14.dp),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 6.dp),
+        ) {
+            Button(
+                enabled = !state.answering && state.question.isNotBlank(),
+                onClick = viewModel::sendQuestion,
+            ) { Text("Gönder") }
+            if (state.answering) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+
+    // Tek satır, iki düğme. "Kapat" yok: kutunun dışına dokunmak
+    // zaten kapatıyor, ikinci bir yol gereksiz yer kaplıyordu.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 18.dp),
+    ) {
+        Button(onClick = viewModel::addToVocab) { Text("Ekle") }
+        if (state.aiConfigured) {
+            TextButton(onClick = viewModel::toggleQuestion) {
+                Text(if (state.asking) "Soruyu kapat" else "Soru sor")
             }
         }
     }

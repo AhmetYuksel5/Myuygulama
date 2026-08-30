@@ -11,6 +11,8 @@ import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
 import com.ahmety.uygulama.core.model.penFor
+import com.ahmety.uygulama.feature.reader.ReaderRepository
+import com.ahmety.uygulama.feature.reader.SaveArticleResult
 import com.ahmety.uygulama.feature.vocab.VocabRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.NonCancellable
@@ -24,6 +26,15 @@ import javax.inject.Inject
 
 data class TextActionUiState(
     val text: String = "",
+    /**
+     * Paylaşılan şey bir sayfa bağlantısıysa adres burada durur ve kutu
+     * kelime kutusu olmaktan çıkıp Pocket kutusuna dönüşür. Boşsa her şey
+     * eskisi gibi: seçilen metin kelime olarak işleniyor.
+     */
+    val url: String? = null,
+    /** Sayfanın paylaşımdan gelen adı; yoksa adresin alan adı. */
+    val pageTitle: String = "",
+    val savingPage: Boolean = false,
     val aiConfigured: Boolean = false,
     val loading: Boolean = false,
     val info: WordInfo? = null,
@@ -55,27 +66,98 @@ class TextActionViewModel @Inject constructor(
     private val settings: AiSettings,
     private val entryRepository: EntryRepository,
     private val vocabRepository: VocabRepository,
+    private val readerRepository: ReaderRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TextActionUiState())
     val state: StateFlow<TextActionUiState> = _state.asStateFlow()
 
-    private var started = false
+    /**
+     * En son işlenen paylaşım. Etkinlik `singleTask` olduğu için kutu
+     * açıkken ikinci bir metin gelebiliyor; o zaman etkinlik yeniden
+     * kurulmadığından yalnız bir "başladı" bayrağı yeni metni yutuyordu.
+     */
+    private var started: String? = null
 
-    fun start(raw: String) {
-        if (started) return
-        started = true
+    fun start(raw: String, subject: String? = null, fromShare: Boolean = false) {
+        if (started == raw) return
+        started = raw
         val text = normalize(raw)
+        val url = if (fromShare) pageUrl(raw) else null
         _state.value = TextActionUiState(
             text = text,
+            url = url,
+            pageTitle = url?.let { pageTitle(raw, it, subject) }.orEmpty(),
             aiConfigured = settings.configured,
             // Tek kelime mavi, ifade kırmızı. Başlangıç değeri; kutunun
             // üstündeki daireden çevrilebiliyor.
             pen = penFor(text),
         )
         // Anahtar varsa kullanıcıyı bir tuşa daha bastırmıyoruz: metni seçip
-        // uygulamayı açmak zaten "bunu sorgula" demek.
-        if (settings.configured && text.isNotBlank()) ask()
+        // uygulamayı açmak zaten "bunu sorgula" demek. Sayfa paylaşımında
+        // sorulacak bir kelime yok; adresi yapay zekâya sormak boşuna.
+        if (url == null && settings.configured && text.isNotBlank()) ask()
+    }
+
+    /**
+     * Paylaşılan metin bir sayfa bağlantısı mı?
+     *
+     * Tarayıcıdan sayfa paylaşınca gelen şey ya yalnızca adres oluyor ya da
+     * "Başlık<yeni satır>adres". Adresin dışında kalan kısım bir başlığı
+     * aşacak kadar uzunsa bu bir sayfa değil, içinde link geçen bir metindir
+     * ve kelime kutusunda kalması gerekir.
+     */
+    private fun pageUrl(raw: String): String? {
+        val url = readerRepository.findUrl(raw) ?: return null
+        val rest = raw.replace(url, " ").replace(Regex("\\s+"), " ").trim()
+        return url.takeIf { rest.length <= MAX_TITLE_LENGTH }
+    }
+
+    /** Kutunun tepesinde görünecek ad: paylaşımın başlığı, yoksa alan adı. */
+    private fun pageTitle(raw: String, url: String, subject: String?): String {
+        val rest = raw.replace(url, " ").replace(Regex("\\s+"), " ").trim()
+        val named = rest.ifBlank { subject?.trim().orEmpty() }
+        if (named.isNotBlank()) return named
+        return url.substringAfter("://").substringBefore('/')
+    }
+
+    /**
+     * Sayfayı Pocket'a indirir.
+     *
+     * [NonCancellable]: indirme birkaç saniye sürüyor, kullanıcı bu sırada
+     * kutunun dışına dokunursa etkinlik kapanır ve kayıt yarıda kalırdı.
+     */
+    fun saveToPocket() {
+        val url = _state.value.url ?: return
+        if (_state.value.savingPage) return
+        _state.value = _state.value.copy(savingPage = true, error = null, saved = null)
+        viewModelScope.launch {
+            withContext(NonCancellable) {
+                when (val result = readerRepository.saveFromUrl(url)) {
+                    is SaveArticleResult.Saved -> _state.value = _state.value.copy(
+                        savingPage = false,
+                        saved = "Pocket'a eklendi: ${result.title}",
+                    )
+
+                    is SaveArticleResult.Failed -> _state.value = _state.value.copy(
+                        savingPage = false,
+                        error = result.reason,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * "Bu bir sayfa değil" dediğimiz yol: kutu kelime kutusuna dönüyor.
+     * Ayırma kuralı basit olduğu için yanılabiliyor; elle geri dönebilmek
+     * gerekiyor.
+     */
+    fun useAsWord() {
+        val current = _state.value
+        if (current.url == null) return
+        _state.value = current.copy(url = null, error = null, saved = null)
+        if (settings.configured && current.text.isNotBlank()) ask()
     }
 
     fun ask() {
@@ -236,5 +318,8 @@ class TextActionViewModel @Inject constructor(
     private companion object {
         /** Yanlışlıkla bütün bir yazının seçilmesine karşı üst sınır. */
         const val MAX_LENGTH = 400
+
+        /** Adresin yanındaki metin bundan uzunsa paylaşılan şey bir sayfa değil. */
+        const val MAX_TITLE_LENGTH = 160
     }
 }
