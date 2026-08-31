@@ -27,6 +27,10 @@ android {
 }
 
 dependencies {
+    // İşaretleme rengi ortak bileşenin imzasında geçiyor; kullanan
+    // modüller ayrıca bağlanmak zorunda kalmasın diye api.
+    api(project(":core:model"))
+
     implementation(platform(libs.androidx.compose.bom))
     api(libs.androidx.compose.ui)
     api(libs.androidx.compose.ui.graphics)

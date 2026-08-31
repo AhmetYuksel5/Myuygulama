@@ -1,18 +1,12 @@
-@file:OptIn(ExperimentalFoundationApi::class)
-
 package com.ahmety.uygulama.feature.reader
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,18 +20,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.database.repository.EntryRepository
+import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
+import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
+import com.ahmety.uygulama.core.designsystem.PendingHighlight
+import com.ahmety.uygulama.core.designsystem.SelectionPreview
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
+import com.ahmety.uygulama.core.model.HighlightColor
+import com.ahmety.uygulama.core.model.HighlightRef
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -157,9 +155,9 @@ class ArticleViewModel @Inject constructor(
     private val _entry = MutableStateFlow<Entry?>(null)
     val entry: StateFlow<Entry?> = _entry.asStateFlow()
 
-    /** Bu makaledeki alıntılanmış paragrafların metinleri. */
-    private val _highlights = MutableStateFlow<List<Entry>>(emptyList())
-    val highlights: StateFlow<List<Entry>> = _highlights.asStateFlow()
+    /** Bu sayfada işaretli kelime/öbek (küçük harf) -> renk. */
+    private val _colors = MutableStateFlow<Map<String, HighlightColor>>(emptyMap())
+    val colors: StateFlow<Map<String, HighlightColor>> = _colors.asStateFlow()
 
     private var articleId: Long = 0L
 
@@ -167,44 +165,85 @@ class ArticleViewModel @Inject constructor(
         articleId = id
         viewModelScope.launch {
             _entry.value = entryRepository.getById(id)
-            refreshHighlights()
+            refresh()
         }
     }
 
     /**
-     * Paragrafı alıntıla / alıntıyı kaldır. Alıntılar ortak kayıt tipiyle
-     * saklandığı için aramada da çıkıyor ve senkronla ikinci telefona geçiyor.
+     * Kelimeyi işaretler ya da rengini değiştirir.
+     *
+     * Kitaptaki [setHighlight] ile aynı davranış: aynı kelime başka bir
+     * cümlede de işaretlenirse o cümle de saklanıyor, çünkü bir kelimenin
+     * birden çok anlamı olabiliyor.
      */
-    fun toggleHighlight(paragraph: String) {
-        val text = paragraph.trim()
-        if (text.isEmpty()) return
+    fun highlight(word: String, contextSentence: String, color: HighlightColor) {
+        val trimmed = word.trim()
+        if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            val existing = _highlights.value.firstOrNull { it.body.trim() == text }
-            if (existing != null) {
-                entryRepository.deleteEntry(existing.id)
-            } else {
+            val marks = marks()
+            val existing = marks.firstOrNull { it.title.equals(trimmed, ignoreCase = true) }
+            val source = HighlightRef.encode(HighlightRef.KIND_ARTICLE, articleId, color)
+            val sentence = contextSentence.trim()
+
+            if (existing == null) {
                 entryRepository.createEntry(
                     type = EntryType.HIGHLIGHT,
-                    title = _entry.value?.title.orEmpty(),
-                    body = text,
-                    source = highlightSource(articleId),
+                    title = trimmed,
+                    body = sentence,
+                    source = source,
                 )
+            } else {
+                if (HighlightRef.color(existing.source) != color) {
+                    entryRepository.updateSource(existing.id, source)
+                }
+                val known = existing.body.lineSequence().map { it.trim() }.toSet()
+                if (sentence.isNotBlank() && sentence !in known) {
+                    val merged = listOf(existing.body, sentence)
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n")
+                    entryRepository.updateEntry(existing.id, existing.title, merged)
+                }
             }
-            refreshHighlights()
+            refresh()
         }
     }
 
-    private suspend fun refreshHighlights() {
-        val source = highlightSource(articleId)
-        _highlights.value = entryRepository
-            .listByType(EntryType.HIGHLIGHT)
-            .filter { it.source == source }
+    fun removeHighlight(word: String) {
+        val trimmed = word.trim()
+        viewModelScope.launch {
+            marks()
+                .firstOrNull { it.title.equals(trimmed, ignoreCase = true) }
+                ?.let { entryRepository.deleteEntry(it.id) }
+            refresh()
+        }
     }
 
-    private fun highlightSource(id: Long): String = "article:$id"
+    /** Bu sayfaya ait işaretleme kayıtları. */
+    private suspend fun marks(): List<Entry> = entryRepository
+        .listByType(EntryType.HIGHLIGHT)
+        .filter {
+            HighlightRef.kind(it.source) == HighlightRef.KIND_ARTICLE &&
+                HighlightRef.sourceId(it.source) == articleId
+        }
+
+    private suspend fun refresh() {
+        _colors.value = marks()
+            .mapNotNull { entry ->
+                val color = HighlightRef.color(entry.source) ?: return@mapNotNull null
+                entry.title.lowercase() to color
+            }
+            .toMap()
+    }
 }
 
-/** Kaydedilmiş makalenin okuma ekranı: sakin tipografi, dikkat dağıtan yok. */
+/**
+ * Kaydedilmiş sayfanın okuma ekranı: sakin tipografi, dikkat dağıtan yok.
+ *
+ * İşaretleme kitaptakiyle aynı: çift dokunuş kelimeyi, üçüncü dokunuş
+ * cümleyi, uzun basıp sürüklemek araya giren her şeyi seçiyor. Eskiden
+ * paragrafa uzun basınca paragrafın tamamı alıntılanıyordu; iki okuma
+ * ekranının birbirine benzememesi için bir sebep yok.
+ */
 @Composable
 fun ArticleRoute(
     entryId: Long,
@@ -212,63 +251,84 @@ fun ArticleRoute(
     viewModel: ArticleViewModel = hiltViewModel(),
 ) {
     val entry by viewModel.entry.collectAsStateWithLifecycle()
-    val highlights by viewModel.highlights.collectAsStateWithLifecycle()
+    val colors by viewModel.colors.collectAsStateWithLifecycle()
     LaunchedEffect(entryId) { viewModel.load(entryId) }
 
+    var pending by remember { mutableStateOf<PendingHighlight?>(null) }
+    var preview by remember { mutableStateOf<String?>(null) }
+
     val article = entry ?: return
-    val highlighted = remember(highlights) { highlights.map { it.body.trim() }.toSet() }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Text(
-            text = article.title,
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        article.source?.let { source ->
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             Text(
-                text = source.substringAfter("://").substringBefore('/'),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                text = article.title,
+                style = MaterialTheme.typography.headlineMedium,
             )
-        }
-        Text(
-            text = if (highlighted.isEmpty()) {
-                "Bir paragrafa uzun bas → alıntıla."
-            } else {
-                "${highlighted.size} alıntı · uzun basarak ekle/kaldır"
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        article.body.split("\n\n").forEach { paragraph ->
-            val isHighlighted = paragraph.trim() in highlighted
+            article.source?.let { source ->
+                Text(
+                    text = source.substringAfter("://").substringBefore('/'),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             Text(
-                text = paragraph,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = 17.sp,
-                    lineHeight = 27.sp,
-                ),
+                text = if (colors.isEmpty()) {
+                    "Kelimeye çift dokun → işaretle."
+                } else {
+                    "${colors.size} işaret · işarete dokununca kutu açılır"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            article.body.split("\n\n").forEach { paragraph ->
+                HighlightableParagraph(
+                    raw = paragraph,
+                    colors = colors,
+                    textColor = MaterialTheme.colorScheme.onSurface,
+                    fontSizeSp = 17,
+                    onSelection = { text, sentence ->
+                        pending = PendingHighlight(text, sentence)
+                    },
+                    onPreview = { preview = it },
+                )
+            }
+        }
+
+        preview?.let { text ->
+            SelectionPreview(
+                text = text,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (isHighlighted) highlightColor() else Color.Transparent)
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { viewModel.toggleHighlight(paragraph) },
-                    )
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
             )
         }
     }
-}
 
-/** Alıntı zemini: açık temada sarı, koyu temada gözü yormayan koyu altın. */
-@Composable
-private fun highlightColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFF4A3F1A) else Color(0xFFFFF2A8)
+    pending?.let { request ->
+        ColorPickerDialog(
+            request = request,
+            current = colors[request.word.lowercase()],
+            onDismiss = { pending = null },
+            onPick = { color, keepContext ->
+                viewModel.highlight(
+                    word = request.word,
+                    contextSentence = if (keepContext) request.sentence else "",
+                    color = color,
+                )
+                pending = null
+            },
+            onRemove = {
+                viewModel.removeHighlight(request.word)
+                pending = null
+            },
+        )
+    }
+}

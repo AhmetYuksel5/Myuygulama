@@ -56,8 +56,12 @@ class VocabRepository @Inject constructor(
     fun observeBookWords(): Flow<List<VocabWord>> = combine(
         entryRepository.observeByType(EntryType.HIGHLIGHT),
         entryRepository.observeByType(EntryType.DOCUMENT),
-    ) { entries, documents ->
-        val titleById = documents.associate { it.id to it.title.trim() }
+        // Pocket'taki sayfalar ayrı bir kayıt türü ama onlarda da kelime
+        // işaretleniyor; başlıkları olmadan kelimeler "kaynağı yok"
+        // bölmesine düşerdi.
+        entryRepository.observeByType(EntryType.ARTICLE),
+    ) { entries, documents, articles ->
+        val titleById = (documents + articles).associate { it.id to it.title.trim() }
         // Hangi kayıt film: kelimenin "Kitaptan" mı "Filmden" mi geldiği
         // buradan belirleniyor, işaretin üzerindeki etiketten değil.
         val filmIds = documents
@@ -102,6 +106,7 @@ class VocabRepository @Inject constructor(
                         kind == HighlightRef.KIND_SELECTION -> VocabSource.SELECTION
                         kind == HighlightRef.KIND_LIST -> VocabSource.LIST
                         kind == HighlightRef.KIND_MANUAL -> VocabSource.MANUAL
+                        kind == HighlightRef.KIND_ARTICLE -> VocabSource.ARTICLE
                         documentId != null && documentId in filmIds -> VocabSource.SUBTITLE
                         kind == HighlightRef.KIND_SUBTITLE -> VocabSource.SUBTITLE
                         else -> VocabSource.BOOK
