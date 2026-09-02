@@ -1,6 +1,14 @@
 package com.ahmety.uygulama.feature.habits
 
 import androidx.compose.foundation.Canvas
+import com.ahmety.uygulama.core.designsystem.MerkezTopBar
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -13,10 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,7 +47,10 @@ import kotlinx.datetime.LocalDate
 private const val WEEKS = 53
 
 /**
- * Alışkanlığın detayı: seriler ve bir yıllık takvim.
+ * Alışkanlığın detay ekranı: seri halkası, sayılar ve bir yıllık takvim.
+ *
+ * Eskiden bir uyarı kutusuydu — uygulamanın en zengin görselini bir
+ * kutunun içine sıkıştırmak doğru değildi.
  *
  * Satırdaki yedi günlük şerit "bu hafta ne oldu" sorusunu cevaplıyor ama
  * "geçen kış ne yapıyordum" sorusunu cevaplamıyor. Bir yıllık ızgara
@@ -52,12 +61,13 @@ private const val WEEKS = 53
  * "dün yapmıştım, işaretlemeyi unutmuşum" en sık ihtiyaç.
  */
 @Composable
-internal fun HabitDetailDialog(
+internal fun HabitDetailScreen(
     item: HabitUiItem,
     checks: List<HabitCheck>,
     today: Int,
     onToggleDay: (date: Int, done: Boolean) -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val accent = item.habit.colorArgb?.let { Color(it) }
         ?: MerkezPalette.colorFor(item.habit.uuid)
@@ -78,51 +88,121 @@ internal fun HabitDetailDialog(
 
     var selected by remember { mutableStateOf<Int?>(null) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text(item.habit.name, style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = scheduleLabel(item.habit.schedule),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        MerkezTopBar(title = item.habit.name, onBack = onDismiss)
+
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Text(
+                text = scheduleLabel(item.habit.schedule),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Serinin kendisi: sayıyı bir halkanın içine koymak, aynı sayıyı
+            // satır arasında yazmaktan bambaşka bir şey. Halka bir sonraki
+            // kilometre taşına ne kadar kaldığını da gösteriyor.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Stat("Şu anki seri", "${item.currentStreak}", accent)
+                StreakRing(streak = item.currentStreak, accent = accent)
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Stat("En uzun", "$longest", MaterialTheme.colorScheme.onSurface)
                     Stat("Son bir yıl", "$inWindow gün", MaterialTheme.colorScheme.onSurface)
                 }
-
-                YearGrid(
-                    gridStart = gridStart,
-                    today = today,
-                    completed = completed,
-                    accent = accent,
-                    onTap = { date ->
-                        selected = date
-                        onToggleDay(date, date !in completed)
-                    },
-                )
-
-                Text(
-                    text = selected?.let { "${formatDate(it)} — dokununca işareti değişir" }
-                        ?: "Bir kareye dokunarak geçmiş bir günü işaretleyebilirsin.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
-    )
+
+            YearGrid(
+                gridStart = gridStart,
+                today = today,
+                completed = completed,
+                accent = accent,
+                onTap = { date ->
+                    selected = date
+                    onToggleDay(date, date !in completed)
+                },
+            )
+
+            Text(
+                text = selected?.let { "${formatDate(it)} — dokununca işareti değişir" }
+                    ?: "Bir kareye dokunarak geçmiş bir günü işaretleyebilirsin.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
+
+/**
+ * Seri halkası.
+ *
+ * Yay bir sonraki kilometre taşına (7, 30, 100, 365 gün) göre doluyor.
+ * "Kaç gün oldu" sorusunun yanına "hedefe ne kadar kaldı" sorusunun
+ * cevabını da koyuyor.
+ */
+@Composable
+private fun StreakRing(streak: Int, accent: Color) {
+    val milestone = MILESTONES.firstOrNull { it > streak } ?: MILESTONES.last()
+    val target by animateFloatAsState(
+        targetValue = (streak.toFloat() / milestone).coerceIn(0f, 1f),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow,
+        ),
+        label = "seriHalkasi",
+    )
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+
+    Box(contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.size(116.dp)) {
+            val stroke = 10.dp.toPx()
+            val inset = stroke / 2f
+            drawArc(
+                color = track,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = Size(size.width - stroke, size.height - stroke),
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+            drawArc(
+                color = accent,
+                startAngle = -90f,
+                sweepAngle = 360f * target,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = Size(size.width - stroke, size.height - stroke),
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "$streak",
+                style = MaterialTheme.typography.displaySmall,
+                color = accent,
+            )
+            Text(
+                text = if (streak >= MILESTONES.last()) "gün" else "/ $milestone gün",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Kutlamaya değer seriler. */
+internal val MILESTONES = listOf(7, 30, 100, 365)
 
 @Composable
 private fun Stat(label: String, value: String, color: Color) {

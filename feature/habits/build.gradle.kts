@@ -42,6 +42,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
+    // Detay ekranı açıkken sistem geri tuşu önce onu kapatsın (BackHandler).
+    implementation(libs.androidx.activity.compose)
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)

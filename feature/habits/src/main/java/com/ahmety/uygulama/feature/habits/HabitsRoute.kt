@@ -1,5 +1,6 @@
 package com.ahmety.uygulama.feature.habits
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,6 +63,28 @@ fun HabitsRoute(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Detay artık kutu değil ekran: listenin yerini alıyor. Gezinme
+    // grafiğine yeni bir rota koymadık, çünkü alışkanlıklar zaten "Daha"nın
+    // altında bir alt sayfa ve iki kat derinlik geri tuşunu karıştırıyor.
+    val detailItem = detailUuid?.let { uuid ->
+        state.items.firstOrNull { it.habit.uuid == uuid }
+    }
+    if (detailItem != null) {
+        BackHandler { detailUuid = null }
+        val history by remember(detailItem.habit.uuid) {
+            viewModel.historyOf(detailItem.habit.uuid)
+        }.collectAsStateWithLifecycle(initialValue = emptyList())
+        HabitDetailScreen(
+            item = detailItem,
+            checks = history,
+            today = state.today,
+            onToggleDay = { date, done -> viewModel.setDay(detailItem, date, done) },
+            onDismiss = { detailUuid = null },
+            modifier = modifier,
+        )
+        return
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -106,23 +129,6 @@ fun HabitsRoute(
                 .padding(16.dp),
         ) {
             Icon(MerkezIcons.Add, contentDescription = "Alışkanlık ekle")
-        }
-    }
-
-    detailUuid?.let { uuid ->
-        val item = state.items.firstOrNull { it.habit.uuid == uuid }
-        if (item == null) {
-            detailUuid = null
-        } else {
-            val history by remember(uuid) { viewModel.historyOf(uuid) }
-                .collectAsStateWithLifecycle(initialValue = emptyList())
-            HabitDetailDialog(
-                item = item,
-                checks = history,
-                today = state.today,
-                onToggleDay = { date, done -> viewModel.setDay(item, date, done) },
-                onDismiss = { detailUuid = null },
-            )
         }
     }
 

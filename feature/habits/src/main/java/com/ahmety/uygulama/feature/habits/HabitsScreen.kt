@@ -24,6 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,6 +38,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ahmety.uygulama.core.designsystem.MerkezCelebration
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.MerkezPalette
 
@@ -137,17 +140,36 @@ private fun HabitRow(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ProgressBadge(
-                count = item.todayCount,
-                target = item.habit.targetPerDay,
-                done = item.isDoneToday,
-                enabled = item.isDueToday,
-                accent = accent,
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onAdvance()
-                },
-            )
+            // Seri bir kilometre taşına ulaştığı anda bir kez patlıyor.
+            // Her işaretlemede olsa birkaç günde bıkkınlık verirdi.
+            var celebrate by remember(item.habit.uuid) { mutableStateOf(false) }
+            var lastStreak by remember(item.habit.uuid) { mutableIntStateOf(item.currentStreak) }
+            LaunchedEffect(item.currentStreak) {
+                if (item.currentStreak > lastStreak && item.currentStreak in MILESTONES) {
+                    celebrate = true
+                }
+                lastStreak = item.currentStreak
+            }
+
+            Box(contentAlignment = Alignment.Center) {
+                ProgressBadge(
+                    count = item.todayCount,
+                    target = item.habit.targetPerDay,
+                    done = item.isDoneToday,
+                    enabled = item.canCheckToday,
+                    accent = accent,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onAdvance()
+                    },
+                )
+                MerkezCelebration(
+                    play = celebrate,
+                    accent = accent,
+                    onFinished = { celebrate = false },
+                    modifier = Modifier.size(160.dp),
+                )
+            }
 
             Column(
                 modifier = Modifier
@@ -162,12 +184,26 @@ private fun HabitRow(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     if (item.currentStreak > 0) {
-                        Text(
-                            text = "  🔥${item.currentStreak}",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = accent,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        // Emoji yerine kendi çizdiğimiz alev: emoji her
+                        // markanın yazı tipinde başka türlü çiziliyor ve
+                        // uygulamanın öbür simgeleriyle uyuşmuyordu.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = MerkezIcons.Flame,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .size(15.dp),
+                            )
+                            Text(
+                                text = "${item.currentStreak}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = accent,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 2.dp),
+                            )
+                        }
                     }
                 }
                 WeekStrip(

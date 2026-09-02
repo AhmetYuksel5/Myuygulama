@@ -35,7 +35,10 @@ data class HabitUiItem(
     val habit: Habit,
     val todayCount: Int,
     val currentStreak: Int,
+    /** Bugün hâlâ yapılması gerekiyor mu — "Bugün 3/5" başlığındaki payda. */
     val isDueToday: Boolean,
+    /** Bugün işaretlenebilir mi. Haftalıkta hedef dolsa bile işaretlenebilir. */
+    val canCheckToday: Boolean,
     /** Son 7 gün, eskiden bugüne. */
     val week: List<DayCell> = emptyList(),
 ) {
@@ -160,7 +163,8 @@ private fun buildState(
             habit = habit,
             todayCount = habitChecks.firstOrNull { it.date == today }?.count ?: 0,
             currentStreak = HabitStreaks.currentStreak(habit.schedule, completed, today),
-            isDueToday = HabitStreaks.isDue(habit.schedule, today),
+            isDueToday = HabitStreaks.needsToday(habit.schedule, completed, today),
+            canCheckToday = HabitStreaks.isDue(habit.schedule, today),
             week = (6 downTo 0).map { offset ->
                 val date = today - offset
                 DayCell(

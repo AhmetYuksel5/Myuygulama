@@ -126,4 +126,42 @@ class HabitStreaksTest {
         assertTrue(HabitDayStatus(monday, 5, 3).isComplete)
         assertEquals(1f, HabitDayStatus(monday, 5, 3).fraction, 0.0001f)
     }
+
+    @Test
+    fun `haftalik aliskanlik hedefe ulasinca artik gerekmiyor`() {
+        val schedule = HabitSchedule.TimesPerWeek(times = 3)
+        // Pazartesi, Salı, Çarşamba yapılmış: hafta doldu.
+        val completed = setOf(monday, monday + 1, monday + 2)
+
+        // Perşembe: işaretlenebilir ama gerekmiyor.
+        assertTrue(HabitStreaks.isDue(schedule, monday + 3))
+        assertFalse(HabitStreaks.needsToday(schedule, completed, monday + 3))
+    }
+
+    @Test
+    fun `haftalik aliskanlik hedef dolmadan her gun gerekiyor`() {
+        val schedule = HabitSchedule.TimesPerWeek(times = 3)
+        val completed = setOf(monday)
+        assertTrue(HabitStreaks.needsToday(schedule, completed, monday + 1))
+        assertTrue(HabitStreaks.needsToday(schedule, completed, monday + 4))
+    }
+
+    @Test
+    fun `hedefi bugun dolduran aliskanlik listeden dusmez`() {
+        val schedule = HabitSchedule.TimesPerWeek(times = 3)
+        // Üçüncüsü bugün yapıldı: bugün için hâlâ "gerekiyordu" sayılmalı,
+        // yoksa işaretlediğin anda satır gözünün önünden kayboluyor.
+        val completed = setOf(monday, monday + 1, monday + 2)
+        assertTrue(HabitStreaks.needsToday(schedule, completed, monday + 2))
+    }
+
+    @Test
+    fun `gunluk ve belirli gunler needsToday ile isDue ayni`() {
+        val daily = HabitSchedule.Daily
+        assertTrue(HabitStreaks.needsToday(daily, emptySet(), monday))
+
+        val schedule = HabitSchedule.SpecificDays(daysMask = 0b0010101)
+        assertTrue(HabitStreaks.needsToday(schedule, emptySet(), monday))
+        assertFalse(HabitStreaks.needsToday(schedule, emptySet(), monday + 1))
+    }
 }

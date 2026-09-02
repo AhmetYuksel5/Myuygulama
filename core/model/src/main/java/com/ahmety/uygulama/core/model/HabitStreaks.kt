@@ -24,12 +24,46 @@ object HabitStreaks {
     /** İçinde bulunulan haftanın Pazartesi günü. */
     fun weekStart(epochDay: Int): Int = epochDay - dayOfWeekIndex(epochDay)
 
+    /**
+     * O gün işaretlenebilir mi.
+     *
+     * Haftada N kez kurulmuş bir alışkanlıkta hangi gün yapıldığı serbest,
+     * o yüzden her gün uygundur.
+     */
     fun isDue(schedule: HabitSchedule, epochDay: Int): Boolean = when (schedule) {
         HabitSchedule.Daily -> true
         is HabitSchedule.SpecificDays ->
             (schedule.daysMask shr dayOfWeekIndex(epochDay)) and 1 == 1
-        // Haftada N kez: hangi gün yapıldığı serbest, o yüzden her gün uygundur.
         is HabitSchedule.TimesPerWeek -> true
+    }
+
+    /**
+     * O gün hâlâ yapılması gerekiyor mu.
+     *
+     * [isDue] ile aynı şey değil: haftada üç kez yürüyüş, haftanın her günü
+     * *işaretlenebilir* ama üçü tamamlandıktan sonra o hafta bir daha
+     * *gerekmez*. İkisi tek fonksiyondayken "Bugün 3/5" başlığı haftalık
+     * alışkanlıkları her gün sayıyordu.
+     *
+     * Günün kendi işareti hesaptan düşülüyor: bugün yaptığın için hedefe
+     * ulaştıysan alışkanlık listeden düşmüyor, "yapıldı" olarak kalıyor.
+     * Yoksa işaretlediğin anda satır gözünün önünden kayboluyordu.
+     */
+    fun needsToday(
+        schedule: HabitSchedule,
+        completedDates: Set<Int>,
+        epochDay: Int,
+    ): Boolean = when (schedule) {
+        HabitSchedule.Daily -> true
+        is HabitSchedule.SpecificDays ->
+            (schedule.daysMask shr dayOfWeekIndex(epochDay)) and 1 == 1
+
+        is HabitSchedule.TimesPerWeek -> {
+            val week = weekStart(epochDay)
+            val done = completedInWeek(completedDates, week) -
+                if (epochDay in completedDates) 1 else 0
+            done < schedule.times
+        }
     }
 
     /**
