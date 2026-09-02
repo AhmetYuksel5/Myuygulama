@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,12 +34,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
+import com.ahmety.uygulama.core.designsystem.MonogramTile
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -66,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
@@ -346,13 +350,17 @@ fun PocketRoute(
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            // Kaydedilenler kart değil düz satır; aradaki boşluğu satırın
+            // kendi dolgusu ve ince çizgi veriyor. Yatay boşluk da satıra
+            // ait: çizginin kenardan 20dp içeride durması gerekiyor.
+            contentPadding = PaddingValues(top = 16.dp, bottom = 96.dp),
         ) {
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
                 ) {
                     Text(
                         text = if (showHighlights) "Alıntılar" else "Pocket",
@@ -379,15 +387,17 @@ fun PocketRoute(
                 if (state.highlights.isEmpty()) {
                     item {
                         Text(
-                            text = "Alıntı yok. Bir makalede paragrafa uzun basarak alıntıla.",
+                            text = "Alıntı yok. Bir makalede kelimeye çift dokunarak işaretle.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp),
                         )
                     }
                 }
                 items(state.highlights, key = { it.id }) { entry ->
                     EntryCard(
                         entry = entry,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         onClick = {
                             entry.source
                                 ?.removePrefix("article:")
@@ -405,12 +415,13 @@ fun PocketRoute(
                                 "sayfa okunabilir hâle getirilip çevrimdışı saklanır.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp),
                         )
                     }
                 }
 
                 items(state.articles, key = { it.id }) { entry ->
-                    ArticleCard(
+                    SaveRow(
                         entry = entry,
                         preview = viewModel::previewFile,
                         onClick = { onOpenArticle(entry.id) },
@@ -425,13 +436,21 @@ fun PocketRoute(
                 if (open.isNotEmpty()) {
                     item {
                         Text(
-                            text = "Öneriler",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
+                            text = "ÖNERİLER",
+                            style = MaterialTheme.typography.labelSmall,
+                            letterSpacing = 1.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(
+                                start = 20.dp,
+                                end = 20.dp,
+                                top = 24.dp,
+                                bottom = 8.dp,
+                            ),
                         )
                     }
                     items(open, key = { it.url }) { suggestion ->
                         SuggestionRow(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                             suggestion = suggestion,
                             saving = saving == suggestion.url,
                             onSave = { viewModel.saveSuggestion(suggestion.url) },
@@ -696,15 +715,19 @@ fun SearchRoute(
 }
 
 /**
- * Kaydedilmiş bir sayfanın kartı.
+ * Kaydedilmiş bir sayfanın satırı.
  *
- * Pocket'ın listesi böyleydi: üstte sayfanın kendi görseli, altında
- * başlık ve tek satırlık künye — sitenin adı ve kaç dakikalık olduğu.
- * Buradaki kartlar not kartlarıyla aynı kalıptaydı ve makale bir nota
- * benziyordu; başlık tek satıra sıkışıp yarısı görünmüyordu.
+ * Ölçüler Pocket'ın kendi Android kaynağından: uygulama kapanırken açık
+ * kaynak yayımlandı, satırın layout dosyası elimizde. Kart yok — düz satır,
+ * altında ince bir çizgi; kartların her satırda ürettiği kenar kalabalığı
+ * yerine listeye tek bir ritim veriyor. Resim sağda ve küçük (90x60), yoksa
+ * metin genişliyor.
+ *
+ * Künye satırındaki numara: alan adı uzunsa kısalıyor, süre kısalmıyor.
+ * Bu yüzden "· 7 dk" bütün listede aynı hizada duruyor.
  */
 @Composable
-private fun ArticleCard(
+private fun SaveRow(
     entry: Entry,
     preview: (Long) -> File?,
     onClick: () -> Unit,
@@ -715,44 +738,64 @@ private fun ArticleCard(
     val minutes = remember(entry.id) { readingMinutes(entry.body) }
     val site = remember(entry.source) { siteOf(entry.source) }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            image?.let {
-                Image(
-                    bitmap = it,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                )
-            }
-            Row(
+    Column(modifier = Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 108.dp)
+                .padding(top = 16.dp, bottom = 16.dp),
+        ) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
-                verticalAlignment = Alignment.Top,
+                    .weight(1f)
+                    .padding(start = 20.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = entry.title.ifBlank { "(başlıksız)" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 10.dp),
+                ) {
+                    if (site != null) {
+                        Text(
+                            text = site,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            // fill = false: alan adı yer kalmayınca kısalıyor,
+                            // süreyi ekrandan itmiyor.
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
                     Text(
-                        text = entry.title.ifBlank { "(başlıksız)" },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = listOfNotNull(site, "$minutes dk").joinToString(" · "),
-                        style = MaterialTheme.typography.labelMedium,
+                        text = if (site == null) "$minutes dk" else " · $minutes dk",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp),
+                        maxLines = 1,
                     )
                 }
-                Box {
+            }
+
+            // Sağ sütun sabit genişlikte: resim üstte, menü altta.
+            Column(
+                modifier = Modifier.width(130.dp),
+                horizontalAlignment = Alignment.End,
+            ) {
+                MonogramTile(
+                    seed = entry.source ?: entry.title,
+                    label = site ?: entry.title,
+                    image = image,
+                    modifier = Modifier
+                        .padding(end = 20.dp)
+                        .size(width = 90.dp, height = 60.dp),
+                )
+                Box(modifier = Modifier.padding(end = 8.dp)) {
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(MerkezIcons.MoreVert, contentDescription = "Seçenekler")
                     }
@@ -768,6 +811,11 @@ private fun ArticleCard(
                 }
             }
         }
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 20.dp),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
     }
 }
 
@@ -777,8 +825,9 @@ private fun SuggestionRow(
     suggestion: ArticleSuggestion,
     saving: Boolean,
     onSave: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -840,11 +889,12 @@ private fun EntryCard(
     entry: Entry,
     onClick: () -> Unit,
     onDelete: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
