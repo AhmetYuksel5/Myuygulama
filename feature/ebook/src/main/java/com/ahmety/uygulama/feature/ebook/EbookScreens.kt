@@ -1,5 +1,12 @@
 package com.ahmety.uygulama.feature.ebook
 
+import android.graphics.BitmapFactory
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -16,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -168,6 +176,7 @@ fun BookShelfRoute(
                     book = book,
                     film = viewModel.isFilm(book),
                     percent = remember(book.id) { viewModel.progressOf(book.id) },
+                    cover = viewModel::coverOf,
                     onOpen = { onOpenBook(book.id) },
                     onBrief = { viewModel.openBrief(book) },
                     onDelete = { withWords -> viewModel.delete(book, withWords) },
@@ -245,6 +254,7 @@ private fun BookCard(
     book: Entry,
     film: Boolean,
     percent: Int,
+    cover: (Long) -> File?,
     modifier: Modifier = Modifier,
     onOpen: () -> Unit,
     onBrief: () -> Unit,
@@ -263,13 +273,13 @@ private fun BookCard(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Kapak yerine renkli bir sırt. Gerçek kapağı çıkarmak EPUB'ı
-            // ayrıştırmak demek; renk kitabın adından türüyor, yani her
-            // kitap her açılışta aynı rengi alıyor ve raf tanınır oluyor.
+            // Kitabın kendi kapağı; yoksa adından türeyen renkli bir sırt.
+            // Renk kitabın adından geldiği için her açılışta aynı: kapağı
+            // olmayan kitaplar da rafta tanınıyor.
             MonogramTile(
                 seed = book.title,
                 label = book.title.ifBlank { "?" },
-                image = null,
+                image = bookCover(book.id, cover),
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .padding(end = 14.dp)
@@ -647,6 +657,22 @@ fun BookReaderRoute(
  * hesaba katılıyor: uzun paragraflı bölümlerde yüzde sayfa çevirdikçe
  * yerinde sayıp sonra sıçruyordu.
  */
+/**
+ * Kapağı dosyadan okur. Ana iş parçacığında değil: rafta on kitap varsa on
+ * JPEG açılıyor ve kaydırma takılıyor.
+ */
+@Composable
+private fun bookCover(bookId: Long, cover: (Long) -> File?): ImageBitmap? {
+    val state = produceState<ImageBitmap?>(null, bookId) {
+        value = withContext(Dispatchers.IO) {
+            cover(bookId)
+                ?.let { runCatching { BitmapFactory.decodeFile(it.absolutePath) }.getOrNull() }
+                ?.asImageBitmap()
+        }
+    }
+    return state.value
+}
+
 private fun readingPercent(state: ReaderUiState, listState: LazyListState): Int {
     val info = listState.layoutInfo
     val total = info.totalItemsCount.coerceAtLeast(1)
@@ -753,23 +779,55 @@ private fun ChapterIndexDialog(
         onDismissRequest = onDismiss,
         title = { Text("İndeks") },
         text = {
-            LazyColumn(modifier = Modifier.height(400.dp)) {
+            // Liste okuduğun bölümde açılıyor. Kırk bölümlük bir kitapta
+            // her seferinde birinci bölümden başlıyor, kaldığın yeri
+            // bulmak için elle kaydırman gerekiyordu.
+            val listState = rememberLazyListState()
+            LaunchedEffect(current) {
+                listState.scrollToItem(current.coerceAtLeast(0))
+            }
+            LazyColumn(state = listState, modifier = Modifier.height(400.dp)) {
                 itemsIndexed(chapters) { index, chapter ->
-                    Text(
-                        text = chapter.title.ifBlank { "Bölüm ${index + 1}" },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (index == current) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onPick(index) }
                             .padding(vertical = 12.dp),
-                    )
+                    ) {
+                        // Okuduğun bölümü renkten başka bir şey de söylesin.
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .height(20.dp)
+                                .background(
+                                    if (index == current) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                ),
+                        )
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(start = 10.dp)
+                                .width(26.dp),
+                        )
+                        Text(
+                            text = chapter.title.ifBlank { "Bölüm ${index + 1}" },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (index == current) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         },

@@ -39,6 +39,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.core.designsystem.MerkezCelebration
+import com.ahmety.uygulama.core.designsystem.MerkezEmptyState
+import com.ahmety.uygulama.core.designsystem.MerkezGlyphs
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.MerkezPalette
 
@@ -84,10 +86,11 @@ fun HabitsSection(
         }
 
         if (state.loaded && state.items.isEmpty()) {
-            Text(
-                text = "Henüz alışkanlık yok. Sağ alttaki düğmeyle ekleyebilirsin.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            MerkezEmptyState(
+                title = "Henüz alışkanlık yok",
+                description = "Sağ alttaki düğmeyle ilk alışkanlığını ekle. " +
+                    "Her gün, haftanın belirli günleri ya da haftada N kez olabilir.",
+                glyph = { MerkezGlyphs.CardStack() },
             )
         }
 

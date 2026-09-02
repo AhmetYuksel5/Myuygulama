@@ -131,6 +131,9 @@ class BookShelfViewModel @Inject constructor(
 
     /** Kitaplık satırındaki ilerleme çizgisi için. */
     fun progressOf(bookId: Long): Int = repository.readingPercent(bookId)
+
+    /** Kitabın kapağı; yoksa null ve satır renkli sırta düşüyor. */
+    fun coverOf(bookId: Long) = repository.coverFile(bookId)
 }
 
 data class ReaderUiState(

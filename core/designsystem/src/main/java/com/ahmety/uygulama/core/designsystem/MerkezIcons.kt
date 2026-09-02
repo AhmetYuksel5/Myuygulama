@@ -290,6 +290,15 @@ object MerkezIcons {
         }
     }
 
+    /** Aşağı bakan küçük ok: açılır seçim. */
+    val ChevronDown: ImageVector by lazy {
+        outlined("MerkezChevronDown") {
+            moveTo(6f, 9.5f)
+            lineTo(12f, 15.5f)
+            lineTo(18f, 9.5f)
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

@@ -72,6 +72,61 @@ object EpubParser {
         }
     }.getOrNull()
 
+    /**
+     * Kitabın kapak görseli.
+     *
+     * Standart tek bir yol söylemiyor, bu yüzden sırayla deneniyor:
+     * 1. EPUB 2'nin `<meta name="cover" content="ID">` işareti,
+     * 2. EPUB 3'ün `properties="cover-image"` niteliği,
+     * 3. adında "cover" geçen bir resim,
+     * 4. arşivdeki ilk resim — bir şey göstermek hiç göstermemekten iyi.
+     *
+     * Ayrı bir fonksiyon: kapak yalnızca kitap yüklenirken bir kez
+     * gerekiyor, oysa [parse] kitabı her açışta çalışıyor. Baytları
+     * orada taşımak boşuna bellek olurdu.
+     */
+    fun coverBytes(file: File): ByteArray? = runCatching {
+        ZipFile(file).use { zip ->
+            val opfPath = findOpfPath(zip) ?: return@use null
+            val opfDoc = zip.readXml(opfPath) ?: return@use null
+            val basePath = opfPath.substringBeforeLast('/', "")
+
+            val items = opfDoc.select("manifest > item")
+            val isImage = { href: String, type: String ->
+                type.startsWith("image/", ignoreCase = true) ||
+                    IMAGE_SUFFIXES.any { href.endsWith(it, ignoreCase = true) }
+            }
+
+            val metaId = opfDoc.selectFirst("metadata > meta[name=cover]")?.attr("content")
+            val candidates = buildList {
+                if (!metaId.isNullOrBlank()) {
+                    items.firstOrNull { it.attr("id") == metaId }?.let { add(it.attr("href")) }
+                }
+                items.firstOrNull { it.attr("properties").contains("cover-image") }
+                    ?.let { add(it.attr("href")) }
+                items.filter { isImage(it.attr("href"), it.attr("media-type")) }
+                    .firstOrNull {
+                        it.attr("id").contains("cover", ignoreCase = true) ||
+                            it.attr("href").contains("cover", ignoreCase = true)
+                    }
+                    ?.let { add(it.attr("href")) }
+                items.firstOrNull { isImage(it.attr("href"), it.attr("media-type")) }
+                    ?.let { add(it.attr("href")) }
+            }
+
+            candidates.firstNotNullOfOrNull { href ->
+                val entry = zip.getEntry(resolve(basePath, href)) ?: return@firstNotNullOfOrNull null
+                if (entry.size > MAX_COVER_BYTES) return@firstNotNullOfOrNull null
+                runCatching { zip.getInputStream(entry).use { it.readBytes() } }.getOrNull()
+            }
+        }
+    }.getOrNull()
+
+    private val IMAGE_SUFFIXES = listOf(".jpg", ".jpeg", ".png", ".webp", ".gif")
+
+    /** Bundan büyük bir kapak zaten kapak değildir. */
+    private const val MAX_COVER_BYTES = 8L * 1024 * 1024
+
     private fun findOpfPath(zip: ZipFile): String? {
         val container = zip.readXml("META-INF/container.xml")
         val fromContainer = container?.selectFirst("rootfile")?.attr("full-path")

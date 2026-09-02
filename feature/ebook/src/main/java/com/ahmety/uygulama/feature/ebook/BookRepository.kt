@@ -36,6 +36,7 @@ class BookRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val entryRepository: EntryRepository,
     private val progressStore: VocabProgressRepository,
+    private val covers: BookCoverStore,
 ) {
 
     private val readerPrefs = context.getSharedPreferences("merkez_kitap", Context.MODE_PRIVATE)
@@ -85,6 +86,10 @@ class BookRepository @Inject constructor(
             body = book.author,
             source = textFile.absolutePath,
         )
+        // Kapak bir kez çıkarılıp saklanıyor. Bulunamazsa kitaplık kitabın
+        // adından türeyen renkli sırtı gösteriyor; kitap yine yüklenmiş
+        // sayılıyor.
+        EpubParser.coverBytes(epubFile)?.let { covers.save(id, it) }
         ImportResult.Imported(id, book.title)
     }
 
@@ -222,6 +227,9 @@ class BookRepository @Inject constructor(
             ?.let { entryRepository.deleteEntry(it.id) }
     }
 
+    /** Kitabın kapak dosyası; yoksa null. */
+    fun coverFile(bookId: Long) = covers.fileFor(bookId)
+
     /** Kitapta en son okunan bölüm — kaldığın yerden devam edebilmek için. */
     fun lastChapter(bookId: Long): Int = readerPrefs.getInt("chapter_$bookId", 0)
 
@@ -284,6 +292,7 @@ class BookRepository @Inject constructor(
                 runCatching { File(path.removeSuffix(".json") + ".epub").delete() }
             }
         }
+        covers.delete(entry.id)
         entryRepository.deleteEntry(entry.id)
     }
 

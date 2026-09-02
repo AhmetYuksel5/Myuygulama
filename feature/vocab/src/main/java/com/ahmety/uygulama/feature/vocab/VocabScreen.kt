@@ -96,7 +96,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.model.Collocation
+import androidx.compose.material3.Icon
 import com.ahmety.uygulama.core.designsystem.MerkezEmptyState
+import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.MerkezGlyphs
 import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
@@ -131,6 +133,7 @@ fun VocabRoute(
     val aiReady = viewModel.aiConfigured
     val density = LocalDensity.current
     var showSettings by remember { mutableStateOf(false) }
+    var showSources by remember { mutableStateOf(false) }
     // Kart destesi mi, tam liste mi. Liste "hepsini bir arada gör" için;
     // kart çalışmak için.
     var listView by rememberSaveable { mutableStateOf(false) }
@@ -157,15 +160,39 @@ fun VocabRoute(
             // Başlık nerede olduğunu söylüyor; sayılar zaten çiplerde.
             // Boyut diğer ekranlarla aynı: bu başlık on altı puntoydu,
             // Kitaplık yirmi iki, "Daha" yirmi altı — üç ekran üç ölçü.
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = state.filter.sourceName.ifBlank {
-                        state.filter.source?.label ?: "Tüm kelimeler"
-                    },
-                    style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            // Başlığın kendisi kapsamı değiştiriyor. Eskiden altta ayrı bir
+            // çip satırı vardı: sekiz kaynak çipi, altında beş bölme çipi,
+            // yani kelimeyi görmeden önce ekranın dörtte biri gidiyordu.
+            // Başlık zaten kapsamı yazıyordu; dokunulur olması yetti.
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showSources = true }
+                    .padding(vertical = 2.dp, horizontal = 4.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = state.filter.sourceName.ifBlank {
+                            when {
+                                state.filter.orphan -> "Kaynağı yok"
+                                else -> state.filter.source?.label ?: "Tüm kelimeler"
+                            }
+                        },
+                        style = MaterialTheme.typography.headlineSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Icon(
+                        imageVector = MerkezIcons.ChevronDown,
+                        contentDescription = "Kaynak seç",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(18.dp),
+                    )
+                }
                 // Oturumun nerede olduğu. Sayılar zaten hesaplanıyordu ama
                 // hiçbiri ekranda yoktu: destenin ne kadarı bitti belli
                 // değildi.
@@ -200,81 +227,6 @@ fun VocabRoute(
                 Text(if (listView) "Kart" else "Liste")
             }
             TextButton(onClick = { showSettings = !showSettings }) { Text("Ayar") }
-        }
-
-        // Kaynak asıl kapsam, bu yüzden üstte: bir kitap seçince alttaki
-        // bölmeler ve sayılar o kitabın içinde çalışıyor.
-        if (state.bookCount > 0 || state.subtitleCount > 0 || state.selectionCount > 0) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-            ) {
-                val filter = state.filter
-                ModeChip(
-                    label = "Her kaynak",
-                    selected = filter.source == null &&
-                        filter.sourceName.isBlank() &&
-                        !filter.orphan,
-                ) { viewModel.setFilter(VocabFilter()) }
-                if (state.bookCount > 0) {
-                    ModeChip(
-                        label = "Kitaptan (${state.bookCount})",
-                        selected = filter.source == VocabSource.BOOK &&
-                            filter.sourceName.isBlank(),
-                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.BOOK)) }
-                }
-                if (state.subtitleCount > 0) {
-                    ModeChip(
-                        label = "Filmden (${state.subtitleCount})",
-                        selected = filter.source == VocabSource.SUBTITLE &&
-                            filter.sourceName.isBlank(),
-                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.SUBTITLE)) }
-                }
-                if (state.manualCount > 0) {
-                    ModeChip(
-                        label = "Kendim (${state.manualCount})",
-                        selected = filter.source == VocabSource.MANUAL &&
-                            filter.sourceName.isBlank(),
-                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.MANUAL)) }
-                }
-                if (state.listCount > 0) {
-                    ModeChip(
-                        label = "Listeden (${state.listCount})",
-                        selected = filter.source == VocabSource.LIST &&
-                            filter.sourceName.isBlank(),
-                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.LIST)) }
-                }
-                if (state.articleCount > 0) {
-                    ModeChip(
-                        label = "Pocket'tan (${state.articleCount})",
-                        selected = filter.source == VocabSource.ARTICLE &&
-                            filter.sourceName.isBlank(),
-                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.ARTICLE)) }
-                }
-                if (state.selectionCount > 0) {
-                    ModeChip(
-                        label = "Seçtiklerim (${state.selectionCount})",
-                        selected = filter.source == VocabSource.SELECTION &&
-                            filter.sourceName.isBlank(),
-                    ) { viewModel.setFilter(VocabFilter(source = VocabSource.SELECTION)) }
-                }
-                // Kaynağı silinmiş kelimeler. Kitabı sildiğinde işaretleri
-                // kalıyordu; buradan toplu temizlenebilsinler.
-                if (state.orphanCount > 0) {
-                    ModeChip(
-                        label = "Kaynağı yok (${state.orphanCount})",
-                        selected = filter.orphan,
-                    ) { viewModel.setFilter(VocabFilter(orphan = true)) }
-                }
-                // Tek tek başlıklar: "şu kitaptan" ya da "şu filmden" çalışmak.
-                state.sources.forEach { (source, name) ->
-                    ModeChip(label = name, selected = filter.sourceName == name) {
-                        viewModel.setFilter(VocabFilter(source = source, sourceName = name))
-                    }
-                }
-            }
         }
 
         // Bölmeler seçili kaynağın içinde; sayılar da ona göre.
@@ -426,6 +378,17 @@ fun VocabRoute(
             fontScale = fontScale,
             onFontScaleChange = viewModel::setFontScale,
             onDismiss = { showSettings = false },
+        )
+    }
+
+    if (showSources) {
+        SourceFilterDialog(
+            state = state,
+            onPick = {
+                viewModel.setFilter(it)
+                showSources = false
+            },
+            onDismiss = { showSources = false },
         )
     }
 
@@ -1239,6 +1202,138 @@ private fun penEmptyMessage(state: VocabUiState): String? = when (state.filter.p
     }
 
     VocabPen.BOTH -> null
+}
+
+/**
+ * Kaynak seçimi.
+ *
+ * Eskiden ekranın üstünde yatay kayan bir çip şerididir; sekiz kaynak artı
+ * kitap/film adları, altında da beş bölme çipi vardı. Kelimeyi görmeden
+ * önce ekranın dörtte biri gidiyordu. Hepsi buraya taşındı; başlığa
+ * dokununca açılıyor.
+ */
+@Composable
+private fun SourceFilterDialog(
+    state: VocabUiState,
+    onPick: (VocabFilter) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val filter = state.filter
+    val entries = buildList {
+        add(Triple("Her kaynak", state.totalCount, VocabFilter()))
+        if (state.bookCount > 0) {
+            add(Triple("Kitaptan", state.bookCount, VocabFilter(source = VocabSource.BOOK)))
+        }
+        if (state.subtitleCount > 0) {
+            add(
+                Triple("Filmden", state.subtitleCount, VocabFilter(source = VocabSource.SUBTITLE)),
+            )
+        }
+        if (state.articleCount > 0) {
+            add(
+                Triple("Pocket'tan", state.articleCount, VocabFilter(source = VocabSource.ARTICLE)),
+            )
+        }
+        if (state.listCount > 0) {
+            add(Triple("Listeden", state.listCount, VocabFilter(source = VocabSource.LIST)))
+        }
+        if (state.manualCount > 0) {
+            add(Triple("Kendim", state.manualCount, VocabFilter(source = VocabSource.MANUAL)))
+        }
+        if (state.selectionCount > 0) {
+            add(
+                Triple(
+                    "Seçtiklerim",
+                    state.selectionCount,
+                    VocabFilter(source = VocabSource.SELECTION),
+                ),
+            )
+        }
+        // Kaynağı silinmiş kelimeler; buradan toplu temizlenebilsinler.
+        if (state.orphanCount > 0) {
+            add(Triple("Kaynağı yok", state.orphanCount, VocabFilter(orphan = true)))
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Kaynak") },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                items(entries) { (label, count, target) ->
+                    val selected = filter.sourceName.isBlank() &&
+                        filter.source == target.source &&
+                        filter.orphan == target.orphan
+                    SourceRow(label, count, selected) { onPick(target) }
+                }
+                // Tek tek başlıklar: "şu kitaptan" ya da "şu filmden" çalışmak.
+                if (state.sources.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "ESERLER",
+                            style = MaterialTheme.typography.labelSmall,
+                            letterSpacing = 1.5.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(state.sources) { (source, name) ->
+                        SourceRow(name, null, filter.sourceName == name) {
+                            onPick(VocabFilter(source = source, sourceName = name))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+    )
+}
+
+@Composable
+private fun SourceRow(
+    label: String,
+    count: Int?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (count != null) {
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (selected) {
+            Icon(
+                imageVector = MerkezIcons.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(18.dp),
+            )
+        }
+    }
 }
 
 @Composable
