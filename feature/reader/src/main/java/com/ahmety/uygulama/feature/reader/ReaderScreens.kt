@@ -2,8 +2,10 @@ package com.ahmety.uygulama.feature.reader
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -25,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -37,8 +42,11 @@ import androidx.lifecycle.viewModelScope
 import android.graphics.BitmapFactory
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
+import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
 import com.ahmety.uygulama.core.designsystem.PendingHighlight
+import com.ahmety.uygulama.core.designsystem.ReaderDisplayDialog
+import com.ahmety.uygulama.core.designsystem.ReaderPrefs
 import com.ahmety.uygulama.core.designsystem.SelectionPreview
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
@@ -280,14 +288,27 @@ fun ArticleRoute(
     var pending by remember { mutableStateOf<PendingHighlight?>(null) }
     var preview by remember { mutableStateOf<String?>(null) }
 
+    // Kitap okuyucusuyla aynı tercihler. İki okuma ekranının ayrı
+    // davranması için bir sebep yoktu; makale tarafında hiç ayar yoktu.
+    val context = LocalContext.current
+    val prefs = remember { ReaderPrefs(context) }
+    var theme by remember { mutableStateOf(prefs.theme) }
+    var fontSize by remember { mutableStateOf(prefs.fontSizeSp) }
+    var marginDp by remember { mutableStateOf(prefs.marginDp) }
+    var showDisplay by remember { mutableStateOf(false) }
+
     val article = entry ?: return
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(theme.background),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = marginDp.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // Sayfanın kendi kapak görseli. Süs olsun diye duruyor:
@@ -306,30 +327,42 @@ fun ArticleRoute(
             Text(
                 text = article.title,
                 style = MaterialTheme.typography.headlineMedium,
+                color = theme.text,
             )
             article.source?.let { source ->
                 Text(
-                    text = source.substringAfter("://").substringBefore('/'),
+                    text = source.substringAfter("://").substringBefore('/')
+                        .removePrefix("www."),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = theme.text.copy(alpha = 0.65f),
                 )
             }
-            Text(
-                text = if (colors.isEmpty()) {
-                    "Kelimeye çift dokun → işaretle."
-                } else {
-                    "${colors.size} işaret · işarete dokununca kutu açılır"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (colors.isEmpty()) {
+                        "Kelimeye çift dokun → işaretle"
+                    } else {
+                        "${colors.size} işaret"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = theme.text.copy(alpha = 0.55f),
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { showDisplay = true }) {
+                    Icon(
+                        MerkezIcons.TextSize,
+                        contentDescription = "Görünüm",
+                        tint = theme.text.copy(alpha = 0.75f),
+                    )
+                }
+            }
 
             article.body.split("\n\n").forEach { paragraph ->
                 HighlightableParagraph(
                     raw = paragraph,
                     colors = colors,
-                    textColor = MaterialTheme.colorScheme.onSurface,
-                    fontSizeSp = 17,
+                    textColor = theme.text,
+                    fontSizeSp = fontSize,
                     onSelection = { text, sentence ->
                         pending = PendingHighlight(text, sentence)
                     },
@@ -346,6 +379,18 @@ fun ArticleRoute(
                     .padding(horizontal = 20.dp, vertical = 12.dp),
             )
         }
+    }
+
+    if (showDisplay) {
+        ReaderDisplayDialog(
+            theme = theme,
+            fontSizeSp = fontSize,
+            marginDp = marginDp,
+            onTheme = { theme = it; prefs.theme = it },
+            onFontSize = { fontSize = it; prefs.fontSizeSp = it },
+            onMargin = { marginDp = it; prefs.marginDp = it },
+            onDismiss = { showDisplay = false },
+        )
     }
 
     pending?.let { request ->

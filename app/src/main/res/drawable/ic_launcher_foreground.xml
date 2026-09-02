@@ -3,10 +3,25 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!--
+      İşaretlenmiş bir satır. Uygulamanın yaptığı iş bu: okurken
+      bilmediğin kelimeyi işaretlemek. Her şey güvenli alanın (54
+      merkezli, 33 yarıçaplı daire) içinde duruyor.
+    -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,30a24,24 0 1,0 0.1,0zM54,38a16,16 0 1,1 -0.1,0z" />
+        android:fillAlpha="0.85"
+        android:pathData="M32.5,34 h43.0 a2.5,2.5 0 0 1 2.5,2.5 v2.0 a2.5,2.5 0 0 1 -2.5,2.5 h-43.0 a2.5,2.5 0 0 1 -2.5,-2.5 v-2.0 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <!-- İşaret: kelimenin arkasındaki sarı. -->
+    <path
+        android:fillColor="#F2B65C"
+        android:pathData="M34,46 h36 a4,4 0 0 1 4,4 v7 a4,4 0 0 1 -4,4 h-36 a4,4 0 0 1 -4,-4 v-7 a4,4 0 0 1 4,-4 z" />
+    <!-- İşaretin içindeki kelime. -->
+    <path
+        android:fillColor="#241C6E"
+        android:pathData="M36.5,50.5 h27.0 a2.5,2.5 0 0 1 2.5,2.5 v2.0 a2.5,2.5 0 0 1 -2.5,2.5 h-27.0 a2.5,2.5 0 0 1 -2.5,-2.5 v-2.0 a2.5,2.5 0 0 1 2.5,-2.5 z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M50,50h8v8h-8z" />
+        android:fillAlpha="0.85"
+        android:pathData="M32.5,66 h31.0 a2.5,2.5 0 0 1 2.5,2.5 v2.0 a2.5,2.5 0 0 1 -2.5,2.5 h-31.0 a2.5,2.5 0 0 1 -2.5,-2.5 v-2.0 a2.5,2.5 0 0 1 2.5,-2.5 z" />
 </vector>

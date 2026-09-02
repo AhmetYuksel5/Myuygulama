@@ -76,7 +76,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -1423,6 +1425,20 @@ private fun SwipeableCard(
         else -> null
     }
     val decisionStrength = if (vertical) abs(verticalProgress) else abs(horizontalProgress)
+
+    // Eşiği geçince tek bir titreşim: parmağını kaldırırsan kararın
+    // verileceğini ekrana bakmadan da bildiriyor. Geri dönünce yeniden
+    // kuruluyor, yoksa eşiğin etrafında oynarken sürekli titriyordu.
+    val haptic = LocalHapticFeedback.current
+    var crossed by remember(key) { mutableStateOf(false) }
+    LaunchedEffect(decisionStrength >= 1f) {
+        if (decisionStrength >= 1f && !crossed) {
+            crossed = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        } else if (decisionStrength < 0.9f) {
+            crossed = false
+        }
+    }
     val tint = decisionLabel?.let { (_, color) ->
         color.copy(alpha = decisionStrength * 0.26f)
     } ?: Color.Transparent

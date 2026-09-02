@@ -66,6 +66,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
 import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
 import com.ahmety.uygulama.core.designsystem.MerkezEmptyState
+import com.ahmety.uygulama.core.designsystem.ReaderDisplayDialog
+import com.ahmety.uygulama.core.designsystem.ReaderPrefs
+import com.ahmety.uygulama.core.designsystem.ReaderTheme
 import com.ahmety.uygulama.core.designsystem.MerkezGlyphs
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.MonogramTile
@@ -161,6 +164,7 @@ fun BookShelfRoute(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(shown, key = { it.id }) { book ->
                 BookCard(
+                    modifier = Modifier.animateItem(),
                     book = book,
                     film = viewModel.isFilm(book),
                     percent = remember(book.id) { viewModel.progressOf(book.id) },
@@ -241,6 +245,7 @@ private fun BookCard(
     book: Entry,
     film: Boolean,
     percent: Int,
+    modifier: Modifier = Modifier,
     onOpen: () -> Unit,
     onBrief: () -> Unit,
     onDelete: (withWords: Boolean) -> Unit,
@@ -253,7 +258,7 @@ private fun BookCard(
 
     var menuOpen by remember { mutableStateOf(false) }
 
-    Card(modifier = Modifier.fillMaxWidth().pressable(onClick = onOpen)) {
+    Card(modifier = modifier.fillMaxWidth().pressable(onClick = onOpen)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -437,6 +442,7 @@ fun BookReaderRoute(
     val prefs = remember { ReaderPrefs(context) }
     var theme by remember { mutableStateOf(prefs.theme) }
     var fontSize by remember { mutableStateOf(prefs.fontSizeSp) }
+    var marginDp by remember { mutableStateOf(prefs.marginDp) }
 
     var pending by remember { mutableStateOf<PendingHighlight?>(null) }
     // Sürüklerken seçtiğin metin. Ekranın üstünde duruyor: parmağın altında
@@ -518,8 +524,8 @@ fun BookReaderRoute(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        start = 20.dp,
-                        end = 20.dp,
+                        start = marginDp.dp,
+                        end = marginDp.dp,
                         top = 28.dp,
                         bottom = 120.dp,
                     ),
@@ -596,11 +602,13 @@ fun BookReaderRoute(
             }
 
             if (showDisplay) {
-                DisplayOptionsDialog(
+                ReaderDisplayDialog(
                     theme = theme,
                     fontSizeSp = fontSize,
+                    marginDp = marginDp,
                     onTheme = { theme = it; prefs.theme = it },
                     onFontSize = { fontSize = it; prefs.fontSizeSp = it },
+                    onMargin = { marginDp = it; prefs.marginDp = it },
                     onDismiss = { showDisplay = false },
                 )
             }
@@ -769,42 +777,3 @@ private fun ChapterIndexDialog(
     )
 }
 
-@Composable
-private fun DisplayOptionsDialog(
-    theme: ReaderTheme,
-    fontSizeSp: Int,
-    onTheme: (ReaderTheme) -> Unit,
-    onFontSize: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Görünüm") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReaderTheme.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == theme,
-                            onClick = { onTheme(option) },
-                            label = { Text(option.label) },
-                        )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Yazı boyutu", modifier = Modifier.weight(1f))
-                    TextButton(
-                        enabled = fontSizeSp > 14,
-                        onClick = { onFontSize(fontSizeSp - 1) },
-                    ) { Text("−") }
-                    Text("$fontSizeSp")
-                    TextButton(
-                        enabled = fontSizeSp < 28,
-                        onClick = { onFontSize(fontSizeSp + 1) },
-                    ) { Text("+") }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
-    )
-}

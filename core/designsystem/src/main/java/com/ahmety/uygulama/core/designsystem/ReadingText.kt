@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -119,7 +120,16 @@ fun HighlightableParagraph(
     val haptic = LocalHapticFeedback.current
     val selectionTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
 
-    val painted: AnnotatedString = remember(paragraph, colors, selection, selectionTint) {
+    // Sayfa koyu mu: metin rengi açıksa zemin koyudur.
+    val onDarkPage = textColor.luminance() > 0.5f
+
+    val painted: AnnotatedString = remember(
+        paragraph,
+        colors,
+        selection,
+        selectionTint,
+        onDarkPage,
+    ) {
         buildAnnotatedString {
             append(paragraph)
 
@@ -132,7 +142,11 @@ fun HighlightableParagraph(
                 if (!text.contains(' ')) return@forEach
                 var index = paragraph.indexOf(text, ignoreCase = true)
                 while (index >= 0) {
-                    addStyle(SpanStyle(background = paintOf(color)), index, index + text.length)
+                    addStyle(
+                        SpanStyle(background = paintOf(color, onDarkPage)),
+                        index,
+                        index + text.length,
+                    )
                     index = paragraph.indexOf(text, index + text.length, ignoreCase = true)
                 }
             }
@@ -142,7 +156,11 @@ fun HighlightableParagraph(
                 val bounds = trimBounds(paragraph, rawStart, rawEnd) ?: return@forEachWord
                 val word = paragraph.substring(bounds.first, bounds.second).lowercase()
                 colors[word]?.let { color ->
-                    addStyle(SpanStyle(background = paintOf(color)), bounds.first, bounds.second)
+                    addStyle(
+                        SpanStyle(background = paintOf(color, onDarkPage)),
+                        bounds.first,
+                        bounds.second,
+                    )
                 }
             }
 
@@ -513,11 +531,31 @@ private const val MAX_SENTENCE_WORDS = 10
 private const val WINDOW_WORDS = 5
 
 /** Composable olmayan yerlerden kullanılabilen renk eşlemesi. */
-private fun paintOf(color: HighlightColor): Color = when (color) {
-    HighlightColor.YELLOW -> Color(0xFFFFE082)
-    HighlightColor.BLUE -> Color(0xFF90CAF9)
-    HighlightColor.GREEN -> Color(0xFFA5D6A7)
-    HighlightColor.RED -> Color(0xFFEF9A9A)
+/**
+ * Metnin arkasına sürülen işaret rengi.
+ *
+ * İki takım var: aydınlık zemin için pastel, koyu zemin için derin. Tek
+ * takım varken gece temasında sarı işaret parlıyor ve üstündeki yazı
+ * okunmuyordu — fosforlu kalemi siyah kâğıda sürmek gibi.
+ *
+ * Hangi takımın kullanılacağına metnin rengine bakarak karar veriliyor:
+ * okuma zemini sistem temasından bağımsız seçiliyor (Kâğıt, Krem, Gece,
+ * Mürekkep), o yüzden sistemin karanlık olup olmaması burada yanıltıcı.
+ */
+private fun paintOf(color: HighlightColor, onDarkPage: Boolean): Color = when {
+    onDarkPage -> when (color) {
+        HighlightColor.YELLOW -> Color(0xFF4A3A12)
+        HighlightColor.BLUE -> Color(0xFF123553)
+        HighlightColor.GREEN -> Color(0xFF14401F)
+        HighlightColor.RED -> Color(0xFF4A1830)
+    }
+
+    else -> when (color) {
+        HighlightColor.YELLOW -> Color(0xFFFDE7A6)
+        HighlightColor.BLUE -> Color(0xFFCFE4FA)
+        HighlightColor.GREEN -> Color(0xFFC9EBC9)
+        HighlightColor.RED -> Color(0xFFFAD3DD)
+    }
 }
 
 /** Düz metin ve içindeki eğik yazı aralıkları. */

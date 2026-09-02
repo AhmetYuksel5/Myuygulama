@@ -429,6 +429,9 @@ fun PocketRoute(
 
                 items(state.articles, key = { it.id }) { entry ->
                     SaveRow(
+                        // Kaydedilen ya da silinen satır sıçramak yerine
+                        // yerine akıyor.
+                        modifier = Modifier.animateItem(),
                         entry = entry,
                         preview = viewModel::previewFile,
                         onClick = { onOpenArticle(entry.id) },
@@ -739,13 +742,14 @@ private fun SaveRow(
     preview: (Long) -> File?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val image = articleImage(entry.id, preview)
     val minutes = remember(entry.id) { readingMinutes(entry.body) }
     val site = remember(entry.source) { siteOf(entry.source) }
 
-    Column(modifier = Modifier.pressable(onClick = onClick)) {
+    Column(modifier = modifier.pressable(onClick = onClick)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
