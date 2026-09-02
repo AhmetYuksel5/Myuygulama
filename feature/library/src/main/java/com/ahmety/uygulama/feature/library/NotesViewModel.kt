@@ -6,6 +6,7 @@ import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightRef
+import com.ahmety.uygulama.feature.reader.ReaderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +29,28 @@ data class NotesUiState(
 class NotesViewModel @Inject constructor(
     private val repository: EntryRepository,
     private val samples: NoteSampleSeeder,
+    private val reader: ReaderRepository,
 ) : ViewModel() {
+
+    /** Bir öneri kaydediliyor mu; kaydedilirken satır bekletiliyor. */
+    private val _savingSuggestion = MutableStateFlow<String?>(null)
+    val savingSuggestion: StateFlow<String?> = _savingSuggestion.asStateFlow()
+
+    /** Kartın önizleme resmi; yoksa null. Dosyadan okuma çağıranın işi. */
+    fun previewFile(entryId: Long) = reader.previewImage(entryId)
+
+    /**
+     * Öneriyi kaydeder. Pocket'ın kendi keşif akışı kapandı; buradaki
+     * liste elle seçilmiş ve uygulamanın içinde duruyor.
+     */
+    fun saveSuggestion(url: String) {
+        if (_savingSuggestion.value != null) return
+        _savingSuggestion.value = url
+        viewModelScope.launch {
+            reader.saveFromUrl(url)
+            _savingSuggestion.value = null
+        }
+    }
 
     init {
         // İlk açılışta not defteri bomboş açılmasın: nasıl kullanıldığını
@@ -110,7 +132,12 @@ class NotesViewModel @Inject constructor(
     }
 
     fun delete(entry: Entry) {
-        viewModelScope.launch { repository.deleteEntry(entry.id) }
+        viewModelScope.launch {
+            repository.deleteEntry(entry.id)
+            // Önizleme resmi kaydın dışında, dosyada duruyor; kayıt gidince
+            // onu da almazsak dosyalar birikip kalıyor.
+            if (entry.type == EntryType.ARTICLE) reader.deletePreview(entry.id)
+        }
     }
 }
 

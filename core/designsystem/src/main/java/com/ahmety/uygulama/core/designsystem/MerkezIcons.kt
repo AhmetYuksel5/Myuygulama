@@ -97,6 +97,32 @@ object MerkezIcons {
         }
     }
 
+    /**
+     * Pocket sekmesi: kapanmış uygulamanın kendi biçimi — üstü düz, altı
+     * yuvarlanan bir cep ve içinde aşağı bakan çengel.
+     *
+     * Yer imi simgesi duruyordu; bu sekmenin adı Pocket ve o uygulamanın
+     * hatırası kastediliyor, simgenin de onu söylemesi gerekiyor.
+     */
+    val Pocket: ImageVector by lazy {
+        outlined("MerkezPocket") {
+            // Cebin ağzı: iki üst köşe hafif yuvarlak.
+            moveTo(3f, 7.2f)
+            curveTo(3f, 5.9f, 3.9f, 5f, 5.2f, 5f)
+            lineTo(18.8f, 5f)
+            curveTo(20.1f, 5f, 21f, 5.9f, 21f, 7.2f)
+            // Yanlar aşağı inip altta birleşiyor.
+            lineTo(21f, 10.6f)
+            curveTo(21f, 15.6f, 16.9f, 19.6f, 12f, 19.6f)
+            curveTo(7.1f, 19.6f, 3f, 15.6f, 3f, 10.6f)
+            close()
+            // Aşağı bakan çengel.
+            moveTo(8.1f, 9.9f)
+            lineTo(12f, 13.7f)
+            lineTo(15.9f, 9.9f)
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

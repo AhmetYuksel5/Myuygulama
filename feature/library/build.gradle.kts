@@ -31,6 +31,9 @@ android {
 dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:designsystem"))
+    // Pocket listesi okuyucunun kaydettiği makaleleri gösteriyor: önizleme
+    // resmi ve öneri kaydetme oradan geliyor.
+    implementation(project(":feature:reader"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

@@ -1,12 +1,15 @@
 package com.ahmety.uygulama.feature.reader
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,11 +25,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import android.graphics.BitmapFactory
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
 import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
@@ -37,10 +45,12 @@ import com.ahmety.uygulama.core.model.EntryType
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class SaveArticleUiState(
@@ -150,6 +160,7 @@ fun SaveArticleDialog(
 @HiltViewModel
 class ArticleViewModel @Inject constructor(
     private val entryRepository: EntryRepository,
+    private val readerRepository: ReaderRepository,
 ) : ViewModel() {
 
     private val _entry = MutableStateFlow<Entry?>(null)
@@ -159,6 +170,10 @@ class ArticleViewModel @Inject constructor(
     private val _colors = MutableStateFlow<Map<String, HighlightColor>>(emptyMap())
     val colors: StateFlow<Map<String, HighlightColor>> = _colors.asStateFlow()
 
+    /** Yazının başındaki görsel; kaydederken indirilmişse. */
+    private val _cover = MutableStateFlow<ImageBitmap?>(null)
+    val cover: StateFlow<ImageBitmap?> = _cover.asStateFlow()
+
     private var articleId: Long = 0L
 
     fun load(id: Long) {
@@ -166,13 +181,20 @@ class ArticleViewModel @Inject constructor(
         viewModelScope.launch {
             _entry.value = entryRepository.getById(id)
             refresh()
+            // Dosyadan okuma ana iş parçacığında yapılmıyor: küçük bir JPEG
+            // bile açılırken kaydırmayı takıyor.
+            _cover.value = withContext(Dispatchers.IO) {
+                readerRepository.previewImage(id)
+                    ?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                    ?.asImageBitmap()
+            }
         }
     }
 
     /**
      * Kelimeyi işaretler ya da rengini değiştirir.
      *
-     * Kitaptaki [setHighlight] ile aynı davranış: aynı kelime başka bir
+     * Kitaptaki işaretlemeyle aynı davranış: aynı kelime başka bir
      * cümlede de işaretlenirse o cümle de saklanıyor, çünkü bir kelimenin
      * birden çok anlamı olabiliyor.
      */
@@ -252,6 +274,7 @@ fun ArticleRoute(
 ) {
     val entry by viewModel.entry.collectAsStateWithLifecycle()
     val colors by viewModel.colors.collectAsStateWithLifecycle()
+    val cover by viewModel.cover.collectAsStateWithLifecycle()
     LaunchedEffect(entryId) { viewModel.load(entryId) }
 
     var pending by remember { mutableStateOf<PendingHighlight?>(null) }
@@ -267,6 +290,19 @@ fun ArticleRoute(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // Sayfanın kendi kapak görseli. Süs olsun diye duruyor:
+            // yazının hangi yazı olduğunu bir bakışta hatırlatıyor.
+            cover?.let { image ->
+                Image(
+                    bitmap = image,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(14.dp)),
+                )
+            }
             Text(
                 text = article.title,
                 style = MaterialTheme.typography.headlineMedium,

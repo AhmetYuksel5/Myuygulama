@@ -69,7 +69,7 @@ private enum class TopLevelDestination(
 ) {
     BOOKS("books", "Kitaplık", MerkezIcons.Book),
     VOCAB("vocab", "Kelimeler", MerkezIcons.Translate),
-    POCKET("pocket", "Pocket", MerkezIcons.Bookmark),
+    POCKET("pocket", "Pocket", MerkezIcons.Pocket),
     MORE("more", "Daha", MerkezIcons.MoreHoriz),
 }
 

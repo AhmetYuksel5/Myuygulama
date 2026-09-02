@@ -10,6 +10,8 @@ data class ExtractedArticle(
     val byline: String?,
     /** Boş satırla ayrılmış okunabilir bloklar. */
     val paragraphs: List<String>,
+    /** Sayfanın kapak görselinin adresi; yoksa null. */
+    val image: String? = null,
 ) {
     val body: String get() = paragraphs.joinToString("\n\n")
     val length: Int get() = paragraphs.sumOf { it.length }
@@ -41,6 +43,11 @@ object ArticleExtractor {
         val byline = doc.selectFirst("meta[name=author]")?.attr("content")
             ?.takeIf { it.isNotBlank() }
 
+        // Kapak görseli temizlikten önce okunuyor: adresi <head> içinde ama
+        // yedek olarak gövdedeki ilk büyük resme de bakıyoruz ve preClean
+        // gövdenin yarısını atıyor.
+        val image = coverImage(doc)
+
         preClean(doc)
 
         val fromReadability = runCatching {
@@ -63,8 +70,51 @@ object ArticleExtractor {
         }
 
         if (paragraphs.sumOf { it.length } < MIN_FINAL_LENGTH) return null
-        return ExtractedArticle(title = title, byline = byline, paragraphs = paragraphs)
+        return ExtractedArticle(
+            title = title,
+            byline = byline,
+            paragraphs = paragraphs,
+            image = image,
+        )
     }
+
+    /**
+     * Kapak görseli.
+     *
+     * Sıra paylaşım etiketlerinden başlıyor: `og:image` zaten "bu sayfayı
+     * bir yerde göstereceksen bu resmi kullan" demek — Pocket'ın kartlarda
+     * gösterdiği resim de buydu. Hiçbiri yoksa gövdedeki ilk büyükçe resme
+     * düşüyoruz; küçükler genelde simge, avatar ya da izleme pikseli.
+     */
+    private fun coverImage(doc: Document): String? {
+        val meta = listOf(
+            "meta[property=og:image]",
+            "meta[name=og:image]",
+            "meta[name=twitter:image]",
+            "meta[property=twitter:image]",
+            "link[rel=image_src]",
+        )
+        meta.forEach { selector ->
+            val element = doc.selectFirst(selector) ?: return@forEach
+            val attribute = if (element.tagName() == "link") "href" else "content"
+            val url = element.absUrl(attribute)
+            if (url.isNotBlank()) return url
+        }
+        return doc.select("article img, main img, img")
+            .firstOrNull { image ->
+                val width = image.attr("width").toIntOrNull() ?: DEFAULT_IMAGE_EDGE
+                val height = image.attr("height").toIntOrNull() ?: DEFAULT_IMAGE_EDGE
+                width >= MIN_IMAGE_EDGE && height >= MIN_IMAGE_EDGE &&
+                    image.absUrl("src").isNotBlank()
+            }
+            ?.absUrl("src")
+    }
+
+    /** Bundan küçük resim kapak değil; simge ya da izleme pikselidir. */
+    private const val MIN_IMAGE_EDGE = 200
+
+    /** Ölçüsünü yazmayan resim: şansını denesin. */
+    private const val DEFAULT_IMAGE_EDGE = 400
 
     private fun bestTitle(doc: Document): String =
         doc.selectFirst("meta[property=og:title]")?.attr("content")?.takeIf { it.isNotBlank() }

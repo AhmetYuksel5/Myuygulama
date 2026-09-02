@@ -2,6 +2,7 @@
 
 package com.ahmety.uygulama.feature.library
 
+import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,12 +52,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -67,7 +71,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Keep benzeri not panosu: renkli kartlar, iki sütunlu serbest yükseklikli
@@ -333,6 +340,7 @@ fun PocketRoute(
     viewModel: NotesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val saving by viewModel.savingSuggestion.collectAsStateWithLifecycle()
     var showHighlights by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -402,11 +410,33 @@ fun PocketRoute(
                 }
 
                 items(state.articles, key = { it.id }) { entry ->
-                    EntryCard(
+                    ArticleCard(
                         entry = entry,
+                        preview = viewModel::previewFile,
                         onClick = { onOpenArticle(entry.id) },
                         onDelete = { viewModel.delete(entry) },
                     )
+                }
+
+                // Pocket'ın keşif akışı kapandı; öneriler elle seçilmiş ve
+                // uygulamanın içinde duruyor. Kaydedilenler listeden düşüyor.
+                val saved = state.articles.mapNotNull { it.source }.toSet()
+                val open = ARTICLE_SUGGESTIONS.filterNot { it.url in saved }
+                if (open.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Öneriler",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(open, key = { it.url }) { suggestion ->
+                        SuggestionRow(
+                            suggestion = suggestion,
+                            saving = saving == suggestion.url,
+                            onSave = { viewModel.saveSuggestion(suggestion.url) },
+                        )
+                    }
                 }
             }
         }
@@ -665,6 +695,146 @@ fun SearchRoute(
     }
 }
 
+/**
+ * Kaydedilmiş bir sayfanın kartı.
+ *
+ * Pocket'ın listesi böyleydi: üstte sayfanın kendi görseli, altında
+ * başlık ve tek satırlık künye — sitenin adı ve kaç dakikalık olduğu.
+ * Buradaki kartlar not kartlarıyla aynı kalıptaydı ve makale bir nota
+ * benziyordu; başlık tek satıra sıkışıp yarısı görünmüyordu.
+ */
+@Composable
+private fun ArticleCard(
+    entry: Entry,
+    preview: (Long) -> File?,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val image = articleImage(entry.id, preview)
+    val minutes = remember(entry.id) { readingMinutes(entry.body) }
+    val site = remember(entry.source) { siteOf(entry.source) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            image?.let {
+                Image(
+                    bitmap = it,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = entry.title.ifBlank { "(başlıksız)" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = listOfNotNull(site, "$minutes dk").joinToString(" · "),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(MerkezIcons.MoreVert, contentDescription = "Seçenekler")
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Sil") },
+                            onClick = {
+                                menuOpen = false
+                                onDelete()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Önerilen bir yazı: tek dokunuşla kaydedilip listeye giriyor. */
+@Composable
+private fun SuggestionRow(
+    suggestion: ArticleSuggestion,
+    saving: Boolean,
+    onSave: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = suggestion.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = suggestion.note,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            TextButton(onClick = onSave, enabled = !saving) {
+                Text(if (saving) "Alınıyor…" else "Kaydet")
+            }
+        }
+    }
+}
+
+/**
+ * Kartın resmi. Dosyadan okuma ana iş parçacığında yapılmıyor: listede on
+ * kart varsa on JPEG açılıyor ve kaydırma takılıyor.
+ */
+@Composable
+private fun articleImage(entryId: Long, preview: (Long) -> File?): ImageBitmap? {
+    val state = produceState<ImageBitmap?>(null, entryId) {
+        value = withContext(Dispatchers.IO) {
+            preview(entryId)
+                ?.let { runCatching { BitmapFactory.decodeFile(it.absolutePath) }.getOrNull() }
+                ?.asImageBitmap()
+        }
+    }
+    return state.value
+}
+
+/** Kaba okuma süresi: dakikada iki yüz kelime. Pocket da böyle sayıyordu. */
+private fun readingMinutes(body: String): Int {
+    val words = body.split(' ', '\n', '\t').count { it.isNotBlank() }
+    return (words / 200).coerceAtLeast(1)
+}
+
+/** Adresin görünen adı: "www." ve yol atılıyor. */
+private fun siteOf(source: String?): String? = source
+    ?.substringAfter("://")
+    ?.substringBefore('/')
+    ?.removePrefix("www.")
+    ?.takeIf { it.isNotBlank() }
+
 @Composable
 private fun EntryCard(
     entry: Entry,
@@ -741,3 +911,60 @@ private fun typeLabel(type: EntryType): String = when (type) {
     EntryType.TASK -> "Görev"
     EntryType.NEWS -> "Haber"
 }
+
+/** Kaydedilmeye hazır bekleyen bir yazı. */
+private data class ArticleSuggestion(
+    val title: String,
+    val note: String,
+    val url: String,
+)
+
+/**
+ * Öneri listesi.
+ *
+ * Pocket'ın keşif akışı uygulamayla birlikte kapandı; yerine koyacak bir
+ * kaynak yok. Bu yüzden liste elle seçilmiş ve uygulamanın içinde duruyor:
+ * verimlilik ve zaman yönetimi üzerine, yıllardır yerinde duran yazılar.
+ */
+private val ARTICLE_SUGGESTIONS = listOf(
+    ArticleSuggestion(
+        title = "Maker's Schedule, Manager's Schedule",
+        note = "Paul Graham · gün neden parçalanınca iş çıkmıyor",
+        url = "https://www.paulgraham.com/makersschedule.html",
+    ),
+    ArticleSuggestion(
+        title = "Good and Bad Procrastination",
+        note = "Paul Graham · her erteleme kötü değil",
+        url = "https://www.paulgraham.com/procrastination.html",
+    ),
+    ArticleSuggestion(
+        title = "Life is Short",
+        note = "Paul Graham · zamanın gerçekten neye gittiği",
+        url = "https://www.paulgraham.com/vb.html",
+    ),
+    ArticleSuggestion(
+        title = "How to Do Great Work",
+        note = "Paul Graham · uzun ve sindire sindire okunacak",
+        url = "https://www.paulgraham.com/greatwork.html",
+    ),
+    ArticleSuggestion(
+        title = "Why Procrastinators Procrastinate",
+        note = "Wait But Why · ertelemenin içeriden anlatımı",
+        url = "https://waitbutwhy.com/2013/10/why-procrastinators-procrastinate.html",
+    ),
+    ArticleSuggestion(
+        title = "Your Life in Weeks",
+        note = "Wait But Why · ömrü tek sayfada görmek",
+        url = "https://waitbutwhy.com/2014/05/life-weeks.html",
+    ),
+    ArticleSuggestion(
+        title = "Hell Yeah or No",
+        note = "Derek Sivers · neye evet denir",
+        url = "https://sive.rs/hyn",
+    ),
+    ArticleSuggestion(
+        title = "Structured Procrastination",
+        note = "John Perry · ertelemeyi işe koşmak",
+        url = "https://www.structuredprocrastination.com/",
+    ),
+)
