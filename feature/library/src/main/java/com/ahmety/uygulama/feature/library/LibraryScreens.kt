@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.MonogramTile
+import com.ahmety.uygulama.core.designsystem.pressable
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -738,7 +739,7 @@ private fun SaveRow(
     val minutes = remember(entry.id) { readingMinutes(entry.body) }
     val site = remember(entry.source) { siteOf(entry.source) }
 
-    Column(modifier = Modifier.clickable(onClick = onClick)) {
+    Column(modifier = Modifier.pressable(onClick = onClick)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

@@ -15,8 +15,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Switch
@@ -73,11 +78,31 @@ private enum class TopLevelDestination(
     MORE("more", "Daha", MerkezIcons.MoreHoriz),
 }
 
+/**
+ * Alt sayfaların hangi sekmeye ait olduğu.
+ *
+ * Gezinme grafiğinde hepsi düz duruyor (iç içe grafik kurmak, geri tuşunun
+ * davranışını da değiştirirdi); ait oldukları sekme burada yazılı.
+ */
+private fun ownerTabOf(route: String?): TopLevelDestination? {
+    val value = route ?: return null
+    // Sekmelerin kendisi zaten eşleşiyor; burada yalnız alt sayfalar var.
+    if (TopLevelDestination.entries.any { it.route == value }) return null
+    return when {
+        value.startsWith("$ARTICLE_ROUTE/") -> TopLevelDestination.POCKET
+        value.startsWith("$BOOK_ROUTE/") || value == SUBTITLE_ROUTE -> TopLevelDestination.BOOKS
+        else -> TopLevelDestination.MORE
+    }
+}
+
 @Composable
 fun MerkezApp() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+
+    val badgeViewModel: DeckBadgeViewModel = hiltViewModel()
+    val dueToday by badgeViewModel.dueToday.collectAsStateWithLifecycle()
 
     var showUpdate by remember { mutableStateOf(false) }
     var showSaveArticle by remember { mutableStateOf(false) }
@@ -114,9 +139,15 @@ fun MerkezApp() {
             if (immersive) return@Scaffold
             NavigationBar {
                 TopLevelDestination.entries.forEach { destination ->
+                    // Alt sayfalar (senkron, izinler, alışkanlıklar…) üst
+                    // sekmelerin kardeşi olarak açılıyor; yalnız rotaya
+                    // bakarsak o ekranlarda dört sekme de sönük kalıyor ve
+                    // çubuk ölü bir şeride dönüyordu.
+                    val current = currentDestination?.route
                     val selected = currentDestination?.hierarchy?.any {
                         it.route == destination.route
-                    } == true
+                    } == true || ownerTabOf(current) == destination
+
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
@@ -130,8 +161,32 @@ fun MerkezApp() {
                                 launchSingleTop = true
                             }
                         },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
+                        icon = {
+                            // Vadesi gelen kelime sayısı: uygulamanın seni
+                            // çağırdığı tek yer. Sayı kodda zaten vardı ama
+                            // hiçbir ekranda görünmüyordu.
+                            if (destination == TopLevelDestination.VOCAB && dueToday > 0) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge {
+                                            Text(if (dueToday > 99) "99+" else "$dueToday")
+                                        }
+                                    },
+                                ) {
+                                    Icon(destination.icon, contentDescription = destination.label)
+                                }
+                            } else {
+                                Icon(destination.icon, contentDescription = destination.label)
+                            }
+                        },
                         label = { Text(destination.label, maxLines = 1) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                     )
                 }
             }

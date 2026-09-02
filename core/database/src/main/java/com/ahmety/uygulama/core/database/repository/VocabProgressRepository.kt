@@ -6,6 +6,9 @@ import com.ahmety.uygulama.core.database.entity.ChangeOperation
 import com.ahmety.uygulama.core.database.entity.VocabProgressEntity
 import com.ahmety.uygulama.core.database.sync.ChangeRecorder
 import com.ahmety.uygulama.core.database.sync.Now
+import com.ahmety.uygulama.core.model.startOfDay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,11 +52,38 @@ class VocabProgressRepository @Inject constructor(
         )
     }
 
+    /**
+     * Bugün tekrarı gelen kelime sayısı — alt çubuktaki rozet için.
+     *
+     * Kelime destesinin kendisine bakmıyor, yalnızca tekrar satırlarına:
+     * rozet uygulamanın her ekranında canlı duruyor ve kelime listesini
+     * kurmak (işaretlemeler, kaynak adları, yapay zekâ dolguları) rozet
+     * için fazla pahalı. Vadesi geçmiş satırlar da sayılıyor; gün sonu
+     * her toplamada yeniden hesaplanıyor ki gece yarısını geçince sayı
+     * kendiliğinden düzelsin.
+     */
+    fun observeDueToday(): Flow<Int> = vocabDao.observeAll().map { rows ->
+        val timestamp = now.millis()
+        val offset = java.util.TimeZone.getDefault().getOffset(timestamp).toLong()
+        val endOfToday = startOfDay(timestamp, offset) + DAY_MILLIS
+        rows.count { row ->
+            row.status == LEARNING &&
+                row.lastReviewedAt != null &&
+                row.dueAt != null &&
+                row.dueAt!! <= endOfToday
+        }
+    }
+
     /** Toplu silme. Aynı kelime iki kez geçse de bir kez işleniyor. */
     suspend fun forgetAll(words: Collection<String>) {
         words.map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
             .forEach { forget(it) }
+    }
+
+    private companion object {
+        const val LEARNING = "LEARNING"
+        const val DAY_MILLIS = 86_400_000L
     }
 }

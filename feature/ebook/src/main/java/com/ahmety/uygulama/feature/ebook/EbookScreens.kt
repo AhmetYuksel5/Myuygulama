@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
 import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
 import com.ahmety.uygulama.core.designsystem.PendingHighlight
+import com.ahmety.uygulama.core.designsystem.pressable
 import com.ahmety.uygulama.core.designsystem.SelectionPreview
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.HighlightColor
@@ -239,7 +240,7 @@ private fun BookCard(
     // yapmak körlemesine oluyor. -1 "henüz sayılmadı" demek.
     var wordCount by remember { mutableIntStateOf(-1) }
 
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+    Card(modifier = Modifier.fillMaxWidth().pressable(onClick = onOpen)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,

@@ -43,6 +43,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -1405,15 +1406,22 @@ private fun SwipeableCard(
 
     val horizontalProgress = (offsetX / threshold).coerceIn(-1f, 1f)
     val verticalProgress = (offsetY / threshold).coerceIn(-1f, 1f)
-    val tint = when {
-        offsetY > 0f && abs(offsetY) > abs(offsetX) && verticalProgress > 0.1f ->
-            Color(0xFF616161).copy(alpha = verticalProgress * 0.28f)
-        offsetY < 0f && abs(offsetY) > abs(offsetX) && verticalProgress < -0.1f ->
-            Color(0xFF1565C0).copy(alpha = abs(verticalProgress) * 0.20f)
-        horizontalProgress < -0.1f -> Color(0xFF2E7D32).copy(alpha = abs(horizontalProgress) * 0.28f)
-        horizontalProgress > 0.1f -> Color(0xFFE65100).copy(alpha = horizontalProgress * 0.28f)
-        else -> Color.Transparent
+
+    // Hangi karara doğru gidiliyor. Dört yönün ne anlama geldiği şimdiye
+    // kadar yalnızca koddaki bir yorumda yazıyordu; ilk kaydırma tahmine
+    // kalıyordu.
+    val vertical = abs(offsetY) > abs(offsetX)
+    val decisionLabel: Pair<String, Color>? = when {
+        vertical && verticalProgress > 0.1f -> "ÖNEMSİZ" to DECISION_SKIP
+        vertical && verticalProgress < -0.1f -> "ÖĞRENDİM" to DECISION_LEARNED
+        !vertical && horizontalProgress < -0.1f -> "ÇALIŞTIM" to DECISION_STUDIED
+        !vertical && horizontalProgress > 0.1f -> "GEÇ" to DECISION_LATER
+        else -> null
     }
+    val decisionStrength = if (vertical) abs(verticalProgress) else abs(horizontalProgress)
+    val tint = decisionLabel?.let { (_, color) ->
+        color.copy(alpha = decisionStrength * 0.26f)
+    } ?: Color.Transparent
 
     Box(
         modifier = Modifier
@@ -1461,6 +1469,8 @@ private fun SwipeableCard(
         WordCard(
             word = word,
             tint = tint,
+            decision = decisionLabel,
+            decisionStrength = decisionStrength,
             fontScale = fontScale,
             image = image,
             imaging = imaging,
@@ -1491,8 +1501,14 @@ private fun WordCardStatic(word: VocabWord, fontScale: Int) {
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer {
-                scaleX = 0.96f
-                scaleY = 0.96f
+                // Yalnız küçültünce arkadaki kart öndekinin tam arkasında
+                // kalıyor ve tek bir kartın etrafında soluk bir hâle gibi
+                // görünüyordu. Aşağı kaydırıp hafifçe çevirince deste
+                // olduğu anlaşılıyor.
+                scaleX = 0.955f
+                scaleY = 0.955f
+                translationY = 18f
+                rotationZ = -1.8f
             },
     ) {
         WordCard(
@@ -1513,6 +1529,10 @@ private fun WordCardStatic(word: VocabWord, fontScale: Int) {
 private fun WordCard(
     word: VocabWord,
     tint: Color,
+    /** Kaydırılırken verilecek kararın adı ve rengi; duruyorken null. */
+    decision: Pair<String, Color>? = null,
+    /** Kararın ne kadar yaklaştığı (0..1); yazının koyuluğunu veriyor. */
+    decisionStrength: Float = 0f,
     fontScale: Int = 100,
     image: ImageBitmap? = null,
     imaging: Boolean = false,
@@ -1553,6 +1573,9 @@ private fun WordCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
+        // Gölgesiz kart, zeminden bir ton koyu bir dikdörtgen olarak
+        // duruyordu. Kaldırılabilir bir şey gibi görünmesi gerekiyor.
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -1827,7 +1850,22 @@ private fun WordCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(tint, RoundedCornerShape(24.dp)),
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                // Parmak kalkmadan ne olacağını söylüyor. Eşiğe yaklaştıkça
+                // koyulaşıyor; yarıdan sonra tam görünür oluyor.
+                decision?.let { (label, color) ->
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = color.copy(
+                            alpha = (decisionStrength * 1.8f).coerceIn(0f, 1f),
+                        ),
+                        letterSpacing = 2.sp,
+                    )
+                }
+            }
 
             // Kartın dibindeki düğme: bilgi yoksa getiriyor, varsa soru
             // sormaya açıyor. Metnin arasında değil dipte, çünkü kartın
@@ -1838,7 +1876,9 @@ private fun WordCard(
                 else -> onAsk
             }
             if (bottomAction != null && revealed) {
-                TextButton(
+                // Dolu düğme: kartın en çok basılan yeri renkli bir yazı
+                // olarak duruyordu, basılabilir olduğu belli değildi.
+                FilledTonalButton(
                     enabled = !enriching,
                     onClick = bottomAction,
                     modifier = Modifier
@@ -2012,6 +2052,15 @@ private fun cleanOpposite(word: String): String =
     word.replace("(zıt)", "", ignoreCase = true).trim()
 
 /** Açık ve koyu temada da beyaz yazıyı taşıyan bir mavi. */
+/**
+ * Dört kaydırma kararının rengi. Kartın üstündeki yazının ve zeminin
+ * rengi aynı yerden geliyor ki ikisi birbiriyle çelişmesin.
+ */
+private val DECISION_LEARNED = Color(0xFF1565C0)
+private val DECISION_STUDIED = Color(0xFF2E7D32)
+private val DECISION_LATER = Color(0xFFE65100)
+private val DECISION_SKIP = Color(0xFF616161)
+
 private val CHIP_BLUE = Color(0xFF1565C0)
 
 /** Zıt anlamlılar için; beyaz yazıyı her iki temada da taşıyor. */
