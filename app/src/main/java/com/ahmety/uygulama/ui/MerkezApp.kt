@@ -198,7 +198,7 @@ fun MerkezApp() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(HABITS_ROUTE) {
-                HabitsRoute()
+                HabitsRoute(onBack = { navController.popBackStack() })
             }
             composable(TopLevelDestination.MORE.route) {
                 MoreScreen(
@@ -240,19 +240,19 @@ fun MerkezApp() {
                 PermissionsScreen(onContinue = { navController.popBackStack() })
             }
             composable(SYNC_ROUTE) {
-                SyncScreen()
+                SyncScreen(onBack = { navController.popBackStack() })
             }
             composable(AI_ROUTE) {
-                AiSettingsScreen()
+                AiSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable(GESTURES_ROUTE) {
-                GestureSettingsScreen()
+                GestureSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable(CURSOR_ROUTE) {
-                QuickCursorScreen()
+                QuickCursorScreen(onBack = { navController.popBackStack() })
             }
             composable(SUBTITLE_ROUTE) {
-                SubtitleRoute()
+                SubtitleRoute(onBack = { navController.popBackStack() })
             }
         }
     }

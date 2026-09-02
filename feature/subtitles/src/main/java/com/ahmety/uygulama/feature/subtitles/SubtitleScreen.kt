@@ -18,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  */
 @Composable
 fun SubtitleRoute(
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SubtitleViewModel = hiltViewModel(),
 ) {
@@ -56,17 +58,13 @@ fun SubtitleRoute(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Film hazırlığı",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = { showSettings = true }) { Text("Ayar") }
-        }
+        MerkezTopBar(
+            title = "Altyazı arama",
+            onBack = onBack,
+            actions = {
+                TextButton(onClick = { showSettings = true }) { Text("Ayar") }
+            },
+        )
 
         if (!state.configured) {
             Text(

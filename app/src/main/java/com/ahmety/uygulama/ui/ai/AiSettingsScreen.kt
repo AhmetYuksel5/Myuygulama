@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,6 +63,7 @@ class AiSettingsViewModel @Inject constructor(
  */
 @Composable
 fun AiSettingsScreen(
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: AiSettingsViewModel = hiltViewModel(),
 ) {
@@ -78,7 +80,7 @@ fun AiSettingsScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Yapay zekâ", style = MaterialTheme.typography.headlineMedium)
+        MerkezTopBar(title = "Yapay zekâ", onBack = onBack)
 
         Text(
             text = "Kitapta işaretlediğin ama sözlükte karşılığı olmayan " +

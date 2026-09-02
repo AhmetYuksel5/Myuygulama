@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -51,7 +52,7 @@ import com.ahmety.uygulama.feature.gestures.GestureFeedback
 import com.ahmety.uygulama.feature.gestures.GestureSettings
 
 @Composable
-fun GestureSettingsScreen(modifier: Modifier = Modifier) {
+fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val settings = remember { GestureSettings(context) }
 
@@ -92,7 +93,7 @@ fun GestureSettingsScreen(modifier: Modifier = Modifier) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Kenar hareketleri", style = MaterialTheme.typography.headlineMedium)
+        MerkezTopBar(title = "Kenar hareketleri", onBack = onBack)
 
         ServiceCard(
             enabled = serviceEnabled,

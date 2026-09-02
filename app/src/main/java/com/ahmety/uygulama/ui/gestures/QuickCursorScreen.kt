@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -27,7 +28,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ahmety.uygulama.feature.gestures.QuickCursorSettings
 
 @Composable
-fun QuickCursorScreen(modifier: Modifier = Modifier) {
+fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val settings = remember { QuickCursorSettings(context) }
 
@@ -58,7 +59,7 @@ fun QuickCursorScreen(modifier: Modifier = Modifier) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Tek elle imleç", style = MaterialTheme.typography.headlineMedium)
+        MerkezTopBar(title = "Tek elle imleç", onBack = onBack)
         Text(
             text = "Kenardaki topa parmağını basıp gezdir; ekranda bir imleç trackpad " +
                 "gibi dolaşır, parmağını kaldırınca oraya dokunur. Sol üst gibi tek elle " +

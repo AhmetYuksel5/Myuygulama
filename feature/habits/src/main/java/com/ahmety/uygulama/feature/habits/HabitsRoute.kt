@@ -12,6 +12,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -41,6 +42,7 @@ import com.ahmety.uygulama.core.designsystem.MerkezIcons
  */
 @Composable
 fun HabitsRoute(
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: HabitsViewModel = hiltViewModel(),
 ) {
@@ -68,11 +70,15 @@ fun HabitsRoute(
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (onBack != null) {
+                MerkezTopBar(title = "Alışkanlıklar", onBack = onBack)
+            }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val due = state.dueToday.size
                 val done = state.doneCount
+                // Ad üst çubukta duruyor; buradaki satır günün durumu.
                 Text(
-                    text = if (due == 0) "Alışkanlıklar" else "Bugün $done/$due",
+                    text = if (due == 0) "Bugün için bir şey yok" else "Bugün $done/$due",
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 if (due > 0) {

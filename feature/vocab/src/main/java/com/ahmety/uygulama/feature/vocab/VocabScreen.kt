@@ -151,15 +151,28 @@ fun VocabRoute(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Başlık nerede olduğunu söylüyor; sayılar zaten çiplerde.
-            Text(
-                text = state.filter.sourceName.ifBlank {
-                    state.filter.source?.label ?: "Tüm kelimeler"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            // Boyut diğer ekranlarla aynı: bu başlık on altı puntoydu,
+            // Kitaplık yirmi iki, "Daha" yirmi altı — üç ekran üç ölçü.
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.filter.sourceName.ifBlank {
+                        state.filter.source?.label ?: "Tüm kelimeler"
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                // Oturumun nerede olduğu. Sayılar zaten hesaplanıyordu ama
+                // hiçbiri ekranda yoktu: destenin ne kadarı bitti belli
+                // değildi.
+                if (state.totalCount > 0) {
+                    Text(
+                        text = "${state.remaining} kart · bugün ${state.dueToday}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             // Kalem süzgeci: kırmızı işaretlediklerin cümle, mavi
             // işaretlediklerin kelime. Tek düğme, üç durum.
             PenToggle(

@@ -123,6 +123,53 @@ object MerkezIcons {
         }
     }
 
+    /** Geri: sola bakan ok. */
+    val Back: ImageVector by lazy {
+        outlined("MerkezBack") {
+            moveTo(19f, 12f)
+            lineTo(5f, 12f)
+            moveTo(11.5f, 5.5f)
+            lineTo(5f, 12f)
+            lineTo(11.5f, 18.5f)
+        }
+    }
+
+    /** Bölüm listesi: üç satır ve önlerinde birer nokta. */
+    val ListLines: ImageVector by lazy {
+        outlined("MerkezList") {
+            moveTo(9f, 6.5f)
+            lineTo(20f, 6.5f)
+            moveTo(9f, 12f)
+            lineTo(20f, 12f)
+            moveTo(9f, 17.5f)
+            lineTo(20f, 17.5f)
+            moveTo(4.5f, 6.5f)
+            lineTo(4.6f, 6.5f)
+            moveTo(4.5f, 12f)
+            lineTo(4.6f, 12f)
+            moveTo(4.5f, 17.5f)
+            lineTo(4.6f, 17.5f)
+        }
+    }
+
+    /** Görünüm ayarları: büyük ve küçük "A". */
+    val TextSize: ImageVector by lazy {
+        outlined("MerkezTextSize") {
+            // Küçük A
+            moveTo(3f, 18f)
+            lineTo(6.6f, 9.5f)
+            lineTo(10.2f, 18f)
+            moveTo(4.3f, 15.2f)
+            lineTo(8.9f, 15.2f)
+            // Büyük A
+            moveTo(12.6f, 18f)
+            lineTo(17.3f, 6f)
+            lineTo(22f, 18f)
+            moveTo(14.4f, 13.6f)
+            lineTo(20.2f, 13.6f)
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

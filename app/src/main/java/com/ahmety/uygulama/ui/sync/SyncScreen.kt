@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -40,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  */
 @Composable
 fun SyncScreen(
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SyncViewModel = hiltViewModel(),
 ) {
@@ -58,7 +60,7 @@ fun SyncScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Senkronizasyon", style = MaterialTheme.typography.headlineMedium)
+        MerkezTopBar(title = "Senkronizasyon", onBack = onBack)
         Text(
             text = "Her cihaz kendi değişiklik günlüğünü paylaşılan klasöre yazar, " +
                 "karşı tarafınkini okur. Veritabanı dosyası kopyalanmaz — böylece " +
