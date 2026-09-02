@@ -94,6 +94,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.model.Collocation
+import com.ahmety.uygulama.core.designsystem.MerkezEmptyState
+import com.ahmety.uygulama.core.designsystem.MerkezGlyphs
 import com.ahmety.uygulama.core.model.VocabSource
 import com.ahmety.uygulama.core.model.VocabStatus
 import com.ahmety.uygulama.core.model.VocabWord
@@ -1239,41 +1241,30 @@ private fun penEmptyMessage(state: VocabUiState): String? = when (state.filter.p
 
 @Composable
 private fun EmptyDeck(state: VocabUiState) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(24.dp),
-    ) {
-        Text(
-            // Kalem süzgeci açıkken "hiç kelime yok" demek yanıltıcı: kelime
-            // var, süzgeç saklıyor. Önce onu söylüyoruz.
-            text = penEmptyMessage(state) ?: when (state.mode) {
-                VocabMode.TODAY -> "Bugün tekrar edilecek kelime yok."
-                VocabMode.NEW -> "Karar verilmemiş kelime kalmadı."
-                VocabMode.ALL -> "Burada kelime yok. Kitapta ya da altyazıda " +
-                    "işaretledikçe dolar."
-                VocabMode.IGNORED -> "Önemsize atılmış kelime yok."
-                VocabMode.KNOWN -> "Henüz öğrendiğin kelime yok."
-            },
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-        )
-        if (state.mode == VocabMode.TODAY) {
-            Text(
-                text = when {
-                    state.nextDueInDays != null ->
-                        "Sıradaki tekrar ${state.nextDueInDays} gün sonra."
-                    state.newCount > 0 ->
-                        "Tekrar, çalıştığın kelimelerden oluşuyor. " +
-                            "\"Yeni\" bölmesinde ${state.newCount} kelime bekliyor."
-                    else -> "Yeni kelime eklemek için kitapta ya da altyazıda işaretle."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
+    // Kalem süzgeci açıkken "hiç kelime yok" demek yanıltıcı: kelime var,
+    // süzgeç saklıyor. Önce onu söylüyoruz.
+    val title = penEmptyMessage(state) ?: when (state.mode) {
+        VocabMode.TODAY -> "Bugünlük bitti"
+        VocabMode.NEW -> "Karar verilmemiş kelime kalmadı"
+        VocabMode.ALL -> "Burada kelime yok"
+        VocabMode.IGNORED -> "Önemsize atılmış kelime yok"
+        VocabMode.KNOWN -> "Henüz öğrendiğin kelime yok"
     }
+    val description = when {
+        state.mode != VocabMode.TODAY ->
+            "Kitapta, altyazıda ya da Pocket'ta işaretledikçe burası dolar."
+        state.nextDueInDays != null ->
+            "Sıradaki tekrar ${state.nextDueInDays} gün sonra."
+        state.newCount > 0 ->
+            "Tekrar, çalıştığın kelimelerden oluşuyor. " +
+                "\"Yeni\" bölmesinde ${state.newCount} kelime bekliyor."
+        else -> "Yeni kelime eklemek için kitapta ya da altyazıda işaretle."
+    }
+    MerkezEmptyState(
+        title = title,
+        description = description,
+        glyph = { MerkezGlyphs.CardStack() },
+    )
 }
 
 /**

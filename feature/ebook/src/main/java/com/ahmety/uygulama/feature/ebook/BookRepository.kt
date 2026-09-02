@@ -229,6 +229,19 @@ class BookRepository @Inject constructor(
         readerPrefs.edit().putInt("chapter_$bookId", index).apply()
     }
 
+    /**
+     * Okuma yüzdesi.
+     *
+     * Kitaplıkta her satırın altındaki çizgi için. Kitabı açıp hesaplamak
+     * pahalı (bütün bölümleri ayrıştırmak gerekiyor); okurken zaten
+     * hesaplanan sayı buraya yazılıyor.
+     */
+    fun readingPercent(bookId: Long): Int = readerPrefs.getInt("percent_$bookId", 0)
+
+    fun saveReadingPercent(bookId: Long, percent: Int) {
+        readerPrefs.edit().putInt("percent_$bookId", percent.coerceIn(0, 100)).apply()
+    }
+
     /** Bölüm içinde kaldığın paragraf — bölüm başına atmamak için. */
     fun lastParagraph(bookId: Long): Int = readerPrefs.getInt("paragraph_$bookId", 0)
 

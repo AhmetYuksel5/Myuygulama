@@ -128,6 +128,9 @@ class BookShelfViewModel @Inject constructor(
      * "kelimeleriyle sil" derken kaç kelimeden söz ettiğimiz belli olsun.
      */
     suspend fun highlightCount(entry: Entry): Int = repository.highlightCount(entry.id)
+
+    /** Kitaplık satırındaki ilerleme çizgisi için. */
+    fun progressOf(bookId: Long): Int = repository.readingPercent(bookId)
 }
 
 data class ReaderUiState(
@@ -207,6 +210,11 @@ class BookReaderViewModel @Inject constructor(
     /** Okurken kaldığın paragrafı kaydeder. */
     fun savePosition(paragraphIndex: Int) {
         repository.saveLastParagraph(bookId, paragraphIndex)
+    }
+
+    /** Okurken hesaplanan yüzdeyi kitaplığın kullanması için saklar. */
+    fun saveProgress(percent: Int) {
+        if (bookId != 0L) repository.saveReadingPercent(bookId, percent)
     }
 
     fun highlight(word: String, contextSentence: String, color: HighlightColor) {

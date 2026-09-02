@@ -170,6 +170,126 @@ object MerkezIcons {
         }
     }
 
+    /** Takvim: ayın kutusu ve iki halka. */
+    val Calendar: ImageVector by lazy {
+        outlined("MerkezCalendar") {
+            moveTo(4f, 6.5f)
+            lineTo(20f, 6.5f)
+            lineTo(20f, 20f)
+            lineTo(4f, 20f)
+            close()
+            moveTo(4f, 10.5f)
+            lineTo(20f, 10.5f)
+            moveTo(8f, 4f)
+            lineTo(8f, 8f)
+            moveTo(16f, 4f)
+            lineTo(16f, 8f)
+        }
+    }
+
+    /** Alışkanlık: alev. */
+    val Flame: ImageVector by lazy {
+        outlined("MerkezFlame") {
+            moveTo(12f, 3f)
+            curveTo(12f, 7f, 7.5f, 8f, 7.5f, 13f)
+            curveTo(7.5f, 16.6f, 9.5f, 20f, 12f, 20f)
+            curveTo(14.5f, 20f, 16.5f, 16.6f, 16.5f, 13f)
+            curveTo(16.5f, 10.5f, 15f, 9.5f, 14.5f, 8f)
+            curveTo(13.5f, 9.5f, 12.8f, 10f, 12f, 10f)
+            curveTo(12.8f, 7.5f, 12f, 5f, 12f, 3f)
+            close()
+        }
+    }
+
+    /** Altyazı: çerçeve ve içinde iki satır. */
+    val Subtitle: ImageVector by lazy {
+        outlined("MerkezSubtitle") {
+            moveTo(3f, 5f)
+            lineTo(21f, 5f)
+            lineTo(21f, 19f)
+            lineTo(3f, 19f)
+            close()
+            moveTo(6.5f, 13f)
+            lineTo(12f, 13f)
+            moveTo(14.5f, 13f)
+            lineTo(17.5f, 13f)
+            moveTo(6.5f, 16f)
+            lineTo(10f, 16f)
+        }
+    }
+
+    /** Kenar hareketleri: ekranın kenarında bir şerit ve ok. */
+    val EdgeSwipe: ImageVector by lazy {
+        outlined("MerkezEdgeSwipe") {
+            moveTo(4.5f, 4f)
+            lineTo(4.5f, 20f)
+            moveTo(8f, 8f)
+            lineTo(8f, 16f)
+            moveTo(12.5f, 12f)
+            lineTo(20f, 12f)
+            moveTo(16.5f, 8.5f)
+            lineTo(20f, 12f)
+            lineTo(16.5f, 15.5f)
+        }
+    }
+
+    /** Tek elle imleç: sağ kenarda bir tutamak ve ok ucu. */
+    val Cursor: ImageVector by lazy {
+        outlined("MerkezCursor") {
+            moveTo(7f, 4f)
+            lineTo(7f, 15f)
+            lineTo(10f, 12.5f)
+            lineTo(12f, 17.5f)
+            lineTo(14.2f, 16.5f)
+            lineTo(12.2f, 11.6f)
+            lineTo(16f, 11.2f)
+            close()
+        }
+    }
+
+    /** İzinler: kalkan. */
+    val Shield: ImageVector by lazy {
+        outlined("MerkezShield") {
+            moveTo(12f, 3.5f)
+            lineTo(19.5f, 6.2f)
+            lineTo(19.5f, 12f)
+            curveTo(19.5f, 16.2f, 16.5f, 19.2f, 12f, 20.5f)
+            curveTo(7.5f, 19.2f, 4.5f, 16.2f, 4.5f, 12f)
+            lineTo(4.5f, 6.2f)
+            close()
+        }
+    }
+
+    /** Senkronizasyon: birbirini kovalayan iki ok. */
+    val Sync: ImageVector by lazy {
+        outlined("MerkezSync") {
+            moveTo(4.5f, 12f)
+            curveTo(4.5f, 7.9f, 7.9f, 4.5f, 12f, 4.5f)
+            curveTo(14.6f, 4.5f, 16.9f, 5.9f, 18.2f, 8f)
+            moveTo(19.5f, 12f)
+            curveTo(19.5f, 16.1f, 16.1f, 19.5f, 12f, 19.5f)
+            curveTo(9.4f, 19.5f, 7.1f, 18.1f, 5.8f, 16f)
+            moveTo(18.6f, 4.4f)
+            lineTo(18.6f, 8.3f)
+            lineTo(14.7f, 8.3f)
+            moveTo(5.4f, 19.6f)
+            lineTo(5.4f, 15.7f)
+            lineTo(9.3f, 15.7f)
+        }
+    }
+
+    /** Yapay zekâ: dört uçlu parıltı. */
+    val Sparkle: ImageVector by lazy {
+        outlined("MerkezSparkle") {
+            moveTo(12f, 3.5f)
+            curveTo(12.7f, 8.4f, 15.6f, 11.3f, 20.5f, 12f)
+            curveTo(15.6f, 12.7f, 12.7f, 15.6f, 12f, 20.5f)
+            curveTo(11.3f, 15.6f, 8.4f, 12.7f, 3.5f, 12f)
+            curveTo(8.4f, 11.3f, 11.3f, 8.4f, 12f, 3.5f)
+            close()
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

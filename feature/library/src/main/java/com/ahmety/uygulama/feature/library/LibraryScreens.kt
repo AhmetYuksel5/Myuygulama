@@ -33,8 +33,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.ahmety.uygulama.core.designsystem.MerkezEmptyState
+import com.ahmety.uygulama.core.designsystem.MerkezGlyphs
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.MonogramTile
+import com.ahmety.uygulama.core.designsystem.highlightPaint
 import com.ahmety.uygulama.core.designsystem.pressable
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -76,6 +79,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.EntryType
+import com.ahmety.uygulama.core.model.HighlightRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -387,11 +391,11 @@ fun PocketRoute(
             if (showHighlights) {
                 if (state.highlights.isEmpty()) {
                     item {
-                        Text(
-                            text = "Alıntı yok. Bir makalede kelimeye çift dokunarak işaretle.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 20.dp),
+                        MerkezEmptyState(
+                            title = "Alıntı yok",
+                            description = "Bir makaleyi açıp kelimeye çift dokunduğunda " +
+                                "işaretlerin burada birikir.",
+                            glyph = { MerkezGlyphs.CardStack() },
                         )
                     }
                 }
@@ -411,12 +415,14 @@ fun PocketRoute(
             } else {
                 if (state.loaded && state.articles.isEmpty()) {
                     item {
-                        Text(
-                            text = "Henüz makale yok. Sağ alttaki düğmeden bir URL yapıştır — " +
-                                "sayfa okunabilir hâle getirilip çevrimdışı saklanır.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 20.dp),
+                        MerkezEmptyState(
+                            title = "Pocket boş",
+                            description = "Bir sayfayı paylaş ya da sağ alttaki düğmeden " +
+                                "adresini yapıştır; okunabilir hâle getirilip " +
+                                "çevrimdışı saklanır.",
+                            glyph = { MerkezGlyphs.Pages() },
+                            actionLabel = "Sayfa kaydet",
+                            onAction = onAddArticle,
                         )
                     }
                 }
@@ -905,6 +911,18 @@ private fun EntryCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.Top,
         ) {
+            // İşaretin rengi: mavi bilmediğin kelime, kırmızı ifade.
+            // Uygulamanın en ayırt edici fikri, tam da onu tutan listede
+            // görünmüyordu.
+            HighlightRef.color(entry.source)?.let { color ->
+                Box(
+                    modifier = Modifier
+                        .padding(end = 10.dp, top = 4.dp)
+                        .size(width = 4.dp, height = 34.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(highlightPaint(color)),
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = entry.title.ifBlank { "(başlıksız)" },

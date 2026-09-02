@@ -29,7 +29,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,6 +65,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
 import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
+import com.ahmety.uygulama.core.designsystem.MerkezEmptyState
+import com.ahmety.uygulama.core.designsystem.MerkezGlyphs
+import com.ahmety.uygulama.core.designsystem.MerkezIcons
+import com.ahmety.uygulama.core.designsystem.MonogramTile
 import com.ahmety.uygulama.core.designsystem.PendingHighlight
 import com.ahmety.uygulama.core.designsystem.pressable
 import com.ahmety.uygulama.core.designsystem.SelectionPreview
@@ -132,13 +141,13 @@ fun BookShelfRoute(
         }
 
         if (books.isEmpty()) {
-            Text(
-                text = "Henüz bir şey yok. EPUB yükle ya da Film hazırlığından bir " +
-                    "altyazı ekle; okurken kelimelere " +
-                    "dokunarak sarı, mavi, yeşil, kırmızı işaretleyebilirsin. " +
-                    "Mavi işaretlediklerin kelime çalışmasına düşer.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            MerkezEmptyState(
+                title = "Raf boş",
+                description = "Bir EPUB yükle ya da Altyazı aramadan bir film ekle. " +
+                    "Okurken kelimelere dokunup işaretlediklerin kelime destene düşer.",
+                glyph = { MerkezGlyphs.Shelf() },
+                actionLabel = "EPUB yükle",
+                onAction = { picker.launch(arrayOf("*/*")) },
             )
         }
 
@@ -154,6 +163,7 @@ fun BookShelfRoute(
                 BookCard(
                     book = book,
                     film = viewModel.isFilm(book),
+                    percent = remember(book.id) { viewModel.progressOf(book.id) },
                     onOpen = { onOpenBook(book.id) },
                     onBrief = { viewModel.openBrief(book) },
                     onDelete = { withWords -> viewModel.delete(book, withWords) },
@@ -230,6 +240,7 @@ private fun ShelfChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun BookCard(
     book: Entry,
     film: Boolean,
+    percent: Int,
     onOpen: () -> Unit,
     onBrief: () -> Unit,
     onDelete: (withWords: Boolean) -> Unit,
@@ -240,22 +251,36 @@ private fun BookCard(
     // yapmak körlemesine oluyor. -1 "henüz sayılmadı" demek.
     var wordCount by remember { mutableIntStateOf(-1) }
 
+    var menuOpen by remember { mutableStateOf(false) }
+
     Card(modifier = Modifier.fillMaxWidth().pressable(onClick = onOpen)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Kapak yerine renkli bir sırt. Gerçek kapağı çıkarmak EPUB'ı
+            // ayrıştırmak demek; renk kitabın adından türüyor, yani her
+            // kitap her açılışta aynı rengi alıyor ve raf tanınır oluyor.
+            MonogramTile(
+                seed = book.title,
+                label = book.title.ifBlank { "?" },
+                image = null,
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier
+                    .padding(end = 14.dp)
+                    .size(width = 46.dp, height = 66.dp),
+            )
             Column(modifier = Modifier.weight(1f)) {
                 if (film) {
                     Text(
-                        text = "Film",
+                        text = "FİLM",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Text(
                     text = book.title.ifBlank { "(adsız kitap)" },
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -264,14 +289,52 @@ private fun BookCard(
                         text = book.body,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                // Nerede kaldığın. Sayı okurken zaten hesaplanıyordu ama
+                // rafta hiç görünmüyordu.
+                if (percent > 0) {
+                    LinearProgressIndicator(
+                        progress = { percent / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .height(3.dp),
+                    )
+                    Text(
+                        text = "%$percent",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
             }
-            TextButton(onClick = onBrief) { Text("Künye") }
-            TextButton(onClick = {
-                wordCount = -1
-                confirmDelete = true
-            }) { Text("Sil") }
+            // "Künye" ve "Sil" başlıkla aynı ağırlıkta iki yazıydı; silme
+            // gibi geri dönüşü olmayan bir şeyin orada durması doğru değil.
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(MerkezIcons.MoreVert, contentDescription = "Seçenekler")
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Künye") },
+                        onClick = {
+                            menuOpen = false
+                            onBrief()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Sil") },
+                        onClick = {
+                            menuOpen = false
+                            wordCount = -1
+                            confirmDelete = true
+                        },
+                    )
+                }
+            }
         }
     }
 
@@ -500,10 +563,14 @@ fun BookReaderRoute(
                     )
                 }
 
+                val percent by remember(state, listState) {
+                    derivedStateOf { readingPercent(state, listState) }
+                }
+                // Kitaplıktaki ilerleme çizgisi için saklanıyor: orada
+                // yeniden hesaplamak bütün bölümleri ayrıştırmak demek.
+                LaunchedEffect(percent) { viewModel.saveProgress(percent) }
+
                 if (chromeVisible) {
-                    val percent by remember(state, listState) {
-                        derivedStateOf { readingPercent(state, listState) }
-                    }
                     ReaderBottomBar(
                         chapterIndex = state.chapterIndex,
                         chapterCount = book.chapters.size,
@@ -633,26 +700,35 @@ private fun ReaderBottomBar(
         tonalElevation = 0.dp,
         shadowElevation = 8.dp,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            // Zemin gezinme çubuğunun arkasına kadar uzanıyor; düğmeler
-            // çubuğun altına düşmesin diye boşluğu içeride veriyoruz.
-            modifier = Modifier
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-        ) {
-            TextButton(onClick = onOpenIndex) {
-                Text("İndeks", color = theme.text)
-            }
-            Text(
-                text = "Bölüm ${chapterIndex + 1}/$chapterCount · %$percent",
-                style = MaterialTheme.typography.labelMedium,
-                color = theme.text.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f),
+        Column(modifier = Modifier.navigationBarsPadding()) {
+            // İlerleme bir sayı olarak yazıyordu. Okuyucu çubuğunda
+            // yüzdeyi rakamla vermek, çizgisi olmayan bir okuyucunun en
+            // belirgin işareti.
+            LinearProgressIndicator(
+                progress = { percent / 100f },
+                color = theme.text.copy(alpha = 0.75f),
+                trackColor = theme.text.copy(alpha = 0.12f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp),
             )
-            TextButton(onClick = onOpenDisplay) {
-                Text("Görünüm", color = theme.text)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            ) {
+                IconButton(onClick = onOpenIndex) {
+                    Icon(MerkezIcons.ListLines, contentDescription = "Bölümler", tint = theme.text)
+                }
+                Text(
+                    text = "Bölüm ${chapterIndex + 1}/$chapterCount",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = theme.text.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onOpenDisplay) {
+                    Icon(MerkezIcons.TextSize, contentDescription = "Görünüm", tint = theme.text)
+                }
             }
         }
     }
