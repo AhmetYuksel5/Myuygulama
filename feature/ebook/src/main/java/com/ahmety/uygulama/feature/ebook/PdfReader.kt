@@ -19,6 +19,7 @@ import kotlinx.coroutines.FlowPreview
 import com.ahmety.uygulama.core.designsystem.pinchToZoom
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.rememberScrollState
@@ -250,7 +251,12 @@ fun PdfReaderRoute(
     var cropOn by remember { mutableStateOf(prefs.pdfCrop) }
     // Basılı tutup bırakılan aralık; metni okumak askıya alınmış bir iş
     // olduğu için hareket ile sonuç arasında bir adım var.
+    //
+    // Seçim etkinin içinde sıfırlanmıyor: anahtarı etkinin kendisi
+    // değiştirirse yeniden derleme çalışan işi iptal ediyor ve metin hiç
+    // okunmuyor. Onun yerine her seçime bir sıra numarası veriliyor.
     var tapped by remember { mutableStateOf<TapSpot?>(null) }
+    var selectionSerial by remember { mutableLongStateOf(0L) }
     var picking by remember { mutableStateOf<Pick?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     // Parmak basılıyken seçilen aralık; sayfanın üstünde canlı gösteriliyor.
@@ -259,7 +265,6 @@ fun PdfReaderRoute(
 
     LaunchedEffect(tapped) {
         val spot = tapped ?: return@LaunchedEffect
-        tapped = null
         if (!state.textSupported) {
             notice = "Bu telefonda PDF'in metnine erişilemiyor. " +
                 "Sayfadaki yazıyı okumak Android 15 ile geldi; " +
@@ -415,7 +420,15 @@ fun PdfReaderRoute(
                                     }
                                 },
                                 onSelected = { start, end ->
-                                    tapped = TapSpot(index, start.x, start.y, end.x, end.y)
+                                    selectionSerial++
+                                    tapped = TapSpot(
+                                        page = index,
+                                        x = start.x,
+                                        y = start.y,
+                                        endX = end.x,
+                                        endY = end.y,
+                                        serial = selectionSerial,
+                                    )
                                 },
                             )
                         }
@@ -492,6 +505,14 @@ private data class TapSpot(
     val y: Float,
     val endX: Float,
     val endY: Float,
+    /**
+     * Her seçim için artan sıra numarası.
+     *
+     * Bu olmadan aynı yeri iki kez seçmek işe yaramıyordu: değer eşit
+     * olduğu için etkinin anahtarı değişmiyor ve etki yeniden
+     * başlamıyordu.
+     */
+    val serial: Long,
 )
 
 /** Renk kutusunda bekleyen seçim. */
@@ -539,14 +560,25 @@ private fun PdfPage(
             // Okurken beklenen hareket bu; çift dokunuş metin kutularının
             // yöntemi, sayfa okurken kimse denemiyor.
             .pointerInput(index, crop) {
+                // Ölçü **hareket anında** okunuyor, blok başında değil.
+                // Blok bileşen ekrana eklenirken çalışıyor ve o sırada
+                // ölçüm henüz yapılmamış oluyor: sıfıra bölmeyi önleyen
+                // alt sınır yüzünden her dokunuş sayfanın aynı köşesine
+                // düşüyor, seçim de hep boş dönüyordu. Bir önceki
+                // sürümde ölçü geri çağrının içinde okunduğu için sorun
+                // görünmemişti.
+                //
                 // Buradaki ölçü bileşenin piksel ölçüsü, sayfanın kendi
                 // ölçüsü değil; adları çakışmasın diye parametre pageSize.
-                val boxWidth = this.size.width.toFloat().coerceAtLeast(1f)
-                val boxHeight = this.size.height.toFloat().coerceAtLeast(1f)
-                fun fractionOf(offset: Offset) = Offset(
-                    crop.left + (offset.x / boxWidth) * crop.width,
-                    crop.top + (offset.y / boxHeight) * crop.height,
-                )
+                val scope = this
+                fun fractionOf(offset: Offset): Offset {
+                    val boxWidth = scope.size.width.toFloat().coerceAtLeast(1f)
+                    val boxHeight = scope.size.height.toFloat().coerceAtLeast(1f)
+                    return Offset(
+                        crop.left + (offset.x / boxWidth) * crop.width,
+                        crop.top + (offset.y / boxHeight) * crop.height,
+                    )
+                }
 
                 var start = Offset.Zero
                 var end = Offset.Zero
