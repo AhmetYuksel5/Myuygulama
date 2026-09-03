@@ -2,6 +2,17 @@ package com.ahmety.uygulama.feature.ebook
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.FlowPreview
+import com.ahmety.uygulama.core.designsystem.pinchToZoom
+import com.ahmety.uygulama.core.designsystem.MerkezIcons
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -130,6 +141,7 @@ class PdfReaderViewModel @Inject constructor(
  * belgeyi baştan çizmek hem beklemek hem belleği doldurmak olurdu. Ölçüler
  * bir kez okunuyor ki liste kaydırırken zıplamasın.
  */
+@OptIn(FlowPreview::class)
 @Composable
 fun PdfReaderRoute(
     bookId: Long,
@@ -144,9 +156,26 @@ fun PdfReaderRoute(
     val prefs = remember { ReaderPrefs(context) }
     var chromeVisible by remember { mutableStateOf(true) }
 
-    val widthPx = with(LocalDensity.current) {
-        LocalConfiguration.current.screenWidthDp.dp.roundToPx()
+    // Yakınlaştırma. İki değer var: [zoom] parmak altında anında değişiyor
+    // ve yerleşimi büyütüyor; [renderZoom] parmak durunca ona yetişip
+    // sayfayı o çözünürlükte yeniden çizdiriyor. Tek değerle yapılsaydı
+    // her karede sayfa yeniden çizilirdi.
+    var zoom by remember { mutableFloatStateOf(prefs.pdfZoom) }
+    var renderZoom by remember { mutableFloatStateOf(prefs.pdfZoom) }
+    var zoomLocked by remember { mutableStateOf(prefs.pdfZoomLocked) }
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { zoom }
+            .debounce(220)
+            .collect { settled ->
+                renderZoom = settled
+                prefs.pdfZoom = settled
+            }
     }
+
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
+    val density = LocalDensity.current
+    val renderWidthPx = with(density) { (screenWidthDp * renderZoom).roundToPx() }
 
     Box(
         modifier = modifier
@@ -192,23 +221,41 @@ fun PdfReaderRoute(
                         .collect { viewModel.rememberPage(it) }
                 }
 
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        horizontal = 8.dp,
-                        vertical = 12.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                val horizontal = rememberScrollState()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // Yakınlaştırınca sayfa ekrandan geniş oluyor; yana
+                        // kaydırma buradan. Dikey kaydırma listenin kendi
+                        // işi, iki eksen birbirine karışmıyor.
+                        .horizontalScroll(horizontal)
+                        .pinchToZoom(enabled = !zoomLocked) { change ->
+                            zoom = (zoom * change).coerceIn(
+                                ReaderPrefs.MIN_ZOOM,
+                                ReaderPrefs.MAX_ZOOM,
+                            )
+                        },
                 ) {
-                    items(state.sizes.size) { index ->
-                        PdfPage(
-                            index = index,
-                            size = state.sizes[index],
-                            widthPx = widthPx,
-                            render = viewModel::render,
-                            onTap = { chromeVisible = !chromeVisible },
-                        )
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .width(screenWidthDp * zoom)
+                            .fillMaxHeight(),
+                        contentPadding = PaddingValues(
+                            horizontal = if (zoom > 1f) 0.dp else 8.dp,
+                            vertical = 12.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(state.sizes.size) { index ->
+                            PdfPage(
+                                index = index,
+                                size = state.sizes[index],
+                                widthPx = renderWidthPx,
+                                render = viewModel::render,
+                                onTap = { chromeVisible = !chromeVisible },
+                            )
+                        }
                     }
                 }
 
@@ -217,6 +264,30 @@ fun PdfReaderRoute(
                         title = state.title,
                         onBack = onBack,
                         modifier = Modifier.align(Alignment.TopCenter),
+                        actions = {
+                            // Kilit okurken lazım oluyor: oranı bir kez
+                            // ayarlayıp kilitleyince parmak kayması onu
+                            // bozmuyor, sayfa değişince de sıfırlanmıyor.
+                            IconButton(
+                                onClick = {
+                                    zoomLocked = !zoomLocked
+                                    prefs.pdfZoomLocked = zoomLocked
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = if (zoomLocked) {
+                                        MerkezIcons.Lock
+                                    } else {
+                                        MerkezIcons.LockOpen
+                                    },
+                                    contentDescription = if (zoomLocked) {
+                                        "Yakınlaştırma kilitli"
+                                    } else {
+                                        "Yakınlaştırmayı kilitle"
+                                    },
+                                )
+                            }
+                        },
                     )
                     val page by remember(listState) {
                         derivedStateOf { listState.firstVisibleItemIndex }
@@ -224,6 +295,7 @@ fun PdfReaderRoute(
                     PdfBottomBar(
                         page = page + 1,
                         total = state.sizes.size,
+                        zoomPercent = (zoom * 100).toInt(),
                         background = prefs.theme.background,
                         textColor = prefs.theme.text,
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -271,6 +343,7 @@ private fun PdfPage(
 private fun PdfBottomBar(
     page: Int,
     total: Int,
+    zoomPercent: Int,
     background: Color,
     textColor: Color,
     modifier: Modifier = Modifier,
@@ -291,7 +364,11 @@ private fun PdfBottomBar(
                     .align(Alignment.TopCenter),
             )
             Text(
-                text = "Sayfa $page/$total",
+                text = if (zoomPercent > 100) {
+                    "Sayfa $page/$total · %$zoomPercent"
+                } else {
+                    "Sayfa $page/$total"
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = textColor.copy(alpha = 0.7f),
                 modifier = Modifier

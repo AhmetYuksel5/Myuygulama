@@ -299,6 +299,38 @@ object MerkezIcons {
         }
     }
 
+    /** Kilitli asma kilit. */
+    val Lock: ImageVector by lazy {
+        outlined("MerkezLock") {
+            moveTo(5.5f, 10.5f)
+            lineTo(18.5f, 10.5f)
+            lineTo(18.5f, 20f)
+            lineTo(5.5f, 20f)
+            close()
+            // Kulp kapalı: gövdenin içine iniyor.
+            moveTo(8f, 10.5f)
+            lineTo(8f, 7.5f)
+            curveTo(8f, 5.3f, 9.8f, 3.5f, 12f, 3.5f)
+            curveTo(14.2f, 3.5f, 16f, 5.3f, 16f, 7.5f)
+            lineTo(16f, 10.5f)
+        }
+    }
+
+    /** Açık asma kilit: kulp bir yandan kalkmış. */
+    val LockOpen: ImageVector by lazy {
+        outlined("MerkezLockOpen") {
+            moveTo(5.5f, 10.5f)
+            lineTo(18.5f, 10.5f)
+            lineTo(18.5f, 20f)
+            lineTo(5.5f, 20f)
+            close()
+            moveTo(8f, 10.5f)
+            lineTo(8f, 7.5f)
+            curveTo(8f, 5.3f, 9.8f, 3.5f, 12f, 3.5f)
+            curveTo(14.2f, 3.5f, 16f, 5.3f, 16f, 7.5f)
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

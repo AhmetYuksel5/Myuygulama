@@ -56,7 +56,26 @@ class ReaderPrefs(context: Context) {
         get() = prefs.getInt(KEY_MARGIN, DEFAULT_MARGIN).coerceIn(MIN_MARGIN, MAX_MARGIN)
         set(value) = prefs.edit().putInt(KEY_MARGIN, value.coerceIn(MIN_MARGIN, MAX_MARGIN)).apply()
 
+    /**
+     * PDF'te yakınlaştırma oranı.
+     *
+     * Sayfanın kendi kenar boşlukları metnin parçası; onlardan kurtulmanın
+     * tek yolu içeri girmek. Oran saklanıyor ki her sayfada ve her açılışta
+     * yeniden ayarlamak gerekmesin.
+     */
+    var pdfZoom: Float
+        get() = prefs.getFloat(KEY_ZOOM, 1f).coerceIn(MIN_ZOOM, MAX_ZOOM)
+        set(value) = prefs.edit().putFloat(KEY_ZOOM, value.coerceIn(MIN_ZOOM, MAX_ZOOM)).apply()
+
+    /** Kilitliyken parmak hareketi oranı değiştirmiyor. */
+    var pdfZoomLocked: Boolean
+        get() = prefs.getBoolean(KEY_ZOOM_LOCK, false)
+        set(value) = prefs.edit().putBoolean(KEY_ZOOM_LOCK, value).apply()
+
     companion object {
+        const val MIN_ZOOM = 1f
+        const val MAX_ZOOM = 5f
+
         const val MIN_FONT = 14
         const val MAX_FONT = 28
         const val DEFAULT_FONT = 18
@@ -68,6 +87,8 @@ class ReaderPrefs(context: Context) {
         private const val KEY_THEME = "theme"
         private const val KEY_FONT = "font_sp"
         private const val KEY_MARGIN = "margin_dp"
+        private const val KEY_ZOOM = "pdf_zoom"
+        private const val KEY_ZOOM_LOCK = "pdf_zoom_kilit"
     }
 }
 

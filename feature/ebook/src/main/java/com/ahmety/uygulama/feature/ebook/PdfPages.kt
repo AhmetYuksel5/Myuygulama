@@ -58,11 +58,22 @@ class PdfPages private constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 renderer.openPage(index).use { page ->
-                    val height = (widthPx.toLong() * page.height / page.width)
+                    // Toplam piksel sınırı. Yakınlaştırma oranı serbest ama
+                    // bir sayfa dört bayt/piksel tutuyor: üç katta A4 boyu
+                    // bir sayfa altmış megabaytı buluyor ve uygulama
+                    // bellekten düşüyor. Sınırın ötesinde görüntü hafifçe
+                    // yumuşuyor, o kadar.
+                    val ratio = page.height.toFloat() / page.width
+                    val capped = minOf(
+                        widthPx.coerceAtLeast(1),
+                        MAX_EDGE,
+                        kotlin.math.sqrt(MAX_PIXELS / ratio).toInt().coerceAtLeast(1),
+                    )
+                    val height = (capped.toLong() * page.height / page.width)
                         .toInt()
                         .coerceIn(1, MAX_EDGE)
                     val bitmap = Bitmap.createBitmap(
-                        widthPx.coerceIn(1, MAX_EDGE),
+                        capped,
                         height,
                         Bitmap.Config.ARGB_8888,
                     )
@@ -82,8 +93,15 @@ class PdfPages private constructor(
     }
 
     companion object {
-        /** Tek bir sayfanın piksel sınırı; büyüğü belleği bir anda dolduruyor. */
+        /** Tek bir kenarın sınırı. */
         private const val MAX_EDGE = 4096
+
+        /**
+         * Bir sayfanın toplam piksel sınırı: beş megapiksel, yani dört
+         * bayttan yirmi megabayt. Kenar boşluklarını kırpmaya yetecek
+         * yakınlaştırma (bir buçuk-iki kat) bu sınırın altında kalıyor.
+         */
+        private const val MAX_PIXELS = 5_000_000f
 
         fun open(file: File): PdfPages? = runCatching {
             val descriptor = ParcelFileDescriptor.open(
