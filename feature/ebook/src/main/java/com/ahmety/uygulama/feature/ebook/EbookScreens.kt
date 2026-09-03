@@ -114,7 +114,7 @@ fun BookShelfRoute(
     LaunchedEffect(state.openBookId) {
         state.openBookId?.let {
             viewModel.consumeOpenRequest()
-            onOpenBook(it)
+            onOpenBook(it, state.openBookIsPdf)
         }
     }
 

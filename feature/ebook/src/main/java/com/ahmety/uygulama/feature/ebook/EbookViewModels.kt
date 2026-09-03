@@ -32,6 +32,8 @@ data class BookShelfUiState(
     val importing: Boolean = false,
     val message: String? = null,
     val openBookId: Long? = null,
+    /** Yeni yüklenen PDF mi; okuyucusu ayrı. */
+    val openBookIsPdf: Boolean = false,
 )
 
 @HiltViewModel
@@ -102,6 +104,7 @@ class BookShelfViewModel @Inject constructor(
                     importing = false,
                     message = "Eklendi: ${result.title}",
                     openBookId = result.entryId,
+                    openBookIsPdf = result.pdf,
                 )
 
                 is ImportResult.Failed -> _state.value = BookShelfUiState(

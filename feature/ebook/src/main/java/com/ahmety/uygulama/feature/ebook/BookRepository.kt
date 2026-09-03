@@ -23,7 +23,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed interface ImportResult {
-    data class Imported(val entryId: Long, val title: String) : ImportResult
+    data class Imported(
+        val entryId: Long,
+        val title: String,
+        /** PDF'in okuyucusu ayrı; yüklemeden sonra doğru ekrana gidilsin. */
+        val pdf: Boolean = false,
+    ) : ImportResult
     data class Failed(val reason: String) : ImportResult
 }
 
@@ -146,7 +151,7 @@ class BookRepository @Inject constructor(
             }
         }
         pages.close()
-        return ImportResult.Imported(id, title)
+        return ImportResult.Imported(id, title, pdf = true)
     }
 
     /** Seçicinin verdiği dosya adı; PDF'in başlığı için. */
