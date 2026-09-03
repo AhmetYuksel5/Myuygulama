@@ -29,6 +29,15 @@ fun penFor(text: String): HighlightColor =
  *
  * Biçim: `book:12;color=BLUE` veya `article:34;color=YELLOW`
  */
+/** Bir PDF işaretinin sayfası ve sayfadaki yeri (oran olarak). */
+data class PdfSpot(
+    val page: Int,
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+)
+
 object HighlightRef {
 
     const val KIND_BOOK = "book"
@@ -98,7 +107,44 @@ object HighlightRef {
         source?.substringAfter(':', "")?.substringBefore(';')?.toLongOrNull()
 
     fun color(source: String?): HighlightColor? {
-        val raw = source?.substringAfter("color=", "")?.takeIf { it.isNotBlank() } ?: return null
+        // Renkten sonra başka alanlar gelebiliyor (PDF'te sayfa ve
+        // dikdörtgen); noktalı virgülde kesmezsek renk okunmuyor.
+        val raw = source?.substringAfter("color=", "")
+            ?.substringBefore(';')
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
         return runCatching { HighlightColor.valueOf(raw) }.getOrNull()
     }
+
+    /**
+     * PDF işaretinin yeri: hangi sayfa ve sayfanın neresi.
+     *
+     * Kayıt biçimi değişmiyor, kaynağın sonuna bir alan daha ekleniyor:
+     * `book:12;color=BLUE;yer=17:0.11,0.32,0.28,0.35`. Dikdörtgen sayfanın
+     * oranı olarak duruyor — yakınlaştırma ve kırpma değişince işaret
+     * yerinden oynamasın diye.
+     */
+    fun encodeSpot(
+        source: String,
+        page: Int,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+    ): String = "$source;$SPOT_KEY=$page:$left,$top,$right,$bottom"
+
+    /** Sayfa numarası ve dikdörtgen; işaret PDF'ten değilse null. */
+    fun spot(source: String?): PdfSpot? {
+        val raw = source?.substringAfter("$SPOT_KEY=", "")
+            ?.substringBefore(';')
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        val page = raw.substringBefore(':').toIntOrNull() ?: return null
+        val parts = raw.substringAfter(':').split(',')
+        if (parts.size != 4) return null
+        val numbers = parts.map { it.toFloatOrNull() ?: return null }
+        return PdfSpot(page, numbers[0], numbers[1], numbers[2], numbers[3])
+    }
+
+    private const val SPOT_KEY = "yer"
 }

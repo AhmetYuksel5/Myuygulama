@@ -2,6 +2,15 @@ package com.ahmety.uygulama.feature.ebook
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import com.ahmety.uygulama.core.designsystem.PendingHighlight
+import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.Canvas
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.FlowPreview
 import com.ahmety.uygulama.core.designsystem.pinchToZoom
@@ -14,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -57,6 +65,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.ahmety.uygulama.core.model.HighlightColor
+import com.ahmety.uygulama.core.model.HighlightRef
+import com.ahmety.uygulama.core.model.PdfSpot
 import com.ahmety.uygulama.core.designsystem.ReaderPrefs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,10 +82,21 @@ data class PdfUiState(
     val sizes: List<PdfPageSize> = emptyList(),
     /** Belgenin yazı çerçevesi; kırpma kapalıyken tam sayfa. */
     val crop: PdfCrop = PdfCrop.FULL,
+    /** Sayfa numarasına göre işaretler; sayfanın üstüne çiziliyorlar. */
+    val marks: Map<Int, List<PdfMark>> = emptyMap(),
+    /** Sayfadaki metne erişilebiliyor mu; Android 15 ile geldi. */
+    val textSupported: Boolean = true,
     /** Açılışta gidilecek sayfa; kaldığın yer. */
     val startPage: Int = 0,
     val loading: Boolean = true,
     val error: String? = null,
+)
+
+/** Sayfaya çizilecek bir işaret. */
+data class PdfMark(
+    val word: String,
+    val spot: PdfSpot,
+    val color: HighlightColor,
 )
 
 @HiltViewModel
@@ -112,14 +134,56 @@ class PdfReaderViewModel @Inject constructor(
             // Çerçeve sayfalar göründükten sonra hesaplanıyor: birkaç
             // sayfa çizmek yarım saniye sürebiliyor ve okumanın önünde
             // beklemek anlamsız.
+            _state.value = _state.value.copy(textSupported = opened.textSupported)
             if (crop) {
                 _state.value = _state.value.copy(crop = opened.contentBox())
             }
+            refreshMarks()
         }
     }
 
     suspend fun render(index: Int, widthPx: Int, crop: PdfCrop): Bitmap? =
         pages?.render(index, widthPx, crop)
+
+    /** Sayfadaki kelimeye dokunulduğunda; nokta sayfanın oranı olarak. */
+    suspend fun wordAt(index: Int, x: Float, y: Float): PdfWord? =
+        pages?.wordAt(index, x, y)
+
+    /** Kelimeyi işaretler ve sayfaya çizer. */
+    fun mark(word: PdfWord, page: Int, color: HighlightColor) {
+        viewModelScope.launch {
+            repository.setPdfHighlight(
+                bookId = bookId,
+                word = word.text,
+                context = word.context,
+                color = color,
+                page = page,
+                left = word.left,
+                top = word.top,
+                right = word.right,
+                bottom = word.bottom,
+            )
+            refreshMarks()
+        }
+    }
+
+    fun removeMark(word: String) {
+        viewModelScope.launch {
+            repository.removeHighlight(bookId, word)
+            refreshMarks()
+        }
+    }
+
+    private suspend fun refreshMarks() {
+        val grouped = repository.highlightsFor(bookId)
+            .mapNotNull { entry ->
+                val spot = HighlightRef.spot(entry.source) ?: return@mapNotNull null
+                val color = HighlightRef.color(entry.source) ?: return@mapNotNull null
+                PdfMark(entry.title, spot, color)
+            }
+            .groupBy { it.spot.page }
+        _state.value = _state.value.copy(marks = grouped)
+    }
 
     /** Kırpmayı açıp kapatır; kapalıyken çerçeve tam sayfaya dönüyor. */
     fun setCrop(enabled: Boolean) {
@@ -174,6 +238,29 @@ fun PdfReaderRoute(
     val prefs = remember { ReaderPrefs(context) }
     var chromeVisible by remember { mutableStateOf(true) }
     var cropOn by remember { mutableStateOf(prefs.pdfCrop) }
+    // Çift dokunulan yer; kelimeyi okumak askıya alınmış bir iş olduğu
+    // için dokunuş ile sonuç arasında bir adım var.
+    var tapped by remember { mutableStateOf<TapSpot?>(null) }
+    var picking by remember { mutableStateOf<Pick?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(tapped) {
+        val spot = tapped ?: return@LaunchedEffect
+        tapped = null
+        if (!state.textSupported) {
+            notice = "Bu telefonda PDF'in metnine erişilemiyor. " +
+                "Sayfadaki yazıyı okumak Android 15 ile geldi; " +
+                "bu cihaz Android ${android.os.Build.VERSION.RELEASE}."
+            return@LaunchedEffect
+        }
+        val word = viewModel.wordAt(spot.page, spot.x, spot.y)
+        if (word == null) {
+            notice = "Burada seçilebilecek bir kelime yok. " +
+                "Sayfa taranmış bir görüntüyse metni bulunmuyor."
+        } else {
+            picking = Pick(spot.page, word)
+        }
+    }
 
     LaunchedEffect(bookId) { viewModel.load(bookId, cropOn) }
 
@@ -271,11 +358,13 @@ fun PdfReaderRoute(
                         items(state.sizes.size) { index ->
                             PdfPage(
                                 index = index,
-                                size = state.sizes[index],
+                                pageSize = state.sizes[index],
                                 crop = state.crop,
+                                marks = state.marks[index].orEmpty(),
                                 widthPx = renderWidthPx,
                                 render = viewModel::render,
                                 onTap = { chromeVisible = !chromeVisible },
+                                onWordTap = { x, y -> tapped = TapSpot(index, x, y) },
                             )
                         }
                     }
@@ -308,16 +397,55 @@ fun PdfReaderRoute(
             }
         }
     }
+
+    picking?.let { pick ->
+        // Kitaptaki renk kutusunun aynısı: aynı kalemler, aynı anlamlar.
+        ColorPickerDialog(
+            request = PendingHighlight(pick.word.text, pick.word.context),
+            current = null,
+            onDismiss = { picking = null },
+            onPick = { color, keepContext ->
+                viewModel.mark(
+                    word = if (keepContext) pick.word else pick.word.copy(context = ""),
+                    page = pick.page,
+                    color = color,
+                )
+                picking = null
+            },
+            onRemove = {
+                viewModel.removeMark(pick.word.text)
+                picking = null
+            },
+        )
+    }
+
+    notice?.let { message ->
+        AlertDialog(
+            onDismissRequest = { notice = null },
+            title = { Text("Metin seçilemiyor") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { notice = null }) { Text("Tamam") } },
+        )
+    }
 }
+
+
+/** Çift dokunulan nokta: hangi sayfa ve sayfanın neresi. */
+private data class TapSpot(val page: Int, val x: Float, val y: Float)
+
+/** Renk kutusunda bekleyen seçim. */
+private data class Pick(val page: Int, val word: PdfWord)
 
 @Composable
 private fun PdfPage(
     index: Int,
-    size: PdfPageSize,
+    pageSize: PdfPageSize,
     crop: PdfCrop,
+    marks: List<PdfMark>,
     widthPx: Int,
     render: suspend (Int, Int, PdfCrop) -> Bitmap?,
     onTap: () -> Unit,
+    onWordTap: (x: Float, y: Float) -> Unit,
 ) {
     val bitmap by produceState<ImageBitmap?>(null, index, widthPx, crop) {
         value = render(index, widthPx, crop)?.asImageBitmap()
@@ -326,14 +454,28 @@ private fun PdfPage(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            // Oran önceden biliniyor: sayfa çizilmeden de yerini tutuyor,
-            // böylece kaydırırken liste zıplamıyor.
             // Kırpılmış çerçevenin oranı: yerleşim sayfa çizilmeden de
             // ne kadar yer tutacağını biliyor.
-            .aspectRatio(size.ratio * crop.height / crop.width)
+            .aspectRatio(pageSize.ratio * crop.height / crop.width)
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .clickable(onClick = onTap),
+            .pointerInput(index, crop) {
+                detectTapGestures(
+                    onTap = { onTap() },
+                    // Çift dokunuş kelimeyi seçiyor — kitap okuyucusundaki
+                    // hareketin aynısı. Tek dokunuş çubukları açıp kapatıyor.
+                    onDoubleTap = { offset ->
+                        // Buradaki genişlik bileşenin piksel ölçüsü, sayfanın
+                        // kendi ölçüsü değil; ikisinin adı çakışmasın diye
+                        // parametre pageSize.
+                        val boxWidth = this.size.width.toFloat().coerceAtLeast(1f)
+                        val boxHeight = this.size.height.toFloat().coerceAtLeast(1f)
+                        val fx = crop.left + (offset.x / boxWidth) * crop.width
+                        val fy = crop.top + (offset.y / boxHeight) * crop.height
+                        onWordTap(fx, fy)
+                    },
+                )
+            },
     ) {
         bitmap?.let { image ->
             Image(
@@ -343,7 +485,36 @@ private fun PdfPage(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        // İşaretler sayfanın üstüne çiziliyor. Yerleri sayfanın oranı
+        // olarak saklandığı için yakınlaştırma ve kırpma değişse de
+        // kelimenin üstünde duruyorlar.
+        if (marks.isNotEmpty()) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val boxWidth = this.size.width
+                val boxHeight = this.size.height
+                marks.forEach { mark ->
+                    val left = (mark.spot.left - crop.left) / crop.width * boxWidth
+                    val top = (mark.spot.top - crop.top) / crop.height * boxHeight
+                    val right = (mark.spot.right - crop.left) / crop.width * boxWidth
+                    val bottom = (mark.spot.bottom - crop.top) / crop.height * boxHeight
+                    if (right <= left || bottom <= top) return@forEach
+                    drawRect(
+                        color = markPaint(mark.color).copy(alpha = 0.38f),
+                        topLeft = Offset(left, top),
+                        size = Size(right - left, bottom - top),
+                    )
+                }
+            }
+        }
     }
+}
+
+/** İşaret rengi; kitaptaki kalemlerle aynı tonlar. */
+private fun markPaint(color: HighlightColor): Color = when (color) {
+    HighlightColor.YELLOW -> Color(0xFFFFC93C)
+    HighlightColor.BLUE -> Color(0xFF4FA3F7)
+    HighlightColor.GREEN -> Color(0xFF5FC46B)
+    HighlightColor.RED -> Color(0xFFF2708A)
 }
 
 @Composable

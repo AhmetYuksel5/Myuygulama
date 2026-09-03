@@ -1,6 +1,10 @@
 package com.ahmety.uygulama.feature.ebook
 
 import android.graphics.Bitmap
+import androidx.annotation.RequiresApi
+import android.os.Build
+import android.graphics.pdf.models.selection.SelectionBoundary
+import android.graphics.Point
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
@@ -32,6 +36,20 @@ data class PdfCrop(
         val FULL = PdfCrop(0f, 0f, 1f, 1f)
     }
 }
+
+/**
+ * Sayfada dokunulan kelime: metni, sayfadaki yeri (oran) ve içinde geçtiği
+ * metin bloğu.
+ */
+data class PdfWord(
+    val text: String,
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+    /** Kelimenin geçtiği blok; kelime kartındaki bağlam cümlesi için. */
+    val context: String,
+)
 
 /** Bir sayfanın en-boy oranı; yerleşim resim gelmeden önce yerini bilsin diye. */
 data class PdfPageSize(val width: Int, val height: Int) {
@@ -74,6 +92,75 @@ class PdfPages private constructor(
             }.getOrDefault(emptyList())
         }
     }
+
+    /**
+     * Sayfadaki metne erişilebiliyor mu.
+     *
+     * PDF'in metnini okumak Android 15 ile geldi (`getTextContents`,
+     * `selectContent`). Daha eski sürümlerde sayfa yalnızca resim; kelimeye
+     * dokunmanın karşılığı yok.
+     */
+    val textSupported: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+
+    /**
+     * Verilen noktadaki kelime.
+     *
+     * Nokta sayfanın oranı olarak geliyor (0..1), böylece yakınlaştırma ve
+     * kırpma çağıranın işi olarak kalıyor. Platformun kendi seçimi
+     * kullanılıyor: başlangıç ve bitiş sınırı aynı noktaysa o noktadaki
+     * kelime seçiliyor — okuyucuların çift dokunuşla yaptığı şey.
+     */
+    suspend fun wordAt(index: Int, xFraction: Float, yFraction: Float): PdfWord? {
+        if (!textSupported) return null
+        return mutex.withLock {
+            withContext(Dispatchers.IO) {
+                runCatching { readWord(index, xFraction, yFraction) }.getOrNull()
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private fun readWord(index: Int, xFraction: Float, yFraction: Float): PdfWord? =
+        renderer.openPage(index).use { page ->
+            val point = Point(
+                (xFraction * page.width).toInt().coerceIn(0, page.width - 1),
+                (yFraction * page.height).toInt().coerceIn(0, page.height - 1),
+            )
+            val boundary = SelectionBoundary(point)
+            val selection = page.selectContent(boundary, boundary) ?: return null
+
+            val contents = selection.selectedTextContents
+            val text = contents.joinToString(" ") { it.text }.trim()
+            if (text.isBlank()) return null
+
+            val rects = contents.flatMap { it.bounds }
+            if (rects.isEmpty()) return null
+            val left = rects.minOf { it.left } / page.width
+            val top = rects.minOf { it.top } / page.height
+            val right = rects.maxOf { it.right } / page.width
+            val bottom = rects.maxOf { it.bottom } / page.height
+
+            // Bağlam: kelimenin bulunduğu satırın/bloğun tamamı. Sayfanın
+            // bütün metnini almak kart için fazla, kelimenin kendisi ise az.
+            val context = runCatching {
+                page.textContents
+                    .map { it.text }
+                    .firstOrNull { it.contains(text, ignoreCase = true) }
+                    ?.replace(Regex("\\s+"), " ")
+                    ?.trim()
+                    .orEmpty()
+            }.getOrDefault("")
+
+            PdfWord(
+                text = text,
+                left = left,
+                top = top,
+                right = right,
+                bottom = bottom,
+                context = context.take(MAX_CONTEXT),
+            )
+        }
 
     /** Sayfayı verilen genişlikte çizer; [crop] verilirse o çerçeveye. */
     suspend fun render(index: Int, widthPx: Int, crop: PdfCrop = PdfCrop.FULL): Bitmap? =
@@ -229,6 +316,9 @@ class PdfPages private constructor(
 
         /** Çerçevenin etrafında bırakılan pay; harfler kenara yapışmasın. */
         private const val PADDING = 0.012f
+
+        /** Karta yazılacak bağlamın üst sınırı. */
+        private const val MAX_CONTEXT = 400
 
         fun open(file: File): PdfPages? = runCatching {
             val descriptor = ParcelFileDescriptor.open(

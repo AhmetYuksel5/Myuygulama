@@ -398,6 +398,50 @@ class BookRepository @Inject constructor(
         }
     }
 
+    /**
+     * PDF'te bir kelimeyi işaretler.
+     *
+     * Kitaptakinden tek farkı kaynağa sayfa ve dikdörtgenin eklenmesi:
+     * PDF'te metin akmıyor, işaretin sayfada nerede duracağını ayrıca
+     * bilmek gerekiyor. Kelime yine kitap işareti olarak kaydediliyor,
+     * yani kelime destesine "Kitaptan" diye düşüyor — PDF de bir kitap.
+     */
+    suspend fun setPdfHighlight(
+        bookId: Long,
+        word: String,
+        context: String,
+        color: HighlightColor,
+        page: Int,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+    ) {
+        val trimmed = word.trim()
+        if (trimmed.isEmpty()) return
+        val source = HighlightRef.encodeSpot(
+            source = HighlightRef.encode(HighlightRef.KIND_BOOK, bookId, color),
+            page = page,
+            left = left,
+            top = top,
+            right = right,
+            bottom = bottom,
+        )
+        val existing = highlightsFor(bookId).firstOrNull {
+            it.title.equals(trimmed, ignoreCase = true)
+        }
+        if (existing == null) {
+            entryRepository.createEntry(
+                type = EntryType.HIGHLIGHT,
+                title = trimmed,
+                body = context.trim(),
+                source = source,
+            )
+        } else {
+            entryRepository.updateSource(existing.id, source)
+        }
+    }
+
     /** İşareti tamamen kaldırır. */
     suspend fun removeHighlight(bookId: Long, word: String) {
         val trimmed = word.trim()
