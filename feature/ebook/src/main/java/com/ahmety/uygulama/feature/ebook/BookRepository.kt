@@ -75,6 +75,17 @@ class BookRepository @Inject constructor(
         }.getOrDefault(false)
         if (!copied) return@withContext ImportResult.Failed("Dosya okunamadı.")
 
+        // Uzantıya değil içeriğe bakıyoruz: seçicide gelen ad her zaman
+        // doğru olmuyor, hele paylaşımdan gelen dosyalarda.
+        if (PdfPages.isPdf(epubFile)) {
+            val pdfFile = File(booksDir, "kitap_$stamp.pdf")
+            if (!epubFile.renameTo(pdfFile)) {
+                epubFile.delete()
+                return@withContext ImportResult.Failed("PDF kaydedilemedi.")
+            }
+            return@withContext importPdf(pdfFile, displayNameOf(uri))
+        }
+
         val book = EpubParser.parse(epubFile)
         if (book == null) {
             epubFile.delete()
@@ -97,6 +108,79 @@ class BookRepository @Inject constructor(
         // sayılıyor.
         EpubParser.coverBytes(epubFile)?.let { covers.save(id, it) }
         ImportResult.Imported(id, book.title)
+    }
+
+    /**
+     * PDF'i kitaplığa koyar.
+     *
+     * Ayrıştırılacak bir şey yok: dosya olduğu gibi duruyor, okuyucu
+     * sayfaları açtıkça çiziyor. Kapak olarak ilk sayfa saklanıyor —
+     * rafta PDF'ler de kitaplar gibi görünsün.
+     */
+    private suspend fun importPdf(file: File, displayName: String?): ImportResult {
+        val pages = PdfPages.open(file)
+        if (pages == null || pages.pageCount == 0) {
+            pages?.close()
+            file.delete()
+            return ImportResult.Failed("Bu PDF açılamadı. Dosya bozuk ya da parolalı olabilir.")
+        }
+
+        val title = displayName
+            ?.substringBeforeLast('.')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: file.nameWithoutExtension
+
+        val id = entryRepository.createEntry(
+            type = EntryType.DOCUMENT,
+            title = title,
+            body = "${pages.pageCount} sayfa",
+            source = "${HighlightRef.PDF_SOURCE_MARKER}:${file.absolutePath}",
+        )
+        runCatching {
+            pages.render(0, COVER_WIDTH)?.let { bitmap ->
+                val stream = java.io.ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
+                covers.save(id, stream.toByteArray())
+                bitmap.recycle()
+            }
+        }
+        pages.close()
+        return ImportResult.Imported(id, title)
+    }
+
+    /** Seçicinin verdiği dosya adı; PDF'in başlığı için. */
+    private fun displayNameOf(uri: Uri): String? = runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()
+
+    /** Kayıt bir PDF mi. */
+    fun isPdf(entry: Entry): Boolean = HighlightRef.isPdfDocument(entry.source)
+
+    /** PDF dosyasını açar; okuyucu sayfaları buradan alıyor. */
+    suspend fun openPdf(entryId: Long): PdfPages? = withContext(Dispatchers.IO) {
+        val entry = entryRepository.getById(entryId) ?: return@withContext null
+        val path = entry.source
+            ?.takeIf { HighlightRef.isPdfDocument(it) }
+            ?.removePrefix("${HighlightRef.PDF_SOURCE_MARKER}:")
+            ?: return@withContext null
+        val file = File(path)
+        if (!file.exists()) return@withContext null
+        PdfPages.open(file)
+    }
+
+    /** Kaydın başlığı; PDF okuyucusu üst çubuğa yazıyor. */
+    suspend fun titleOf(entryId: Long): String =
+        entryRepository.getById(entryId)?.title.orEmpty()
+
+    /** PDF'te kaldığın sayfa. */
+    fun lastPage(bookId: Long): Int = readerPrefs.getInt("sayfa_$bookId", 0)
+
+    fun saveLastPage(bookId: Long, page: Int) {
+        readerPrefs.edit().putInt("sayfa_$bookId", page.coerceAtLeast(0)).apply()
     }
 
     /**
@@ -375,7 +459,14 @@ class BookRepository @Inject constructor(
             progressStore.forgetAll(marks.map { it.title })
         }
         withContext(Dispatchers.IO) {
-            entry.source?.let { path ->
+            entry.source?.let { raw ->
+                if (HighlightRef.isPdfDocument(raw)) {
+                    runCatching {
+                        File(raw.removePrefix("${HighlightRef.PDF_SOURCE_MARKER}:")).delete()
+                    }
+                    return@let
+                }
+                val path = raw
                 val json = File(path)
                 runCatching { json.delete() }
                 // Yanındaki .epub dosyasını da temizle.
@@ -401,6 +492,9 @@ class BookRepository @Inject constructor(
     private companion object {
         /** Bellekte tutulan resim sayısı; fazlası belleği şişiriyor. */
         const val IMAGE_CACHE_SIZE = 6
+
+        /** PDF kapağı için ilk sayfanın çizileceği genişlik. */
+        const val COVER_WIDTH = 640
 
         /** Bir "bölüm"e kaç replik giriyor. Okuyucunun ilerleme çubuğu için. */
         const val FILM_CHAPTER_SENTENCES = 120

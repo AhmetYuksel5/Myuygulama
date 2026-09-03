@@ -149,6 +149,9 @@ class BookShelfViewModel @Inject constructor(
 
     fun canRefresh(entry: Entry): Boolean = repository.canRefresh(entry)
 
+    /** Kayıt bir PDF mi; okuyucusu ayrı. */
+    fun isPdf(entry: Entry): Boolean = repository.isPdf(entry)
+
     /** Kitabın kapağı; yoksa null ve satır renkli sırta düşüyor. */
     fun coverOf(bookId: Long) = repository.coverFile(bookId)
 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.feature.ebook.BookReaderRoute
 import com.ahmety.uygulama.feature.ebook.BookShelfRoute
+import com.ahmety.uygulama.feature.ebook.PdfReaderRoute
 import com.ahmety.uygulama.feature.habits.HabitsRoute
 import com.ahmety.uygulama.feature.library.PocketRoute
 import com.ahmety.uygulama.feature.reader.ArticleRoute
@@ -96,7 +97,9 @@ private fun ownerTabOf(route: String?): TopLevelDestination? {
     if (TopLevelDestination.entries.any { it.route == value }) return null
     return when {
         value.startsWith("$ARTICLE_ROUTE/") -> TopLevelDestination.POCKET
-        value.startsWith("$BOOK_ROUTE/") || value == SUBTITLE_ROUTE -> TopLevelDestination.BOOKS
+        value.startsWith("$BOOK_ROUTE/") ||
+            value.startsWith("$PDF_ROUTE/") ||
+            value == SUBTITLE_ROUTE -> TopLevelDestination.BOOKS
         else -> TopLevelDestination.MORE
     }
 }
@@ -129,7 +132,8 @@ fun MerkezApp() {
 
     // Okuma ekranında alt sekme çubuğu metni sıkıştırıyor ve sağ alt köşedeki
     // "ileri" dokunma bölgesini kapatıyor; o rotada gizliyoruz.
-    val immersive = currentDestination?.route?.startsWith("$BOOK_ROUTE/") == true
+    val immersive = currentDestination?.route?.startsWith("$BOOK_ROUTE/") == true ||
+        currentDestination?.route?.startsWith("$PDF_ROUTE/") == true
 
     Scaffold(
         // Okuma ekranında alt inset'i Scaffold'a bırakmıyoruz: bıraksaydık
@@ -234,13 +238,27 @@ fun MerkezApp() {
                 ArticleRoute(entryId = backStackEntry.arguments?.getLong("articleId") ?: 0L)
             }
             composable(TopLevelDestination.BOOKS.route) {
-                BookShelfRoute(onOpenBook = { navController.navigate("$BOOK_ROUTE/$it") })
+                BookShelfRoute(
+                    onOpenBook = { id, pdf ->
+                        val route = if (pdf) PDF_ROUTE else BOOK_ROUTE
+                        navController.navigate("$route/$id")
+                    },
+                )
             }
             composable(
                 route = "$BOOK_ROUTE/{bookId}",
                 arguments = listOf(navArgument("bookId") { type = NavType.LongType }),
             ) { backStackEntry ->
                 BookReaderRoute(bookId = backStackEntry.arguments?.getLong("bookId") ?: 0L)
+            }
+            composable(
+                route = "$PDF_ROUTE/{bookId}",
+                arguments = listOf(navArgument("bookId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                PdfReaderRoute(
+                    bookId = backStackEntry.arguments?.getLong("bookId") ?: 0L,
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable(PERMISSIONS_ROUTE) {
                 PermissionsScreen(onContinue = { navController.popBackStack() })
@@ -266,6 +284,7 @@ fun MerkezApp() {
 
 private const val HABITS_ROUTE = "aliskanliklar"
 private const val BOOK_ROUTE = "book"
+private const val PDF_ROUTE = "pdf"
 private const val ARTICLE_ROUTE = "article"
 private const val AI_ROUTE = "ai"
 private const val SUBTITLE_ROUTE = "altyazi"

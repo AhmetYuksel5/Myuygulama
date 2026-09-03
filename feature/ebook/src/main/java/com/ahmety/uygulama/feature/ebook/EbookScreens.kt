@@ -96,7 +96,7 @@ import kotlinx.coroutines.flow.collectLatest
 /** Kitaplık: EPUB yükle, kitapları listele. */
 @Composable
 fun BookShelfRoute(
-    onOpenBook: (Long) -> Unit,
+    onOpenBook: (id: Long, pdf: Boolean) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BookShelfViewModel = hiltViewModel(),
 ) {
@@ -180,11 +180,12 @@ fun BookShelfRoute(
                     modifier = Modifier.animateItem(),
                     book = book,
                     film = viewModel.isFilm(book),
+                    pdf = viewModel.isPdf(book),
                     percent = remember(book.id) { viewModel.progressOf(book.id) },
                     cover = viewModel::coverOf,
-                    onOpen = { onOpenBook(book.id) },
+                    onOpen = { onOpenBook(book.id, viewModel.isPdf(book)) },
                     onBrief = { viewModel.openBrief(book) },
-                    onRefresh = if (viewModel.canRefresh(book)) {
+                    onRefresh = if (!viewModel.isPdf(book) && viewModel.canRefresh(book)) {
                         { viewModel.refresh(book) }
                     } else {
                         null
@@ -263,6 +264,7 @@ private fun ShelfChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun BookCard(
     book: Entry,
     film: Boolean,
+    pdf: Boolean,
     percent: Int,
     cover: (Long) -> File?,
     modifier: Modifier = Modifier,
@@ -297,9 +299,14 @@ private fun BookCard(
                     .size(width = 46.dp, height = 66.dp),
             )
             Column(modifier = Modifier.weight(1f)) {
-                if (film) {
+                val kind = when {
+                    film -> "FİLM"
+                    pdf -> "PDF"
+                    else -> null
+                }
+                kind?.let {
                     Text(
-                        text = "FİLM",
+                        text = it,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )

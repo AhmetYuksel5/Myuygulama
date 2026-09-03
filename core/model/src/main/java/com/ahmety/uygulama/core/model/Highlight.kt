@@ -74,6 +74,18 @@ object HighlightRef {
      */
     const val WORDLIST_SOURCE_MARKER = "liste"
 
+    /**
+     * PDF kaydının işareti: `pdf:/…/kitap_1.pdf`.
+     *
+     * PDF de kitaplıkta duruyor ama okuyucusu ayrı — metni yok, sayfaları
+     * resim olarak çiziliyor. Kayıt türünü değiştirmek yerine kaynağın
+     * önüne işaret koyuyoruz; film için de aynı yol izlenmişti.
+     */
+    const val PDF_SOURCE_MARKER = "pdf"
+
+    fun isPdfDocument(source: String?): Boolean =
+        source?.startsWith("$PDF_SOURCE_MARKER:") == true
+
     fun isListDocument(source: String?): Boolean = source == WORDLIST_SOURCE_MARKER
 
     fun encode(kind: String, sourceId: Long, color: HighlightColor): String =
