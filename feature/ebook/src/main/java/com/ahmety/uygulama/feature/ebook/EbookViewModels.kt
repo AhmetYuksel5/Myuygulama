@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.OpenAiClient
 import com.ahmety.uygulama.core.ai.WorkBriefStore
+import android.graphics.Bitmap
 import com.ahmety.uygulama.core.model.Entry
 import com.ahmety.uygulama.core.model.HighlightColor
 import com.ahmety.uygulama.core.model.HighlightRef
@@ -132,6 +133,22 @@ class BookShelfViewModel @Inject constructor(
     /** Kitaplık satırındaki ilerleme çizgisi için. */
     fun progressOf(bookId: Long): Int = repository.readingPercent(bookId)
 
+    /** Kitabı EPUB'ından yeniden ayrıştırır (resimler, kapak). */
+    fun refresh(entry: Entry) {
+        viewModelScope.launch {
+            val ok = repository.refresh(entry)
+            _state.value = _state.value.copy(
+                message = if (ok) {
+                    "\"${entry.title}\" yeniden tarandı; resimler ve kapak geldi."
+                } else {
+                    "Yeniden taranamadı: kitabın EPUB dosyası bulunamadı."
+                },
+            )
+        }
+    }
+
+    fun canRefresh(entry: Entry): Boolean = repository.canRefresh(entry)
+
     /** Kitabın kapağı; yoksa null ve satır renkli sırta düşüyor. */
     fun coverOf(bookId: Long) = repository.coverFile(bookId)
 }
@@ -214,6 +231,10 @@ class BookReaderViewModel @Inject constructor(
     fun savePosition(paragraphIndex: Int) {
         repository.saveLastParagraph(bookId, paragraphIndex)
     }
+
+    /** Bölüm içindeki bir resim; okuyucu çizerken istiyor. */
+    suspend fun chapterImage(entryPath: String, maxWidth: Int): Bitmap? =
+        repository.chapterImage(bookId, entryPath, maxWidth)
 
     /** Okurken hesaplanan yüzdeyi kitaplığın kullanması için saklar. */
     fun saveProgress(percent: Int) {

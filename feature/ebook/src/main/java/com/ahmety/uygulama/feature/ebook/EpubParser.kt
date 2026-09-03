@@ -32,6 +32,20 @@ data class EpubBook(
  */
 object EpubParser {
 
+    /**
+     * Resim paragrafının önündeki işaret.
+     *
+     * Bölümler metin dizisi olarak saklanıyor; resmi ayrı bir alan yapmak
+     * kayıt biçimini ve okuyucuyu birden değiştirmek demekti. Onun yerine
+     * resim, arşiv içindeki yolunu taşıyan bir satır olarak akışta duruyor.
+     * Baştaki denetim karakteri metinde geçemez, karışma ihtimali yok.
+     */
+    const val IMAGE_MARKER = "\u0001img:"
+
+    /** Bu satır bir resimse arşivdeki yolu, değilse null. */
+    fun imagePath(paragraph: String): String? =
+        paragraph.removePrefix(IMAGE_MARKER).takeIf { it != paragraph }
+
     fun parse(file: File): EpubBook? = runCatching {
         ZipFile(file).use { zip ->
             val opfPath = findOpfPath(zip) ?: return@use null
@@ -150,17 +164,32 @@ object EpubParser {
         val doc = runCatching {
             Jsoup.parse(bytes.inputStream(), charset, "")
         }.getOrNull() ?: return null
-        doc.select("script, style, nav, svg, img, figure").remove()
+        // svg ve betikler gidiyor ama <img> kalıyor: resimler kitabın parçası.
+        doc.select("script, style, nav, svg").remove()
 
         val title = repairMojibake(doc.selectFirst("h1, h2, h3, title")?.text()?.trim().orEmpty())
-        var paragraphs = doc.select("p, h1, h2, h3, h4, li, blockquote")
-            .map { repairMojibake(it.text().trim()) }
-            .filter { it.length > 1 }
-        // Bazı kitaplar paragrafları <div> ile kuruyor; hiç <p> yoksa yedek.
-        if (paragraphs.isEmpty()) {
-            paragraphs = doc.select("div")
+        // Seçici, belgedeki sırayla dönüyor; resimler de metnin arasına
+        // girdiği yerde çıkıyor. Resim, yolunu taşıyan bir "paragraf" olarak
+        // akışa katılıyor — kitap zaten paragraf dizisi olarak saklandığı
+        // için veri biçimi değişmiyor.
+        val chapterDir = path.substringBeforeLast('/', "")
+        var paragraphs = doc.select("p, h1, h2, h3, h4, li, blockquote, img")
+            .mapNotNull { element ->
+                if (element.tagName() == "img") {
+                    val src = element.attr("src").takeIf { it.isNotBlank() }
+                        ?: element.attr("xlink:href").takeIf { it.isNotBlank() }
+                        ?: return@mapNotNull null
+                    IMAGE_MARKER + resolve(chapterDir, src)
+                } else {
+                    repairMojibake(element.text().trim()).takeIf { it.length > 1 }
+                }
+            }
+        // Bazı kitaplar paragrafları <div> ile kuruyor; hiç metin yoksa yedek.
+        if (paragraphs.none { !it.startsWith(IMAGE_MARKER) }) {
+            val fromDivs = doc.select("div")
                 .map { repairMojibake(it.ownText().trim()) }
                 .filter { it.length > 1 }
+            if (fromDivs.isNotEmpty()) paragraphs = paragraphs + fromDivs
         }
 
         return if (paragraphs.isEmpty()) null else EpubChapter(title, paragraphs)

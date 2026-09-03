@@ -1,6 +1,11 @@
 package com.ahmety.uygulama.feature.ebook
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -179,6 +184,11 @@ fun BookShelfRoute(
                     cover = viewModel::coverOf,
                     onOpen = { onOpenBook(book.id) },
                     onBrief = { viewModel.openBrief(book) },
+                    onRefresh = if (viewModel.canRefresh(book)) {
+                        { viewModel.refresh(book) }
+                    } else {
+                        null
+                    },
                     onDelete = { withWords -> viewModel.delete(book, withWords) },
                     countWords = { viewModel.highlightCount(book) },
                 )
@@ -258,6 +268,7 @@ private fun BookCard(
     modifier: Modifier = Modifier,
     onOpen: () -> Unit,
     onBrief: () -> Unit,
+    onRefresh: (() -> Unit)?,
     onDelete: (withWords: Boolean) -> Unit,
     countWords: suspend () -> Int,
 ) {
@@ -340,6 +351,18 @@ private fun BookCard(
                             onBrief()
                         },
                     )
+                    // Ayrıştırıcı geliştikçe eski kitaplar geride kalıyor;
+                    // metin bir kez çıkarılıp saklanıyor. EPUB yanında
+                    // durduğu için yeniden okumak mümkün.
+                    if (onRefresh != null) {
+                        DropdownMenuItem(
+                            text = { Text("Yeniden tara") },
+                            onClick = {
+                                menuOpen = false
+                                onRefresh()
+                            },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Sil") },
                         onClick = {
@@ -542,17 +565,28 @@ fun BookReaderRoute(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     items(chapter?.paragraphs.orEmpty()) { paragraph ->
-                        HighlightableParagraph(
-                            raw = paragraph,
-                            colors = state.highlightColors,
-                            textColor = theme.text,
-                            fontSizeSp = fontSize,
-                            onZoneTap = { fraction -> handleZoneTap(fraction) },
-                            onSelection = { text, sentence ->
-                                pending = PendingHighlight(text, sentence)
-                            },
-                            onPreview = { preview = it },
-                        )
+                        // Resimler de akışta bir "paragraf" olarak duruyor;
+                        // metnin arasına girdiği yerde çiziliyorlar.
+                        val imagePath = EpubParser.imagePath(paragraph)
+                        if (imagePath != null) {
+                            ChapterImage(
+                                path = imagePath,
+                                load = viewModel::chapterImage,
+                                onTap = { chromeVisible = !chromeVisible },
+                            )
+                        } else {
+                            HighlightableParagraph(
+                                raw = paragraph,
+                                colors = state.highlightColors,
+                                textColor = theme.text,
+                                fontSizeSp = fontSize,
+                                onZoneTap = { fraction -> handleZoneTap(fraction) },
+                                onSelection = { text, sentence ->
+                                    pending = PendingHighlight(text, sentence)
+                                },
+                                onPreview = { preview = it },
+                            )
+                        }
                     }
 
                     // Bölüm sonunda ölü nokta bırakmıyoruz.
@@ -657,6 +691,41 @@ fun BookReaderRoute(
  * hesaba katılıyor: uzun paragraflı bölümlerde yüzde sayfa çevirdikçe
  * yerinde sayıp sonra sıçruyordu.
  */
+/**
+ * Bölüm içindeki bir resim.
+ *
+ * Boyu önceden bilinmiyor; yüklenene kadar yer tutulmuyor ki metin
+ * gereksiz yere aşağı itilmesin. Geldiğinde kendi en-boy oranıyla,
+ * sayfanın genişliğine oturuyor.
+ */
+@Composable
+private fun ChapterImage(
+    path: String,
+    load: suspend (String, Int) -> Bitmap?,
+    onTap: () -> Unit,
+) {
+    val widthPx = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.roundToPx()
+    }
+    val bitmap by produceState<ImageBitmap?>(null, path, widthPx) {
+        value = load(path, widthPx)?.asImageBitmap()
+    }
+
+    bitmap?.let { image ->
+        Image(
+            bitmap = image,
+            contentDescription = null,
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                // Resme dokunmak da arayüzü açıp kapatsın: metinde olduğu
+                // gibi. Yoksa resmin üstünde dokunuş hiçbir şey yapmıyor.
+                .clickable(onClick = onTap),
+        )
+    }
+}
+
 /**
  * Kapağı dosyadan okur. Ana iş parçacığında değil: rafta on kitap varsa on
  * JPEG açılıyor ve kaydırma takılıyor.

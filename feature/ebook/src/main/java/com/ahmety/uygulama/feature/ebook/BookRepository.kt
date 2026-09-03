@@ -1,6 +1,8 @@
 package com.ahmety.uygulama.feature.ebook
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.database.repository.VocabProgressRepository
@@ -16,6 +18,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,6 +46,9 @@ class BookRepository @Inject constructor(
 
     private val booksDir: File
         get() = File(context.filesDir, "kitaplar").apply { mkdirs() }
+
+    /** Son okunan bölüm resimleri; anahtar arşiv içindeki yol. */
+    private val cachedImages = LinkedHashMap<String, Bitmap>()
 
     /**
      * Kitaplık. Filmler de burada: altyazı da okunacak bir metin, kitaptan
@@ -161,6 +167,90 @@ class BookRepository @Inject constructor(
         val file = File(path)
         if (!file.exists()) return@withContext null
         runCatching { decodeBook(file.readText(), entry.title, entry.body) }.getOrNull()
+    }
+
+    /**
+     * Kitabı EPUB'ından yeniden ayrıştırır.
+     *
+     * Ayrıştırıcı geliştikçe (resimler, kapak) eski kitaplar geride
+     * kalıyor: metin bir kez çıkarılıp saklanıyor ve bir daha
+     * bakılmıyor. Arşiv kitabın yanında durduğu için yeniden okumak
+     * mümkün; işaretlemeler kelimenin kendisine bağlı olduğundan
+     * kayboluyor değil.
+     */
+    suspend fun refresh(entry: Entry): Boolean = withContext(Dispatchers.IO) {
+        val jsonPath = entry.source
+            ?.removePrefix("${HighlightRef.SUBTITLE_SOURCE_MARKER}:")
+            ?: return@withContext false
+        val epub = File(jsonPath.removeSuffix(".json") + ".epub")
+        if (!epub.exists()) return@withContext false
+
+        val book = EpubParser.parse(epub) ?: return@withContext false
+        runCatching { File(jsonPath).writeText(encodeBook(book)) }
+            .getOrElse { return@withContext false }
+        EpubParser.coverBytes(epub)?.let { covers.save(entry.id, it) }
+        cachedImages.clear()
+        true
+    }
+
+    /** Yeniden taranabilir mi: yanında EPUB dosyası duruyor mu. */
+    fun canRefresh(entry: Entry): Boolean {
+        val jsonPath = entry.source
+            ?.removePrefix("${HighlightRef.SUBTITLE_SOURCE_MARKER}:")
+            ?: return false
+        return File(jsonPath.removeSuffix(".json") + ".epub").exists()
+    }
+
+    /**
+     * Bölüm içindeki bir resmi arşivden okur.
+     *
+     * Resimler yükleme sırasında ayrıca çıkarılmıyor: EPUB dosyası kitabın
+     * yanında zaten duruyor ve arşivden tek girdi okumak milisaniyeler
+     * sürüyor. Ayrıca çıkarmak aynı baytları ikinci kez saklamak olurdu.
+     *
+     * Ekrandan büyük resimler okunurken küçültülüyor; bir kitapta üç bin
+     * piksellik sayfalar olabiliyor ve tam boy açmak belleği bir anda
+     * dolduruyor.
+     */
+    suspend fun chapterImage(bookId: Long, entryPath: String, maxWidth: Int): Bitmap? =
+        withContext(Dispatchers.IO) {
+            cachedImages[entryPath]?.let { return@withContext it }
+
+            val entry = entryRepository.getById(bookId) ?: return@withContext null
+            val jsonPath = entry.source
+                ?.removePrefix("${HighlightRef.SUBTITLE_SOURCE_MARKER}:")
+                ?: return@withContext null
+            val epub = File(jsonPath.removeSuffix(".json") + ".epub")
+            if (!epub.exists()) return@withContext null
+
+            val bitmap = runCatching {
+                ZipFile(epub).use { zip ->
+                    val item = zip.getEntry(entryPath) ?: return@use null
+                    val bytes = zip.getInputStream(item).use { it.readBytes() }
+                    decodeScaled(bytes, maxWidth)
+                }
+            }.getOrNull()
+
+            if (bitmap != null) {
+                // Küçük bir tampon: aynı resmin önünden birkaç kez geçiliyor
+                // (aşağı in, yukarı dön) ve her seferinde çözmek gereksiz.
+                if (cachedImages.size >= IMAGE_CACHE_SIZE) {
+                    cachedImages.keys.firstOrNull()?.let { cachedImages.remove(it) }
+                }
+                cachedImages[entryPath] = bitmap
+            }
+            bitmap
+        }
+
+    /** Ekrana sığacak kadar küçülterek çözer. */
+    private fun decodeScaled(bytes: ByteArray, maxWidth: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val width = bounds.outWidth
+        var sample = 1
+        while (width > 0 && maxWidth > 0 && width / sample > maxWidth * 2) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
 
     /**
@@ -309,6 +399,9 @@ class BookRepository @Inject constructor(
     }
 
     private companion object {
+        /** Bellekte tutulan resim sayısı; fazlası belleği şişiriyor. */
+        const val IMAGE_CACHE_SIZE = 6
+
         /** Bir "bölüm"e kaç replik giriyor. Okuyucunun ilerleme çubuğu için. */
         const val FILM_CHAPTER_SENTENCES = 120
 
