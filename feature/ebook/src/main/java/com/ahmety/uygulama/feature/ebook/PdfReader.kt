@@ -520,9 +520,16 @@ private fun PdfPage(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            // Kırpılmış çerçevenin oranı: yerleşim sayfa çizilmeden de
-            // ne kadar yer tutacağını biliyor.
-            .aspectRatio(pageSize.ratio * crop.height / crop.width)
+            // Kırpılmış çerçevenin oranı (en / boy).
+            //
+            // Bölme bir süre ters yazılıydı ve kırpmanın bütün belirtisi
+            // oradan geliyordu: yanlardan ne kadar çok kırpılırsa kutu o
+            // kadar kısalıyor, resim ortalanıp üstten ve alttan
+            // kesiliyordu. Kırpma kutusunun kendisiyle ilgisi yoktu.
+            //
+            // Kırpılmış sayfanın eni = sayfa_eni × kırpma_eni, boyu da
+            // sayfa_boyu × kırpma_boyu; oran ikisinin bölümü.
+            .aspectRatio(pageSize.ratio * crop.width / crop.height)
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .pointerInput(index, crop) {
@@ -566,7 +573,10 @@ private fun PdfPage(
             Image(
                 bitmap = image,
                 contentDescription = null,
-                contentScale = ContentScale.FillWidth,
+                // Fit, FillWidth değil: oran bir kıl payı şaşsa bile
+                // sayfanın bir parçası kesilmiyor, en fazla kenarda
+                // birkaç piksel boşluk kalıyor.
+                contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
             )
         }
