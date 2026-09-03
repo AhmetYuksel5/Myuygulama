@@ -111,24 +111,50 @@ class PdfPages private constructor(
      * kullanılıyor: başlangıç ve bitiş sınırı aynı noktaysa o noktadaki
      * kelime seçiliyor — okuyucuların çift dokunuşla yaptığı şey.
      */
-    suspend fun wordAt(index: Int, xFraction: Float, yFraction: Float): PdfWord? {
+    suspend fun wordAt(index: Int, xFraction: Float, yFraction: Float): PdfWord? =
+        selection(index, xFraction, yFraction, xFraction, yFraction)
+
+    /**
+     * İki nokta arasındaki metin.
+     *
+     * Aynı noktayı iki kez verirsen o noktadaki kelime seçiliyor; farklı
+     * noktalar verirsen aradaki her şey. Parmağı basılı tutup sürüklemek
+     * bunu kullanıyor.
+     */
+    suspend fun selection(
+        index: Int,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): PdfWord? {
         if (!textSupported) return null
         return mutex.withLock {
             withContext(Dispatchers.IO) {
-                runCatching { readWord(index, xFraction, yFraction) }.getOrNull()
+                runCatching { readSelection(index, startX, startY, endX, endY) }.getOrNull()
             }
         }
     }
 
     @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
-    private fun readWord(index: Int, xFraction: Float, yFraction: Float): PdfWord? =
+    private fun readSelection(
+        index: Int,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): PdfWord? =
         renderer.openPage(index).use { page ->
-            val point = Point(
-                (xFraction * page.width).toInt().coerceIn(0, page.width - 1),
-                (yFraction * page.height).toInt().coerceIn(0, page.height - 1),
+            fun boundaryAt(x: Float, y: Float) = SelectionBoundary(
+                Point(
+                    (x * page.width).toInt().coerceIn(0, page.width - 1),
+                    (y * page.height).toInt().coerceIn(0, page.height - 1),
+                ),
             )
-            val boundary = SelectionBoundary(point)
-            val selection = page.selectContent(boundary, boundary) ?: return null
+            val selection = page.selectContent(
+                boundaryAt(startX, startY),
+                boundaryAt(endX, endY),
+            ) ?: return null
 
             val contents = selection.selectedTextContents
             val text = contents.joinToString(" ") { it.text }.trim()
@@ -213,10 +239,17 @@ class PdfPages private constructor(
      * Belgedeki yazının kapladığı çerçeve.
      *
      * Sayfanın kenar boşlukları metnin parçası — PDF'e basılı, kaldırmanın
-     * yolu yok, ama çizerken atlanabilir. Birkaç sayfa küçük boyda çizilip
-     * beyaz olmayan piksellerin sınırı bulunuyor, sonra kenarların ortanca
-     * değeri alınıyor: tek bir tam sayfa resim ya da boş sayfa çerçeveyi
-     * bozmasın diye.
+     * yolu yok, ama çizerken atlanabilir.
+     *
+     * İki karar burada:
+     *
+     * 1. Örneklenen sayfaların kutuları **birleştiriliyor**, ortalaması
+     *    alınmıyor. Ortanca, ilk satırı biraz yukarıda başlayan sayfaların
+     *    tepesini kesiyordu — bir sayfayı okunmaz etmektense biraz fazla
+     *    boşluk bırakmak yeğ.
+     * 2. Her sayfanın kendi üst bilgisi ve sayfa numarası kutunun dışında
+     *    bırakılıyor: gövdeden hep beyaz bir şeritle ayrıldıkları için
+     *    bulunabiliyorlar. Her sayfada aynı satırı okumanın anlamı yok.
      */
     suspend fun contentBox(): PdfCrop = mutex.withLock {
         withContext(Dispatchers.IO) {
@@ -229,25 +262,32 @@ class PdfPages private constructor(
                     .mapNotNull { index ->
                         renderer.openPage(index).use { page -> inkBox(page) }
                     }
+                    // Neredeyse tam sayfa kaplayan örnekler (tam sayfa
+                    // görsel, kapak) birleşimi anlamsız kılıyor.
+                    .filter { it.width < 0.95f || it.height < 0.95f }
                 if (boxes.isEmpty()) return@runCatching PdfCrop.FULL
 
-                fun middle(values: List<Float>): Float =
-                    values.sorted()[values.size / 2]
-
                 val box = PdfCrop(
-                    left = (middle(boxes.map { it.left }) - PADDING).coerceAtLeast(0f),
-                    top = (middle(boxes.map { it.top }) - PADDING).coerceAtLeast(0f),
-                    right = (middle(boxes.map { it.right }) + PADDING).coerceAtMost(1f),
-                    bottom = (middle(boxes.map { it.bottom }) + PADDING).coerceAtMost(1f),
+                    left = (boxes.minOf { it.left } - PADDING).coerceAtLeast(0f),
+                    top = (boxes.minOf { it.top } - PADDING).coerceAtLeast(0f),
+                    right = (boxes.maxOf { it.right } + PADDING).coerceAtMost(1f),
+                    bottom = (boxes.maxOf { it.bottom } + PADDING).coerceAtMost(1f),
                 )
-                // Kazanç yoksa hiç uğraşma: kenarları zaten dar bir belgede
-                // kırpmak metni büyütmüyor, yalnız hata payı getiriyor.
-                if (box.width > 0.94f && box.height > 0.94f) PdfCrop.FULL else box
+                // Kazanç yoksa hiç uğraşma.
+                if (box.width > 0.96f && box.height > 0.96f) PdfCrop.FULL else box
             }.getOrDefault(PdfCrop.FULL)
         }
     }
 
-    /** Tek bir sayfada yazının sınırları; oran olarak. */
+    /**
+     * Tek bir sayfada gövde metninin sınırları; oran olarak.
+     *
+     * Önce satır satır mürekkep sayılıyor. Üstte ve altta, gövdeden beyaz
+     * bir şeritle ayrılmış kısa bloklar varsa (üst bilgi, sayfa numarası)
+     * dışarıda bırakılıyor. Sol ve sağ sınır yalnız kalan satırlara
+     * bakılarak bulunuyor — yoksa sayfanın iki ucuna yayılan üst bilgi
+     * kutuyu gereksiz genişletiyor.
+     */
     private fun inkBox(page: PdfRenderer.Page): PdfCrop? = runCatching {
         val width = SAMPLE_WIDTH
         val height = (width.toFloat() * page.height / page.width).toInt().coerceAtLeast(1)
@@ -259,35 +299,69 @@ class PdfPages private constructor(
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
         bitmap.recycle()
 
-        var minX = width
-        var minY = height
-        var maxX = -1
-        var maxY = -1
+        // Satır başına mürekkepli piksel sayısı.
+        val rowInk = IntArray(height)
         for (y in 0 until height) {
             val row = y * width
+            var count = 0
             for (x in 0 until width) {
-                val pixel = pixels[row + x]
-                // Kaba parlaklık: tarama kâğıdı bembeyaz olmuyor, eşik
-                // biraz gevşek.
-                val luminance = ((pixel shr 16 and 0xFF) * 3 +
-                    (pixel shr 8 and 0xFF) * 6 +
-                    (pixel and 0xFF)) / 10
-                if (luminance < INK_THRESHOLD) {
+                if (isInk(pixels[row + x])) count++
+            }
+            rowInk[y] = count
+        }
+
+        var first = rowInk.indexOfFirst { it > 0 }
+        var last = rowInk.indexOfLast { it > 0 }
+        if (first < 0 || last < 0) return@runCatching null
+
+        val gap = (height * GAP_RATIO).toInt().coerceAtLeast(2)
+        val headerZone = (height * EDGE_ZONE).toInt()
+
+        // Üst bilgi: ilk bloğun ardından yeterince geniş bir beyaz şerit
+        // varsa ve blok sayfanın tepesine yakınsa, gövde şeritten sonra
+        // başlıyor demektir.
+        var y = first
+        while (y <= last && rowInk[y] > 0) y++
+        var blank = y
+        while (blank <= last && rowInk[blank] == 0) blank++
+        if (y - first < headerZone && blank - y >= gap && blank <= last) first = blank
+
+        // Sayfa numarası: aynısı alttan.
+        y = last
+        while (y >= first && rowInk[y] > 0) y--
+        blank = y
+        while (blank >= first && rowInk[blank] == 0) blank--
+        if (last - y < headerZone && y - blank >= gap && blank >= first) last = blank
+
+        // Sol ve sağ, yalnız gövde satırlarına bakarak.
+        var minX = width
+        var maxX = -1
+        for (row in first..last) {
+            val base = row * width
+            for (x in 0 until width) {
+                if (isInk(pixels[base + x])) {
                     if (x < minX) minX = x
                     if (x > maxX) maxX = x
-                    if (y < minY) minY = y
-                    if (y > maxY) maxY = y
                 }
             }
         }
-        if (maxX < 0 || maxY < 0) return@runCatching null
+        if (maxX < 0) return@runCatching null
+
         PdfCrop(
             left = minX.toFloat() / width,
-            top = minY.toFloat() / height,
+            top = first.toFloat() / height,
             right = (maxX + 1).toFloat() / width,
-            bottom = (maxY + 1).toFloat() / height,
+            bottom = (last + 1).toFloat() / height,
         )
     }.getOrNull()
+
+    /** Kaba parlaklık: tarama kâğıdı bembeyaz olmuyor, eşik biraz gevşek. */
+    private fun isInk(pixel: Int): Boolean {
+        val luminance = ((pixel shr 16 and 0xFF) * 3 +
+            (pixel shr 8 and 0xFF) * 6 +
+            (pixel and 0xFF)) / 10
+        return luminance < INK_THRESHOLD
+    }
 
     override fun close() {
         runCatching { renderer.close() }
@@ -305,8 +379,11 @@ class PdfPages private constructor(
          */
         private const val MAX_PIXELS = 5_000_000f
 
-        /** Çerçeve için örneklenecek sayfa sayısı. */
-        private const val SAMPLE_PAGES = 9
+        /**
+         * Çerçeve için örneklenecek sayfa sayısı. Birleşim alındığı için
+         * ne kadar çok sayfaya bakılırsa o kadar az sayfa kesiliyor.
+         */
+        private const val SAMPLE_PAGES = 16
 
         /** Örnek sayfanın çizileceği genişlik; sınır bulmaya bu yetiyor. */
         private const val SAMPLE_WIDTH = 140
@@ -316,6 +393,12 @@ class PdfPages private constructor(
 
         /** Çerçevenin etrafında bırakılan pay; harfler kenara yapışmasın. */
         private const val PADDING = 0.012f
+
+        /** Üst bilgiyi gövdeden ayıran beyaz şeridin en az yüksekliği. */
+        private const val GAP_RATIO = 0.018f
+
+        /** Üst bilgi aranan bölge: sayfanın tepesinden bu kadarı. */
+        private const val EDGE_ZONE = 0.10f
 
         /** Karta yazılacak bağlamın üst sınırı. */
         private const val MAX_CONTEXT = 400

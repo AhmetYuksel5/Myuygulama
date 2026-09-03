@@ -10,6 +10,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.Canvas
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.FlowPreview
@@ -48,6 +51,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import kotlin.math.roundToInt
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -145,9 +150,14 @@ class PdfReaderViewModel @Inject constructor(
     suspend fun render(index: Int, widthPx: Int, crop: PdfCrop): Bitmap? =
         pages?.render(index, widthPx, crop)
 
-    /** Sayfadaki kelimeye dokunulduğunda; nokta sayfanın oranı olarak. */
-    suspend fun wordAt(index: Int, x: Float, y: Float): PdfWord? =
-        pages?.wordAt(index, x, y)
+    /** İki nokta arasındaki metin; noktalar sayfanın oranı olarak. */
+    suspend fun selection(
+        index: Int,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): PdfWord? = pages?.selection(index, startX, startY, endX, endY)
 
     /** Kelimeyi işaretler ve sayfaya çizer. */
     fun mark(word: PdfWord, page: Int, color: HighlightColor) {
@@ -238,11 +248,14 @@ fun PdfReaderRoute(
     val prefs = remember { ReaderPrefs(context) }
     var chromeVisible by remember { mutableStateOf(true) }
     var cropOn by remember { mutableStateOf(prefs.pdfCrop) }
-    // Çift dokunulan yer; kelimeyi okumak askıya alınmış bir iş olduğu
-    // için dokunuş ile sonuç arasında bir adım var.
+    // Basılı tutup bırakılan aralık; metni okumak askıya alınmış bir iş
+    // olduğu için hareket ile sonuç arasında bir adım var.
     var tapped by remember { mutableStateOf<TapSpot?>(null) }
     var picking by remember { mutableStateOf<Pick?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    // Parmak basılıyken seçilen aralık; sayfanın üstünde canlı gösteriliyor.
+    var dragging by remember { mutableStateOf<DragBox?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(tapped) {
         val spot = tapped ?: return@LaunchedEffect
@@ -253,10 +266,16 @@ fun PdfReaderRoute(
                 "bu cihaz Android ${android.os.Build.VERSION.RELEASE}."
             return@LaunchedEffect
         }
-        val word = viewModel.wordAt(spot.page, spot.x, spot.y)
+        val word = viewModel.selection(
+            spot.page,
+            spot.x,
+            spot.y,
+            spot.endX,
+            spot.endY,
+        )
         if (word == null) {
-            notice = "Burada seçilebilecek bir kelime yok. " +
-                "Sayfa taranmış bir görüntüyse metni bulunmuyor."
+            notice = "Burada seçilebilecek metin yok. " +
+                "Sayfa taranmış bir görüntüyse içinde metin bulunmuyor."
         } else {
             picking = Pick(spot.page, word)
         }
@@ -313,6 +332,7 @@ fun PdfReaderRoute(
 
             else -> {
                 val listState = rememberLazyListState()
+                val horizontal = rememberScrollState()
                 // Kaldığın sayfaya bir kez gidiliyor; ölçüler geldikten
                 // sonra, yoksa liste henüz boşken atlama kayboluyor.
                 LaunchedEffect(state.sizes.size, state.startPage) {
@@ -329,7 +349,6 @@ fun PdfReaderRoute(
                         .collect { viewModel.rememberPage(it) }
                 }
 
-                val horizontal = rememberScrollState()
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -337,11 +356,34 @@ fun PdfReaderRoute(
                         // kaydırma buradan. Dikey kaydırma listenin kendi
                         // işi, iki eksen birbirine karışmıyor.
                         .horizontalScroll(horizontal)
-                        .pinchToZoom(enabled = !zoomLocked) { change ->
-                            zoom = (zoom * change).coerceIn(
+                        .pinchToZoom(enabled = !zoomLocked) { change, centroid ->
+                            val next = (zoom * change).coerceIn(
                                 ReaderPrefs.MIN_ZOOM,
                                 ReaderPrefs.MAX_ZOOM,
                             )
+                            val step = next / zoom
+                            zoom = next
+                            // Parmakların ortasındaki nokta yerinde kalsın:
+                            // her şey [step] katı büyüdüğü için o noktanın
+                            // kenara uzaklığı da aynı katta artıyor, iki
+                            // kaydırma da o kadar ilerletiliyor. Bu olmadan
+                            // sayfa hep sol üstünden büyüyordu.
+                            if (step != 1f) {
+                                scope.launch {
+                                    horizontal.scrollTo(
+                                        ((horizontal.value + centroid.x) * step - centroid.x)
+                                            .roundToInt()
+                                            .coerceAtLeast(0),
+                                    )
+                                    listState.scrollToItem(
+                                        listState.firstVisibleItemIndex,
+                                        ((listState.firstVisibleItemScrollOffset + centroid.y) *
+                                            step - centroid.y)
+                                            .roundToInt()
+                                            .coerceAtLeast(0),
+                                    )
+                                }
+                            }
                         },
                 ) {
                     LazyColumn(
@@ -364,7 +406,17 @@ fun PdfReaderRoute(
                                 widthPx = renderWidthPx,
                                 render = viewModel::render,
                                 onTap = { chromeVisible = !chromeVisible },
-                                onWordTap = { x, y -> tapped = TapSpot(index, x, y) },
+                                selecting = if (dragging?.page == index) dragging else null,
+                                onSelecting = { start, end ->
+                                    dragging = if (start == null || end == null) {
+                                        null
+                                    } else {
+                                        DragBox(index, start, end)
+                                    }
+                                },
+                                onSelected = { start, end ->
+                                    tapped = TapSpot(index, start.x, start.y, end.x, end.y)
+                                },
                             )
                         }
                     }
@@ -430,8 +482,17 @@ fun PdfReaderRoute(
 }
 
 
-/** Çift dokunulan nokta: hangi sayfa ve sayfanın neresi. */
-private data class TapSpot(val page: Int, val x: Float, val y: Float)
+/** Parmak basılıyken sürüklenen aralık; sayfanın üstünde çiziliyor. */
+private data class DragBox(val page: Int, val start: Offset, val end: Offset)
+
+/** Seçilen aralık: hangi sayfa, nereden nereye (sayfanın oranı olarak). */
+private data class TapSpot(
+    val page: Int,
+    val x: Float,
+    val y: Float,
+    val endX: Float,
+    val endY: Float,
+)
 
 /** Renk kutusunda bekleyen seçim. */
 private data class Pick(val page: Int, val word: PdfWord)
@@ -445,8 +506,13 @@ private fun PdfPage(
     widthPx: Int,
     render: suspend (Int, Int, PdfCrop) -> Bitmap?,
     onTap: () -> Unit,
-    onWordTap: (x: Float, y: Float) -> Unit,
+    /** Parmak basılıyken sürüklenen aralık; bu sayfada değilse null. */
+    selecting: DragBox?,
+    /** Sürüklerken: aralık ekranda gösterilsin diye. Bitince ikisi de null. */
+    onSelecting: (start: Offset?, end: Offset?) -> Unit,
+    onSelected: (start: Offset, end: Offset) -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
     val bitmap by produceState<ImageBitmap?>(null, index, widthPx, crop) {
         value = render(index, widthPx, crop)?.asImageBitmap()
     }
@@ -460,20 +526,39 @@ private fun PdfPage(
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .pointerInput(index, crop) {
-                detectTapGestures(
-                    onTap = { onTap() },
-                    // Çift dokunuş kelimeyi seçiyor — kitap okuyucusundaki
-                    // hareketin aynısı. Tek dokunuş çubukları açıp kapatıyor.
-                    onDoubleTap = { offset ->
-                        // Buradaki genişlik bileşenin piksel ölçüsü, sayfanın
-                        // kendi ölçüsü değil; ikisinin adı çakışmasın diye
-                        // parametre pageSize.
-                        val boxWidth = this.size.width.toFloat().coerceAtLeast(1f)
-                        val boxHeight = this.size.height.toFloat().coerceAtLeast(1f)
-                        val fx = crop.left + (offset.x / boxWidth) * crop.width
-                        val fy = crop.top + (offset.y / boxHeight) * crop.height
-                        onWordTap(fx, fy)
+                detectTapGestures(onTap = { onTap() })
+            }
+            // Metin seçme: parmağı basılı tut, istersen sürükle, bırak.
+            // Okurken beklenen hareket bu; çift dokunuş metin kutularının
+            // yöntemi, sayfa okurken kimse denemiyor.
+            .pointerInput(index, crop) {
+                // Buradaki ölçü bileşenin piksel ölçüsü, sayfanın kendi
+                // ölçüsü değil; adları çakışmasın diye parametre pageSize.
+                val boxWidth = this.size.width.toFloat().coerceAtLeast(1f)
+                val boxHeight = this.size.height.toFloat().coerceAtLeast(1f)
+                fun fractionOf(offset: Offset) = Offset(
+                    crop.left + (offset.x / boxWidth) * crop.width,
+                    crop.top + (offset.y / boxHeight) * crop.height,
+                )
+
+                var start = Offset.Zero
+                var end = Offset.Zero
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        start = fractionOf(offset)
+                        end = start
+                        onSelecting(start, end)
                     },
+                    onDrag = { change, _ ->
+                        end = fractionOf(change.position)
+                        onSelecting(start, end)
+                    },
+                    onDragEnd = {
+                        onSelected(start, end)
+                        onSelecting(null, null)
+                    },
+                    onDragCancel = { onSelecting(null, null) },
                 )
             },
     ) {
@@ -488,10 +573,31 @@ private fun PdfPage(
         // İşaretler sayfanın üstüne çiziliyor. Yerleri sayfanın oranı
         // olarak saklandığı için yakınlaştırma ve kırpma değişse de
         // kelimenin üstünde duruyorlar.
-        if (marks.isNotEmpty()) {
+        if (marks.isNotEmpty() || selecting != null) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val boxWidth = this.size.width
                 val boxHeight = this.size.height
+
+                // Parmak altındaki aralık: ne seçtiğini bırakmadan görmek
+                // için. Gerçek kelime sınırları bırakınca belli oluyor.
+                selecting?.let { drag ->
+                    val left = (minOf(drag.start.x, drag.end.x) - crop.left) /
+                        crop.width * boxWidth
+                    val right = (maxOf(drag.start.x, drag.end.x) - crop.left) /
+                        crop.width * boxWidth
+                    val top = (minOf(drag.start.y, drag.end.y) - crop.top) /
+                        crop.height * boxHeight
+                    val bottom = (maxOf(drag.start.y, drag.end.y) - crop.top) /
+                        crop.height * boxHeight
+                    drawRect(
+                        color = Color(0xFF4FA3F7).copy(alpha = 0.25f),
+                        topLeft = Offset(left, top),
+                        size = Size(
+                            (right - left).coerceAtLeast(6f),
+                            (bottom - top).coerceAtLeast(6f),
+                        ),
+                    )
+                }
                 marks.forEach { mark ->
                     val left = (mark.spot.left - crop.left) / crop.width * boxWidth
                     val top = (mark.spot.top - crop.top) / crop.height * boxHeight

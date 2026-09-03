@@ -2,8 +2,10 @@ package com.ahmety.uygulama.core.designsystem
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.pointerInput
 
@@ -16,11 +18,13 @@ import androidx.compose.ui.input.pointer.pointerInput
  * tek parmakla kaydırma olduğu gibi geçiyor.
  *
  * Geri çağrı oranın kendisini değil **çarpanını** veriyor (1'den büyükse
- * açılıyor, küçükse kapanıyor); sınırları çağıran koyuyor.
+ * açılıyor, küçükse kapanıyor); sınırları çağıran koyuyor. İki parmağın
+ * ortası da veriliyor: yakınlaştırma o noktayı yerinde tutacak şekilde
+ * yapılmalı, yoksa sayfa hep tepesinden büyüyor.
  */
 fun Modifier.pinchToZoom(
     enabled: Boolean = true,
-    onZoom: (change: Float) -> Unit,
+    onZoom: (change: Float, centroid: Offset) -> Unit,
 ): Modifier = composed {
     if (!enabled) return@composed this
 
@@ -34,7 +38,7 @@ fun Modifier.pinchToZoom(
                     // Bire çok yakın değişimler parmak titremesi; onları
                     // tüketmek kaydırmayı tutuklaştırıyor.
                     if (change != 0f && kotlin.math.abs(change - 1f) > 0.002f) {
-                        onZoom(change)
+                        onZoom(change, event.calculateCentroid(useCurrent = true))
                         event.changes.forEach { it.consume() }
                     }
                 }
