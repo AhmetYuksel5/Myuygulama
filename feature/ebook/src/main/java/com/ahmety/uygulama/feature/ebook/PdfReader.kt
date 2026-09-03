@@ -17,6 +17,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,7 +57,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import com.ahmety.uygulama.core.designsystem.ReaderPrefs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +69,8 @@ import javax.inject.Inject
 data class PdfUiState(
     val title: String = "",
     val sizes: List<PdfPageSize> = emptyList(),
+    /** Belgenin yazı çerçevesi; kırpma kapalıyken tam sayfa. */
+    val crop: PdfCrop = PdfCrop.FULL,
     /** Açılışta gidilecek sayfa; kaldığın yer. */
     val startPage: Int = 0,
     val loading: Boolean = true,
@@ -84,7 +88,7 @@ class PdfReaderViewModel @Inject constructor(
     private var pages: PdfPages? = null
     private var bookId: Long = 0L
 
-    fun load(id: Long) {
+    fun load(id: Long, crop: Boolean) {
         if (bookId == id && pages != null) return
         bookId = id
         viewModelScope.launch {
@@ -105,10 +109,26 @@ class PdfReaderViewModel @Inject constructor(
                 startPage = repository.lastPage(id),
                 loading = false,
             )
+            // Çerçeve sayfalar göründükten sonra hesaplanıyor: birkaç
+            // sayfa çizmek yarım saniye sürebiliyor ve okumanın önünde
+            // beklemek anlamsız.
+            if (crop) {
+                _state.value = _state.value.copy(crop = opened.contentBox())
+            }
         }
     }
 
-    suspend fun render(index: Int, widthPx: Int): Bitmap? = pages?.render(index, widthPx)
+    suspend fun render(index: Int, widthPx: Int, crop: PdfCrop): Bitmap? =
+        pages?.render(index, widthPx, crop)
+
+    /** Kırpmayı açıp kapatır; kapalıyken çerçeve tam sayfaya dönüyor. */
+    fun setCrop(enabled: Boolean) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                crop = if (enabled) pages?.contentBox() ?: PdfCrop.FULL else PdfCrop.FULL,
+            )
+        }
+    }
 
     /**
      * Kaldığın yer. Sayfa numarası hem burada saklanıyor hem de kitaplık
@@ -145,16 +165,17 @@ class PdfReaderViewModel @Inject constructor(
 @Composable
 fun PdfReaderRoute(
     bookId: Long,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PdfReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(bookId) { viewModel.load(bookId) }
 
     val context = LocalContext.current
     val prefs = remember { ReaderPrefs(context) }
     var chromeVisible by remember { mutableStateOf(true) }
+    var cropOn by remember { mutableStateOf(prefs.pdfCrop) }
+
+    LaunchedEffect(bookId) { viewModel.load(bookId, cropOn) }
 
     // Yakınlaştırma. İki değer var: [zoom] parmak altında anında değişiyor
     // ve yerleşimi büyütüyor; [renderZoom] parmak durunca ona yetişip
@@ -251,6 +272,7 @@ fun PdfReaderRoute(
                             PdfPage(
                                 index = index,
                                 size = state.sizes[index],
+                                crop = state.crop,
                                 widthPx = renderWidthPx,
                                 render = viewModel::render,
                                 onTap = { chromeVisible = !chromeVisible },
@@ -260,35 +282,6 @@ fun PdfReaderRoute(
                 }
 
                 if (chromeVisible) {
-                    MerkezTopBar(
-                        title = state.title,
-                        onBack = onBack,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        actions = {
-                            // Kilit okurken lazım oluyor: oranı bir kez
-                            // ayarlayıp kilitleyince parmak kayması onu
-                            // bozmuyor, sayfa değişince de sıfırlanmıyor.
-                            IconButton(
-                                onClick = {
-                                    zoomLocked = !zoomLocked
-                                    prefs.pdfZoomLocked = zoomLocked
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = if (zoomLocked) {
-                                        MerkezIcons.Lock
-                                    } else {
-                                        MerkezIcons.LockOpen
-                                    },
-                                    contentDescription = if (zoomLocked) {
-                                        "Yakınlaştırma kilitli"
-                                    } else {
-                                        "Yakınlaştırmayı kilitle"
-                                    },
-                                )
-                            }
-                        },
-                    )
                     val page by remember(listState) {
                         derivedStateOf { listState.firstVisibleItemIndex }
                     }
@@ -296,6 +289,17 @@ fun PdfReaderRoute(
                         page = page + 1,
                         total = state.sizes.size,
                         zoomPercent = (zoom * 100).toInt(),
+                        cropOn = cropOn,
+                        zoomLocked = zoomLocked,
+                        onToggleCrop = {
+                            cropOn = !cropOn
+                            prefs.pdfCrop = cropOn
+                            viewModel.setCrop(cropOn)
+                        },
+                        onToggleLock = {
+                            zoomLocked = !zoomLocked
+                            prefs.pdfZoomLocked = zoomLocked
+                        },
                         background = prefs.theme.background,
                         textColor = prefs.theme.text,
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -310,12 +314,13 @@ fun PdfReaderRoute(
 private fun PdfPage(
     index: Int,
     size: PdfPageSize,
+    crop: PdfCrop,
     widthPx: Int,
-    render: suspend (Int, Int) -> Bitmap?,
+    render: suspend (Int, Int, PdfCrop) -> Bitmap?,
     onTap: () -> Unit,
 ) {
-    val bitmap by produceState<ImageBitmap?>(null, index, widthPx) {
-        value = render(index, widthPx)?.asImageBitmap()
+    val bitmap by produceState<ImageBitmap?>(null, index, widthPx, crop) {
+        value = render(index, widthPx, crop)?.asImageBitmap()
     }
 
     Box(
@@ -323,7 +328,9 @@ private fun PdfPage(
             .fillMaxWidth()
             // Oran önceden biliniyor: sayfa çizilmeden de yerini tutuyor,
             // böylece kaydırırken liste zıplamıyor.
-            .aspectRatio(size.ratio)
+            // Kırpılmış çerçevenin oranı: yerleşim sayfa çizilmeden de
+            // ne kadar yer tutacağını biliyor.
+            .aspectRatio(size.ratio * crop.height / crop.width)
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .clickable(onClick = onTap),
@@ -344,6 +351,10 @@ private fun PdfBottomBar(
     page: Int,
     total: Int,
     zoomPercent: Int,
+    cropOn: Boolean,
+    zoomLocked: Boolean,
+    onToggleCrop: () -> Unit,
+    onToggleLock: () -> Unit,
     background: Color,
     textColor: Color,
     modifier: Modifier = Modifier,
@@ -354,27 +365,67 @@ private fun PdfBottomBar(
         tonalElevation = 0.dp,
         shadowElevation = 8.dp,
     ) {
-        Box(modifier = Modifier.navigationBarsPadding()) {
+        Column(modifier = Modifier.navigationBarsPadding()) {
             LinearProgressIndicator(
                 progress = { if (total > 0) page.toFloat() / total else 0f },
                 color = textColor.copy(alpha = 0.75f),
                 trackColor = textColor.copy(alpha = 0.12f),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.TopCenter),
+                    .height(2.dp),
             )
-            Text(
-                text = if (zoomPercent > 100) {
-                    "Sayfa $page/$total · %$zoomPercent"
-                } else {
-                    "Sayfa $page/$total"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = textColor.copy(alpha = 0.7f),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(vertical = 10.dp),
-            )
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+            ) {
+                Text(
+                    text = if (zoomPercent > 100) {
+                        "Sayfa $page/$total · %$zoomPercent"
+                    } else {
+                        "Sayfa $page/$total"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = textColor.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp),
+                )
+                // İki küçük düğme sayının yanında: okurken lazım olan tek
+                // şey bunlar. Üstte kitabın adını yazan bir çubuk vardı,
+                // okurken hiçbir işe yaramıyordu.
+                IconButton(onClick = onToggleCrop) {
+                    Icon(
+                        imageVector = MerkezIcons.Crop,
+                        contentDescription = if (cropOn) {
+                            "Kenar kırpma açık"
+                        } else {
+                            "Kenarları kırp"
+                        },
+                        tint = if (cropOn) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            textColor.copy(alpha = 0.55f)
+                        },
+                    )
+                }
+                IconButton(onClick = onToggleLock) {
+                    Icon(
+                        imageVector = if (zoomLocked) MerkezIcons.Lock else MerkezIcons.LockOpen,
+                        contentDescription = if (zoomLocked) {
+                            "Yakınlaştırma kilitli"
+                        } else {
+                            "Yakınlaştırmayı kilitle"
+                        },
+                        tint = if (zoomLocked) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            textColor.copy(alpha = 0.55f)
+                        },
+                    )
+                }
+            }
         }
     }
 }

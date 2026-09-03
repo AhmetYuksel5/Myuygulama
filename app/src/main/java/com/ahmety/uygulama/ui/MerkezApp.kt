@@ -255,10 +255,9 @@ fun MerkezApp() {
                 route = "$PDF_ROUTE/{bookId}",
                 arguments = listOf(navArgument("bookId") { type = NavType.LongType }),
             ) { backStackEntry ->
-                PdfReaderRoute(
-                    bookId = backStackEntry.arguments?.getLong("bookId") ?: 0L,
-                    onBack = { navController.popBackStack() },
-                )
+                // Geri düğmesi yok: okurken üstte çubuk istemiyoruz, çıkış
+                // sistemin geri hareketiyle.
+                PdfReaderRoute(bookId = backStackEntry.arguments?.getLong("bookId") ?: 0L)
             }
             composable(PERMISSIONS_ROUTE) {
                 PermissionsScreen(onContinue = { navController.popBackStack() })

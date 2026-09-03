@@ -331,6 +331,18 @@ object MerkezIcons {
         }
     }
 
+    /** Kırpma işareti: iki gönye üst üste. */
+    val Crop: ImageVector by lazy {
+        outlined("MerkezCrop") {
+            moveTo(6.5f, 2.5f)
+            lineTo(6.5f, 17.5f)
+            lineTo(21.5f, 17.5f)
+            moveTo(2.5f, 6.5f)
+            lineTo(17.5f, 6.5f)
+            lineTo(17.5f, 21.5f)
+        }
+    }
+
     /** Ekle: artı. */
     val Add: ImageVector by lazy {
         outlined("MerkezAdd") {

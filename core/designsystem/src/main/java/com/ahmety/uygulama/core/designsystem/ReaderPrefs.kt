@@ -67,6 +67,16 @@ class ReaderPrefs(context: Context) {
         get() = prefs.getFloat(KEY_ZOOM, 1f).coerceIn(MIN_ZOOM, MAX_ZOOM)
         set(value) = prefs.edit().putFloat(KEY_ZOOM, value.coerceIn(MIN_ZOOM, MAX_ZOOM)).apply()
 
+    /**
+     * PDF'te kenar boşluklarını otomatik kırpma.
+     *
+     * Varsayılan açık: kırpmanın kaybettireceği bir şey yok, kazandırdığı
+     * şey ekranın üçte biri.
+     */
+    var pdfCrop: Boolean
+        get() = prefs.getBoolean(KEY_CROP, true)
+        set(value) = prefs.edit().putBoolean(KEY_CROP, value).apply()
+
     /** Kilitliyken parmak hareketi oranı değiştirmiyor. */
     var pdfZoomLocked: Boolean
         get() = prefs.getBoolean(KEY_ZOOM_LOCK, false)
@@ -89,6 +99,7 @@ class ReaderPrefs(context: Context) {
         private const val KEY_MARGIN = "margin_dp"
         private const val KEY_ZOOM = "pdf_zoom"
         private const val KEY_ZOOM_LOCK = "pdf_zoom_kilit"
+        private const val KEY_CROP = "pdf_kirp"
     }
 }
 
