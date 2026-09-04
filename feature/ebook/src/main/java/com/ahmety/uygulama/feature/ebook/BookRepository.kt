@@ -453,6 +453,37 @@ class BookRepository @Inject constructor(
     /** Kitabın kapak dosyası; yoksa null. */
     fun coverFile(bookId: Long) = covers.fileFor(bookId)
 
+    /**
+     * Eserin adını değiştirir.
+     *
+     * İşaretler esere kimliğiyle bağlı, adıyla değil; ad değişince kelime
+     * destesindeki kayıtlar yerinde kalıyor.
+     */
+    suspend fun rename(bookId: Long, title: String): Boolean {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return false
+        val entry = entryRepository.getById(bookId) ?: return false
+        if (entry.title == trimmed) return true
+        entryRepository.updateEntry(bookId, trimmed, entry.body)
+        return true
+    }
+
+    /**
+     * Kapağı cihazdaki bir görselden koyar.
+     *
+     * Kapağı olmayan kitaplar rafta birbirine benziyor. Görsel küçültülüp
+     * saklanıyor; kaç megabaytlık bir dosya seçildiği önemli değil.
+     */
+    suspend fun setCover(bookId: Long, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return@runCatching false
+            covers.save(bookId, bytes)
+        }.getOrDefault(false)
+    }
+
+    fun clearCover(bookId: Long) = covers.delete(bookId)
+
     /** Kitapta en son okunan bölüm — kaldığın yerden devam edebilmek için. */
     fun lastChapter(bookId: Long): Int = readerPrefs.getInt("chapter_$bookId", 0)
 

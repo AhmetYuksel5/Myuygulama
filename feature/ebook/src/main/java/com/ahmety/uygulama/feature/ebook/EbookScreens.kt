@@ -51,6 +51,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -110,6 +113,19 @@ fun BookShelfRoute(
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> if (uri != null) viewModel.import(uri) }
+
+    // Kapağı değiştirilecek eser; görsel seçici tek olduğu için hangisi
+    // için açıldığını burada tutuyoruz.
+    var coverFor by remember { mutableStateOf<Long?>(null) }
+    val coverPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val target = coverFor
+        coverFor = null
+        if (uri != null && target != null) viewModel.setCover(target, uri)
+    }
+
+    val shelfContext = LocalContext.current
 
     LaunchedEffect(state.openBookId) {
         state.openBookId?.let {
@@ -192,6 +208,31 @@ fun BookShelfRoute(
                     },
                     onDelete = { withWords -> viewModel.delete(book, withWords) },
                     countWords = { viewModel.highlightCount(book) },
+                    coverVersion = viewModel.coverVersion,
+                    onRename = { title -> viewModel.rename(book, title) },
+                    onPickCover = {
+                        coverFor = book.id
+                        coverPicker.launch(arrayOf("image/*"))
+                    },
+                    // Kapağı olmayan kitap rafta tanınmıyor. Uygulamanın
+                    // içinden görsel indirmek yerine tarayıcıda arama
+                    // açılıyor: bulunan resmi telefona kaydedip "Kapak seç"
+                    // ile koyuyorsun.
+                    onSearchCover = {
+                        val what = if (viewModel.isFilm(book)) "film afişi" else "kitap kapağı"
+                        val query = Uri.encode("${book.title} $what")
+                        runCatching {
+                            shelfContext.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse(
+                                        "https://www.google.com/search?tbm=isch&q=$query",
+                                    ),
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    },
+                    onClearCover = { viewModel.clearCover(book.id) },
                 )
             }
         }
@@ -273,8 +314,15 @@ private fun BookCard(
     onRefresh: (() -> Unit)?,
     onDelete: (withWords: Boolean) -> Unit,
     countWords: suspend () -> Int,
+    /** Kapak değişince artıyor; kart resmi yeniden okusun diye. */
+    coverVersion: Int,
+    onRename: (String) -> Unit,
+    onPickCover: () -> Unit,
+    onSearchCover: () -> Unit,
+    onClearCover: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
     // Kutu açılırken sayılıyor: kaç kelimenin gideceğini görmeden seçim
     // yapmak körlemesine oluyor. -1 "henüz sayılmadı" demek.
     var wordCount by remember { mutableIntStateOf(-1) }
@@ -292,7 +340,7 @@ private fun BookCard(
             MonogramTile(
                 seed = book.title,
                 label = book.title.ifBlank { "?" },
-                image = bookCover(book.id, cover),
+                image = bookCover(book.id, coverVersion, cover),
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .padding(end = 14.dp)
@@ -352,6 +400,36 @@ private fun BookCard(
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
+                        text = { Text("Yeniden adlandır") },
+                        onClick = {
+                            menuOpen = false
+                            renaming = true
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Kapak seç") },
+                        onClick = {
+                            menuOpen = false
+                            onPickCover()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("İnternette kapak ara") },
+                        onClick = {
+                            menuOpen = false
+                            onSearchCover()
+                        },
+                    )
+                    if (cover(book.id) != null) {
+                        DropdownMenuItem(
+                            text = { Text("Kapağı kaldır") },
+                            onClick = {
+                                menuOpen = false
+                                onClearCover()
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
                         text = { Text("Künye") },
                         onClick = {
                             menuOpen = false
@@ -381,6 +459,34 @@ private fun BookCard(
                 }
             }
         }
+    }
+
+    if (renaming) {
+        var draft by remember(book.id) { mutableStateOf(book.title) }
+        AlertDialog(
+            onDismissRequest = { renaming = false },
+            title = { Text("Yeniden adlandır") },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = false,
+                    label = { Text("Ad") },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = draft.isNotBlank(),
+                    onClick = {
+                        onRename(draft)
+                        renaming = false
+                    },
+                ) { Text("Kaydet") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renaming = false }) { Text("Vazgeç") }
+            },
+        )
     }
 
     if (confirmDelete) {
@@ -749,8 +855,8 @@ private fun ChapterImage(
  * JPEG açılıyor ve kaydırma takılıyor.
  */
 @Composable
-private fun bookCover(bookId: Long, cover: (Long) -> File?): ImageBitmap? {
-    val state = produceState<ImageBitmap?>(null, bookId) {
+private fun bookCover(bookId: Long, version: Int, cover: (Long) -> File?): ImageBitmap? {
+    val state = produceState<ImageBitmap?>(null, bookId, version) {
         value = withContext(Dispatchers.IO) {
             cover(bookId)
                 ?.let { runCatching { BitmapFactory.decodeFile(it.absolutePath) }.getOrNull() }

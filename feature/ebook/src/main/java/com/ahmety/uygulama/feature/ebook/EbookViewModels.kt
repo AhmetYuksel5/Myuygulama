@@ -2,6 +2,9 @@ package com.ahmety.uygulama.feature.ebook
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.OpenAiClient
@@ -51,6 +54,43 @@ class BookShelfViewModel @Inject constructor(
      */
     private val _brief = MutableStateFlow<BriefUiState?>(null)
     val brief: StateFlow<BriefUiState?> = _brief.asStateFlow()
+
+    /**
+     * Eseri yeniden adlandırır.
+     *
+     * Künye eserin adıyla saklandığı için o da taşınıyor; yoksa ad
+     * değişince kelime sorgularının bağlamı sessizce kayboluyordu.
+     */
+    fun rename(book: Entry, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isBlank() || trimmed == book.title) return
+        viewModelScope.launch {
+            if (!repository.rename(book.id, trimmed)) return@launch
+            briefs.get(book.title)?.let { brief ->
+                briefs.put(trimmed, brief)
+                briefs.forget(book.title)
+            }
+        }
+    }
+
+    /** Kapağı cihazdaki bir görselden koyar. */
+    fun setCover(bookId: Long, uri: Uri) {
+        viewModelScope.launch {
+            if (repository.setCover(bookId, uri)) coverVersion++
+        }
+    }
+
+    fun clearCover(bookId: Long) {
+        repository.clearCover(bookId)
+        coverVersion++
+    }
+
+    /**
+     * Kapak değişince kart yeniden okusun diye artan sayaç. Dosyanın yolu
+     * aynı kaldığı için resmin değiştiğini başka türlü anlamanın yolu yok.
+     */
+    var coverVersion by mutableIntStateOf(0)
+        private set
 
     fun openBrief(entry: Entry) {
         _brief.value = BriefUiState(
