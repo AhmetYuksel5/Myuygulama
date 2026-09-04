@@ -189,5 +189,11 @@ private fun describe(outcome: SyncOutcome): String = when (outcome.error) {
             append(" (${outcome.skippedChanges} eski kayıt atlandı)")
         }
         append(".")
+        if (outcome.receivedFiles > 0) {
+            append(" ${outcome.receivedFiles} kitap/altyazı dosyası alındı.")
+        }
+        if (outcome.sentParts > 0) {
+            append(" ${outcome.sentParts} dosya parçası gönderildi.")
+        }
     }
 }

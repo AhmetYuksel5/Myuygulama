@@ -14,6 +14,9 @@ data class SyncOutcome(
     val exportedChanges: Int = 0,
     val importedChanges: Int = 0,
     val skippedChanges: Int = 0,
+    /** Gönderilen dosya parçası ve alınan dosya sayısı. */
+    val sentParts: Int = 0,
+    val receivedFiles: Int = 0,
     val error: SyncError? = null,
 ) {
     val isSuccess: Boolean get() = error == null
@@ -47,6 +50,7 @@ class SyncEngine @Inject constructor(
     private val applier: ChangeApplier,
     private val crypto: SyncCrypto,
     private val transport: ActiveTransport,
+    private val assets: AssetSync,
     private val json: Json,
     @DeviceId private val deviceId: String,
     private val now: Now,
@@ -64,10 +68,19 @@ class SyncEngine @Inject constructor(
         transport.publish()
 
         val imported = import()
+
+        // Kitaplar, PDF'ler ve altyazı metinleri. Kayıtlardan sonra
+        // geliyor: dosya erken gelse bile onu gösterecek kayıt olmadan
+        // kitaplıkta görünmüyor.
+        val sent = assets.push()
+        val received = assets.pull()
+
         return SyncOutcome(
             exportedChanges = exported,
             importedChanges = imported.applied,
             skippedChanges = imported.skipped,
+            sentParts = sent,
+            receivedFiles = received,
             error = imported.error,
         )
     }
@@ -107,6 +120,8 @@ class SyncEngine @Inject constructor(
 
         transport.deviceFolders()
             .filter { it != deviceId } // Kendi yazdığımızı geri okumaya gerek yok.
+            // Dosya klasörlerinde değişiklik günlüğü yok.
+            .filter { !it.endsWith(AssetSync.ASSET_SUFFIX) }
             .forEach { remoteDevice ->
                 val lastApplied = syncStateDao.lastAppliedSeq(remoteDevice) ?: 0L
                 var highestSeq = lastApplied
