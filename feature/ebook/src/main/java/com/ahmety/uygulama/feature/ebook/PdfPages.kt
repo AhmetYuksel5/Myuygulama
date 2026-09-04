@@ -263,7 +263,10 @@ class PdfPages private constructor(
             ) ?: return null
 
             val contents = selection.selectedTextContents
-            val text = contents.joinToString(" ") { it.text }.trim()
+            // Seçilen metnin kendisi de akan metne çevriliyor: parçalar
+            // satır sonlarıyla geliyor ve olduğu gibi alınırsa iki satırlık
+            // bir öbek kartın başlığına iki satır olarak düşüyor.
+            val text = flowText(contents.map { it.text })
             if (text.isBlank()) return null
 
             val rects = contents.flatMap { it.bounds }
@@ -507,7 +510,11 @@ class PdfPages private constructor(
         }
         if (chosen.isEmpty()) return null
 
-        val text = chosen.joinToString(" ") { it.text }.trim()
+        // Tanınan kelimelerde satır sonu yok ama boşluk olabiliyor;
+        // tirelemeyi burada birleştirmiyoruz, OCR'da tire gerçek tiredir.
+        val text = chosen.joinToString(" ") { it.text }
+            .replace(Regex("\\s+"), " ")
+            .trim()
         if (text.isBlank()) return null
 
         return PdfWord(

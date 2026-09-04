@@ -575,12 +575,23 @@ private fun contextAround(text: String, wordStart: Int, wordEnd: Int): String {
 fun readingContext(block: String, word: String): String {
     val flat = block.replace(Regex("\\s+"), " ").trim()
     if (flat.isEmpty()) return ""
-    if (word.isBlank()) return flat
-    val index = flat.indexOf(word, ignoreCase = true)
-    // Kelime blokta bulunamazsa (OCR ile satırlar farklı birleşmiş
-    // olabiliyor) bloğun kendisi bağlam; hiç yoktan iyi.
+    // Aranan da aynı biçime getiriliyor: içinde satır sonu kalırsa metinde
+    // hiç bulunamıyor ve bağlam diye sayfanın tamamı dönüyordu.
+    val needle = word.replace(Regex("\\s+"), " ").trim()
+    if (needle.isEmpty()) return flat
+
+    val index = flat.indexOf(needle, ignoreCase = true).takeIf { it >= 0 }
+        // Öbek olduğu gibi bulunamazsa ilk kelimesi aranıyor; cümle aynı
+        // cümle, yeter ki bir yere tutunsun.
+        ?: flat.indexOf(needle.substringBefore(' '), ignoreCase = true)
     if (index < 0) return flat
-    return contextAround(flat, index, index + word.length)
+
+    val length = if (flat.regionMatches(index, needle, 0, needle.length, ignoreCase = true)) {
+        needle.length
+    } else {
+        needle.substringBefore(' ').length
+    }
+    return contextAround(flat, index, index + length)
 }
 
 private const val MAX_SENTENCE_WORDS = 10
