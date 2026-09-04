@@ -50,4 +50,5 @@ object ChangeEntityType {
     const val ENTRY = "entry"
     const val TAG = "tag"
     const val VOCAB = "vocab_progress"
+    const val READING = "reading_progress"
 }

@@ -198,7 +198,7 @@ class BookShelfViewModel @Inject constructor(
     suspend fun highlightCount(entry: Entry): Int = repository.highlightCount(entry.id)
 
     /** Kitaplık satırındaki ilerleme çizgisi için. */
-    fun progressOf(bookId: Long): Int = repository.readingPercent(bookId)
+    suspend fun progressOf(bookId: Long): Int = repository.readingPercent(bookId)
 
     /** Kitabı EPUB'ından yeniden ayrıştırır (resimler, kapak). */
     fun refresh(entry: Entry) {
@@ -299,7 +299,7 @@ class BookReaderViewModel @Inject constructor(
      * Bölüm değiştirmek zaten 0 yazdığı için ileri geçişte metnin başından
      * başlanıyor.
      */
-    fun lastParagraph(): Int = repository.lastParagraph(bookId)
+    suspend fun lastParagraph(): Int = repository.lastParagraph(bookId)
 
     fun selectChapter(index: Int) {
         val chapters = _state.value.book?.chapters.orEmpty()
@@ -310,13 +310,15 @@ class BookReaderViewModel @Inject constructor(
             chapterChars = (chapterOffsets.getOrElse(safe + 1) { 0 } -
                 chapterOffsets.getOrElse(safe) { 0 }).coerceAtLeast(1),
         )
-        repository.saveLastChapter(bookId, safe)
-        repository.saveLastParagraph(bookId, 0)
+        viewModelScope.launch {
+            repository.saveLastChapter(bookId, safe)
+            repository.saveLastParagraph(bookId, 0)
+        }
     }
 
     /** Okurken kaldığın paragrafı kaydeder. */
     fun savePosition(paragraphIndex: Int) {
-        repository.saveLastParagraph(bookId, paragraphIndex)
+        viewModelScope.launch { repository.saveLastParagraph(bookId, paragraphIndex) }
     }
 
     /** Bölüm içindeki bir resim; okuyucu çizerken istiyor. */
@@ -325,7 +327,8 @@ class BookReaderViewModel @Inject constructor(
 
     /** Okurken hesaplanan yüzdeyi kitaplığın kullanması için saklar. */
     fun saveProgress(percent: Int) {
-        if (bookId != 0L) repository.saveReadingPercent(bookId, percent)
+        if (bookId == 0L) return
+        viewModelScope.launch { repository.saveReadingPercent(bookId, percent) }
     }
 
     fun highlight(word: String, contextSentence: String, color: HighlightColor) {

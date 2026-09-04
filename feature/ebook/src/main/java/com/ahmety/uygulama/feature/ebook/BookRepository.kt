@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import com.ahmety.uygulama.core.database.entity.ReadingProgressEntity
+import com.ahmety.uygulama.core.database.repository.ReadingProgressRepository
 import com.ahmety.uygulama.core.database.repository.EntryRepository
 import com.ahmety.uygulama.core.database.repository.VocabProgressRepository
 import com.ahmety.uygulama.core.model.Entry
@@ -45,10 +47,17 @@ class BookRepository @Inject constructor(
     private val entryRepository: EntryRepository,
     private val progressStore: VocabProgressRepository,
     private val covers: BookCoverStore,
+    private val progress: ReadingProgressRepository,
     private val openLibrary: OpenLibraryCovers,
 ) {
 
     private val readerPrefs = context.getSharedPreferences("merkez_kitap", Context.MODE_PRIVATE)
+
+    /** Yerel kimlikten kalıcı kimliğe; her yazmada veritabanına gitmemek için. */
+    private val uuidCache = mutableMapOf<Long, String>()
+
+    /** Eski kaydı taşınmış eserler; bir kez bakmak yetiyor. */
+    private val migrated = mutableSetOf<Long>()
 
     private val booksDir: File
         get() = File(context.filesDir, "kitaplar").apply { mkdirs() }
@@ -183,10 +192,10 @@ class BookRepository @Inject constructor(
         entryRepository.getById(entryId)?.title.orEmpty()
 
     /** PDF'te kaldığın sayfa. */
-    fun lastPage(bookId: Long): Int = readerPrefs.getInt("sayfa_$bookId", 0)
+    suspend fun lastPage(bookId: Long): Int = current(bookId)?.page ?: 0
 
-    fun saveLastPage(bookId: Long, page: Int) {
-        readerPrefs.edit().putInt("sayfa_$bookId", page.coerceAtLeast(0)).apply()
+    suspend fun saveLastPage(bookId: Long, page: Int) {
+        progress.save(uuidOf(bookId), page = page.coerceAtLeast(0))
     }
 
     /**
@@ -492,10 +501,10 @@ class BookRepository @Inject constructor(
     }
 
     /** Kitapta en son okunan bölüm — kaldığın yerden devam edebilmek için. */
-    fun lastChapter(bookId: Long): Int = readerPrefs.getInt("chapter_$bookId", 0)
+    suspend fun lastChapter(bookId: Long): Int = current(bookId)?.chapter ?: 0
 
-    fun saveLastChapter(bookId: Long, index: Int) {
-        readerPrefs.edit().putInt("chapter_$bookId", index).apply()
+    suspend fun saveLastChapter(bookId: Long, index: Int) {
+        progress.save(uuidOf(bookId), chapter = index)
     }
 
     /**
@@ -505,17 +514,49 @@ class BookRepository @Inject constructor(
      * pahalı (bütün bölümleri ayrıştırmak gerekiyor); okurken zaten
      * hesaplanan sayı buraya yazılıyor.
      */
-    fun readingPercent(bookId: Long): Int = readerPrefs.getInt("percent_$bookId", 0)
+    suspend fun readingPercent(bookId: Long): Int = current(bookId)?.percent ?: 0
 
-    fun saveReadingPercent(bookId: Long, percent: Int) {
-        readerPrefs.edit().putInt("percent_$bookId", percent.coerceIn(0, 100)).apply()
+    suspend fun saveReadingPercent(bookId: Long, percent: Int) {
+        progress.save(uuidOf(bookId), percent = percent.coerceIn(0, 100))
     }
 
     /** Bölüm içinde kaldığın paragraf — bölüm başına atmamak için. */
-    fun lastParagraph(bookId: Long): Int = readerPrefs.getInt("paragraph_$bookId", 0)
+    suspend fun lastParagraph(bookId: Long): Int = current(bookId)?.paragraph ?: 0
 
-    fun saveLastParagraph(bookId: Long, index: Int) {
-        readerPrefs.edit().putInt("paragraph_$bookId", index).apply()
+    suspend fun saveLastParagraph(bookId: Long, index: Int) {
+        progress.save(uuidOf(bookId), paragraph = index)
+    }
+
+    /**
+     * Eserin kalıcı kimliği. Kaldığın yer buna bağlı: yerel kimlik iki
+     * telefonda farklı olduğu için taşınsa bile yanlış kitabı gösterirdi.
+     */
+    private suspend fun uuidOf(bookId: Long): String =
+        uuidCache[bookId] ?: entryRepository.getById(bookId)?.uuid
+            ?.also { uuidCache[bookId] = it }
+            .orEmpty()
+
+    /**
+     * Kaldığın yer; ilk okumada eski kayıt varsa taşınıyor.
+     *
+     * Bu bilgi cihazın tercihlerinde duruyordu. Yeni yere geçerken orada
+     * kalanı bir kez alıyoruz, yoksa bugüne kadar okunanların hepsi
+     * başa dönerdi.
+     */
+    private suspend fun current(bookId: Long): ReadingProgressEntity? {
+        val uuid = uuidOf(bookId)
+        if (uuid.isEmpty()) return null
+        progress.get(uuid)?.let { return it }
+        if (!migrated.add(bookId)) return null
+
+        val page = readerPrefs.getInt("sayfa_$bookId", 0)
+        val chapter = readerPrefs.getInt("chapter_$bookId", 0)
+        val paragraph = readerPrefs.getInt("paragraph_$bookId", 0)
+        val percent = readerPrefs.getInt("percent_$bookId", 0)
+        if (page == 0 && chapter == 0 && paragraph == 0 && percent == 0) return null
+
+        progress.save(uuid, chapter, paragraph, page, percent)
+        return progress.get(uuid)
     }
 
     /**

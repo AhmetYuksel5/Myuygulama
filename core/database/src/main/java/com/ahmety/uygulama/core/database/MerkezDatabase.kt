@@ -7,6 +7,7 @@ import com.ahmety.uygulama.core.database.dao.ChangeLogDao
 import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
 import com.ahmety.uygulama.core.database.dao.SyncStateDao
+import com.ahmety.uygulama.core.database.dao.ReadingProgressDao
 import com.ahmety.uygulama.core.database.dao.VocabDao
 import com.ahmety.uygulama.core.database.dao.TaskDao
 import com.ahmety.uygulama.core.database.dao.TagDao
@@ -21,6 +22,7 @@ import com.ahmety.uygulama.core.database.entity.SyncStateEntity
 import com.ahmety.uygulama.core.database.entity.TagEntity
 import com.ahmety.uygulama.core.database.entity.TaskEntity
 import com.ahmety.uygulama.core.database.entity.TaskListEntity
+import com.ahmety.uygulama.core.database.entity.ReadingProgressEntity
 import com.ahmety.uygulama.core.database.entity.VocabProgressEntity
 
 @Database(
@@ -37,8 +39,9 @@ import com.ahmety.uygulama.core.database.entity.VocabProgressEntity
         ChangeLogEntity::class,
         SyncStateEntity::class,
         VocabProgressEntity::class,
+        ReadingProgressEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -50,6 +53,8 @@ abstract class MerkezDatabase : RoomDatabase() {
     abstract fun changeLogDao(): ChangeLogDao
     abstract fun syncStateDao(): SyncStateDao
     abstract fun vocabDao(): VocabDao
+
+    abstract fun readingProgressDao(): ReadingProgressDao
 
     companion object {
         const val NAME = "merkez.db"

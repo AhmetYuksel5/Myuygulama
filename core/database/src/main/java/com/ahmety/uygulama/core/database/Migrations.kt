@@ -70,4 +70,29 @@ internal val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
-internal val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+/**
+ * Kaldığın yer.
+ *
+ * Cihazın tercihlerinde duruyordu ve oradan senkrona giremiyordu; üstelik
+ * anahtarı kaydın yerel kimliğiydi, o da iki telefonda farklı. Artık
+ * kaydın kalıcı kimliğine bağlı bir satır.
+ */
+internal val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS reading_progress (
+                entryUuid TEXT NOT NULL PRIMARY KEY,
+                chapter INTEGER NOT NULL,
+                paragraph INTEGER NOT NULL,
+                page INTEGER NOT NULL,
+                percent INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
+internal val ALL_MIGRATIONS =
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

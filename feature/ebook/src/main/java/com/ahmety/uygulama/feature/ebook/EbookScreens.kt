@@ -197,7 +197,11 @@ fun BookShelfRoute(
                     book = book,
                     film = viewModel.isFilm(book),
                     pdf = viewModel.isPdf(book),
-                    percent = remember(book.id) { viewModel.progressOf(book.id) },
+                    // Yüzde artık veritabanından geliyor; kartın çizilmesini
+                    // beklemesin diye önce sıfır, sonra gerçek değer.
+                    percent = produceState(0, book.id, viewModel.coverVersion) {
+                        value = viewModel.progressOf(book.id)
+                    }.value,
                     cover = viewModel::coverOf,
                     onOpen = { onOpenBook(book.id, viewModel.isPdf(book)) },
                     onBrief = { viewModel.openBrief(book) },

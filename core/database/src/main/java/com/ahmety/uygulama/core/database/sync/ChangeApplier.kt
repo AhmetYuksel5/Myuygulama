@@ -1,10 +1,12 @@
 package com.ahmety.uygulama.core.database.sync
 
+import com.ahmety.uygulama.core.database.dao.ReadingProgressDao
 import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
 import com.ahmety.uygulama.core.database.dao.TagDao
 import com.ahmety.uygulama.core.database.dao.TaskDao
 import com.ahmety.uygulama.core.database.dao.VocabDao
+import com.ahmety.uygulama.core.database.entity.ReadingProgressEntity
 import com.ahmety.uygulama.core.database.entity.ChangeEntityType
 import com.ahmety.uygulama.core.database.entity.EntryEntity
 import com.ahmety.uygulama.core.database.entity.HabitCheckEntity
@@ -37,6 +39,7 @@ class ChangeApplier @Inject constructor(
     private val entryDao: EntryDao,
     private val tagDao: TagDao,
     private val vocabDao: VocabDao,
+    private val readingProgressDao: ReadingProgressDao,
     private val json: Json,
 ) {
 
@@ -49,6 +52,7 @@ class ChangeApplier @Inject constructor(
             ChangeEntityType.ENTRY -> applyEntry(payload)
             ChangeEntityType.TAG -> applyTag(payload)
             ChangeEntityType.VOCAB -> applyVocab(payload)
+            ChangeEntityType.READING -> applyReading(payload)
             else -> false
         }
     }.getOrDefault(false)
@@ -112,6 +116,20 @@ class ChangeApplier @Inject constructor(
      * iki telefonda arka arkaya sorulursa çalışma boşa gider. En kötü ihtimalle
      * bir kademe ilerleme kaybediyoruz, o zararsız.
      */
+    /**
+     * Kaldığın yer: geç olan kazanıyor.
+     *
+     * Birleştirme yok, çünkü "daha ileride olan kazansın" yanlış olurdu —
+     * kitabı baştan okumaya başlamak da geçerli bir hareket.
+     */
+    private suspend fun applyReading(payload: String): Boolean {
+        val incoming = json.decodeFromString(ReadingProgressEntity.serializer(), payload)
+        val local = readingProgressDao.get(incoming.entryUuid)
+        if (local != null && incoming.updatedAt <= local.updatedAt) return false
+        readingProgressDao.upsert(incoming)
+        return true
+    }
+
     private suspend fun applyVocab(payload: String): Boolean {
         val incoming = json.decodeFromString(VocabProgressEntity.serializer(), payload)
         val local = vocabDao.getIncludingDeleted(incoming.word)

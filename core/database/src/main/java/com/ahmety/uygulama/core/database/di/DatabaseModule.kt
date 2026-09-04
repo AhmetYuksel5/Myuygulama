@@ -9,6 +9,7 @@ import com.ahmety.uygulama.core.database.dao.EntryDao
 import com.ahmety.uygulama.core.database.dao.HabitDao
 import com.ahmety.uygulama.core.database.dao.TagDao
 import com.ahmety.uygulama.core.database.dao.SyncStateDao
+import com.ahmety.uygulama.core.database.dao.ReadingProgressDao
 import com.ahmety.uygulama.core.database.dao.VocabDao
 import com.ahmety.uygulama.core.database.dao.TaskDao
 import com.ahmety.uygulama.core.database.sync.DeviceId
@@ -71,6 +72,10 @@ object DatabaseModule {
 
     @Provides
     fun provideVocabDao(database: MerkezDatabase): VocabDao = database.vocabDao()
+
+    @Provides
+    fun provideReadingProgressDao(database: MerkezDatabase): ReadingProgressDao =
+        database.readingProgressDao()
 
     @Provides
     @Singleton

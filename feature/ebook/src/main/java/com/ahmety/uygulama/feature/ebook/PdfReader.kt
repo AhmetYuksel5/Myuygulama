@@ -257,10 +257,12 @@ class PdfReaderViewModel @Inject constructor(
      */
     fun rememberPage(index: Int) {
         if (bookId == 0L) return
-        repository.saveLastPage(bookId, index)
-        val total = _state.value.sizes.size
-        if (total > 0) {
-            repository.saveReadingPercent(bookId, (index + 1) * 100 / total)
+        viewModelScope.launch {
+            repository.saveLastPage(bookId, index)
+            val total = _state.value.sizes.size
+            if (total > 0) {
+                repository.saveReadingPercent(bookId, (index + 1) * 100 / total)
+            }
         }
     }
 
