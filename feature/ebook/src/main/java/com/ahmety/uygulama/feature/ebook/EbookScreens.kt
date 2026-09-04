@@ -476,6 +476,7 @@ fun BookReaderRoute(
     viewModel: BookReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val gloss by viewModel.gloss.collectAsStateWithLifecycle()
     LaunchedEffect(bookId) { viewModel.load(bookId) }
 
     val context = LocalContext.current
@@ -667,10 +668,18 @@ fun BookReaderRoute(
     }
 
     pending?.let { request ->
+        // Kutu açılır açılmaz karşılık soruluyor: kelimeyi işaretleyip
+        // işaretlememe kararı buna bakılarak veriliyor.
+        LaunchedEffect(request) { viewModel.lookUp(request.word, request.sentence) }
+
         ColorPickerDialog(
             request = request,
             current = state.highlightColors[request.word.lowercase()],
-            onDismiss = { pending = null },
+            gloss = gloss,
+            onDismiss = {
+                pending = null
+                viewModel.clearGloss()
+            },
             onPick = { color, keepContext ->
                 viewModel.highlight(
                     word = request.word,
@@ -678,10 +687,12 @@ fun BookReaderRoute(
                     color = color,
                 )
                 pending = null
+                viewModel.clearGloss()
             },
             onRemove = {
                 viewModel.removeHighlight(request.word)
                 pending = null
+                viewModel.clearGloss()
             },
         )
     }

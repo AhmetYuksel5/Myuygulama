@@ -146,6 +146,85 @@ class OpenAiClient @Inject constructor(
     }
 
     /**
+     * Kelimenin bir satırlık karşılığı.
+     *
+     * [describeWord] ile aynı şey değil: o kartın tamamını üretiyor ve
+     * saniyeler sürüyor. Burada amaç işaretlemeden önceki o kısa bakış —
+     * "bunu zaten biliyor muyum?" — bu yüzden yanıt tek satır ve model
+     * her seferinde en ucuzu.
+     */
+    suspend fun glossWord(
+        word: String,
+        context: String = "",
+        sourceName: String = "",
+    ): AiResult<String> {
+        val key = settings.apiKey
+        if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
+        if (word.isBlank()) return AiResult.Failed("Kelime boş.")
+
+        val instruction = buildString {
+            append("Give the Turkish meaning of the given English word or phrase ")
+            append("AS IT IS USED in the passage, in ONE line of at most twelve ")
+            append("words. Start with the Turkish equivalent(s). If the sense is ")
+            append("figurative or idiomatic, give that sense, not the literal one. ")
+            append("If the input is a phrase, translate the phrase, not its words ")
+            append("one by one. No quotation marks, no markdown, no preamble, no ")
+            append("full stop at the end, and never repeat the English word itself.")
+        }
+
+        val userText = buildString {
+            append("Input: ").append(word)
+            if (context.isNotBlank()) append("\nPassage: ").append(context)
+            if (sourceName.isNotBlank()) append("\nFrom: ").append(sourceName)
+        }
+
+        val payload = JSONObject().apply {
+            // Kısa bakış her zaman ucuz modelle: kart üretimi için seçilen
+            // büyük model bir satırlık karşılık için gereksiz pahalı.
+            put("model", AiSettings.GLOSS_MODEL)
+            put("temperature", 0.2)
+            put("max_tokens", 60)
+            put(
+                "messages",
+                JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", instruction))
+                    .put(JSONObject().put("role", "user").put("content", userText)),
+            )
+        }
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder()
+                    .url(ENDPOINT)
+                    .addHeader("Authorization", "Bearer $key")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA))
+                    .build()
+
+                http.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        return@use AiResult.Failed(readableError(response.code, body))
+                    }
+                    val content = JSONObject(body)
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content")
+                        .trim()
+                        .trim('"')
+                    if (content.isBlank()) {
+                        AiResult.Failed("Karşılık gelmedi.")
+                    } else {
+                        AiResult.Ok(content)
+                    }
+                }
+            }.getOrElse { error ->
+                AiResult.Failed("Bağlantı kurulamadı: ${error.message ?: "bilinmeyen hata"}")
+            }
+        }
+    }
+
+    /**
      * Kart hakkında serbest soru.
      *
      * Hazır açıklama her zaman yetmiyor: "peki neden böyle deniyor",

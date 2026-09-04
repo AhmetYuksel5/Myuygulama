@@ -2,6 +2,7 @@ package com.ahmety.uygulama.feature.ebook
 
 import android.graphics.Bitmap
 import androidx.annotation.RequiresApi
+import com.ahmety.uygulama.core.designsystem.readingContext
 import android.os.Build
 import android.graphics.pdf.models.selection.SelectionBoundary
 import android.graphics.Point
@@ -195,14 +196,14 @@ class PdfPages private constructor(
             val right = rects.maxOf { it.right } / page.width
             val bottom = rects.maxOf { it.bottom } / page.height
 
-            // Bağlam: kelimenin bulunduğu satırın/bloğun tamamı. Sayfanın
-            // bütün metnini almak kart için fazla, kelimenin kendisi ise az.
+            // Bağlam: kelimenin geçtiği cümle. Bloğun tamamı değil —
+            // PDF'te bir blok bazen bütün sayfa oluyor ve kart okunmaz
+            // hâle geliyordu. Kural kitaptakiyle aynı.
             val context = runCatching {
                 page.textContents
                     .map { it.text }
                     .firstOrNull { it.contains(text, ignoreCase = true) }
-                    ?.replace(Regex("\\s+"), " ")
-                    ?.trim()
+                    ?.let { readingContext(it, text) }
                     .orEmpty()
             }.getOrDefault("")
 
@@ -306,12 +307,10 @@ class PdfPages private constructor(
             top = chosen.minOf { it.top },
             right = chosen.maxOf { it.right },
             bottom = chosen.maxOf { it.bottom },
-            context = chosen.map { it.line }
-                .distinct()
-                .joinToString(" ")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-                .take(MAX_CONTEXT),
+            context = readingContext(
+                chosen.map { it.line }.distinct().joinToString(" "),
+                text,
+            ).take(MAX_CONTEXT),
         )
     }
 

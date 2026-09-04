@@ -81,6 +81,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.designsystem.WordGloss
 import javax.inject.Inject
 
 data class PdfUiState(
@@ -106,10 +108,28 @@ data class PdfMark(
 @HiltViewModel
 class PdfReaderViewModel @Inject constructor(
     private val repository: BookRepository,
+    openAi: OpenAiClient,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PdfUiState())
     val state: StateFlow<PdfUiState> = _state.asStateFlow()
+
+    private val lookup = GlossLookup(openAi)
+
+    /** Renk kutusunda gösterilen bir satırlık karşılık. */
+    private val _gloss = MutableStateFlow(WordGloss())
+    val gloss: StateFlow<WordGloss> = _gloss.asStateFlow()
+
+    /** Kutu açılınca kelimenin karşılığını sorar. */
+    fun lookUp(word: String, context: String) {
+        viewModelScope.launch {
+            lookup.into(_gloss, word, context, _state.value.title)
+        }
+    }
+
+    fun clearGloss() {
+        _gloss.value = WordGloss()
+    }
 
     private var pages: PdfPages? = null
     private var bookId: Long = 0L
@@ -257,6 +277,7 @@ fun PdfReaderRoute(
     viewModel: PdfReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val gloss by viewModel.gloss.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val prefs = remember { ReaderPrefs(context) }
@@ -506,11 +527,19 @@ fun PdfReaderRoute(
     }
 
     picking?.let { pick ->
+        // Kutu açılır açılmaz karşılık soruluyor: karar buna bakılarak
+        // veriliyor, sonradan açılan bir ekrana bakmaya kimse dönmüyor.
+        LaunchedEffect(pick) { viewModel.lookUp(pick.word.text, pick.word.context) }
+
         // Kitaptaki renk kutusunun aynısı: aynı kalemler, aynı anlamlar.
         ColorPickerDialog(
             request = PendingHighlight(pick.word.text, pick.word.context),
             current = null,
-            onDismiss = { picking = null },
+            gloss = gloss,
+            onDismiss = {
+                picking = null
+                viewModel.clearGloss()
+            },
             onPick = { color, keepContext ->
                 viewModel.mark(
                     word = if (keepContext) pick.word else pick.word.copy(context = ""),
@@ -518,10 +547,12 @@ fun PdfReaderRoute(
                     color = color,
                 )
                 picking = null
+                viewModel.clearGloss()
             },
             onRemove = {
                 viewModel.removeMark(pick.word.text)
                 picking = null
+                viewModel.clearGloss()
             },
         )
     }

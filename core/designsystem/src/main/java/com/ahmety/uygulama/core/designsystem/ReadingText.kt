@@ -67,6 +67,18 @@ fun highlightPaint(color: HighlightColor): Color = when (color) {
 data class PendingHighlight(val word: String, val sentence: String)
 
 /**
+ * Renk kutusunda gösterilen kısa anlam.
+ *
+ * Bilmediğini sandığın kelimenin çoğu zaman bildiğin bir kelime çıkması
+ * için var: işaretlemeden önce bir satırlık karşılığı görüyorsun.
+ */
+data class WordGloss(
+    val text: String = "",
+    val busy: Boolean = false,
+    val error: String = "",
+)
+
+/**
  * Çift dokunuştan sonra üçüncü dokunuşu bekleme süresi.
  *
  * Compose ikinci dokunuşu hemen bildiriyor ama üçüncüyü, kendi çift dokunuş
@@ -376,6 +388,8 @@ fun ColorPickerDialog(
     onDismiss: () -> Unit,
     onPick: (HighlightColor, Boolean) -> Unit,
     onRemove: () -> Unit,
+    /** Kısa anlam; verilmezse kutuda o satır hiç görünmüyor. */
+    gloss: WordGloss? = null,
 ) {
     var keepContext by remember { mutableStateOf(true) }
 
@@ -418,6 +432,29 @@ fun ColorPickerDialog(
                                 .clickable {
                                     if (color == current) onRemove() else onPick(color, keepContext)
                                 },
+                        )
+                    }
+                }
+
+                // Kısa anlam renklerin hemen altında: karar buna bakarak
+                // veriliyor, bağlam cümlesi ondan sonra geliyor.
+                gloss?.let { info ->
+                    when {
+                        info.busy -> Text(
+                            text = "Anlamına bakılıyor…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        info.text.isNotBlank() -> Text(
+                            text = info.text,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+
+                        info.error.isNotBlank() -> Text(
+                            text = info.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
@@ -525,6 +562,25 @@ private fun contextAround(text: String, wordStart: Int, wordEnd: Int): String {
         if (right.isNotEmpty()) append(' ').append(right.joinToString(" "))
         if (after.size > WINDOW_WORDS) append(" …")
     }.trim()
+}
+
+/**
+ * Uzun bir metin bloğunda kelimenin bağlamı.
+ *
+ * PDF ve OCR yolları kelimeyi bulduğu bloğun tamamını veriyor; blok bazen
+ * bütün bir sayfa oluyor ve kart okunmaz hâle geliyordu. Kitapta geçerli
+ * olan kuralın aynısı buraya da uygulanıyor: kelimenin cümlesi, cümle
+ * uzunsa çevresinden bir pencere.
+ */
+fun readingContext(block: String, word: String): String {
+    val flat = block.replace(Regex("\\s+"), " ").trim()
+    if (flat.isEmpty()) return ""
+    if (word.isBlank()) return flat
+    val index = flat.indexOf(word, ignoreCase = true)
+    // Kelime blokta bulunamazsa (OCR ile satırlar farklı birleşmiş
+    // olabiliyor) bloğun kendisi bağlam; hiç yoktan iyi.
+    if (index < 0) return flat
+    return contextAround(flat, index, index + word.length)
 }
 
 private const val MAX_SENTENCE_WORDS = 10

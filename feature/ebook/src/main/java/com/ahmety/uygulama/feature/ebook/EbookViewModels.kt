@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.designsystem.WordGloss
 import com.ahmety.uygulama.core.ai.WorkBriefStore
 import android.graphics.Bitmap
 import com.ahmety.uygulama.core.model.Entry
@@ -174,10 +175,27 @@ data class ReaderUiState(
 @HiltViewModel
 class BookReaderViewModel @Inject constructor(
     private val repository: BookRepository,
+    openAi: OpenAiClient,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReaderUiState())
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
+
+    private val lookup = GlossLookup(openAi)
+
+    /** Renk kutusunda gösterilen bir satırlık karşılık. */
+    private val _gloss = MutableStateFlow(WordGloss())
+    val gloss: StateFlow<WordGloss> = _gloss.asStateFlow()
+
+    fun lookUp(word: String, context: String) {
+        viewModelScope.launch {
+            lookup.into(_gloss, word, context, _state.value.book?.title.orEmpty())
+        }
+    }
+
+    fun clearGloss() {
+        _gloss.value = WordGloss()
+    }
 
     private var bookId: Long = 0L
 
