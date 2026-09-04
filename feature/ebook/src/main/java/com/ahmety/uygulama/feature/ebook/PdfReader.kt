@@ -7,6 +7,7 @@ import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -702,6 +703,14 @@ private fun wordEnd(word: PdfBand) = Offset(
     (word.top + word.bottom) / 2f,
 )
 
+/**
+ * Büyütecin parmaktan yüksekliği.
+ *
+ * Elin büyütecin altında kalmaması gerekiyor; bir parmak boyu kadar
+ * yukarıda duruyor.
+ */
+private val MAGNIFIER_LIFT = 110.dp
+
 /** Parmak basılıyken sürüklenen aralık; sayfanın üstünde çiziliyor. */
 private data class DragBox(val page: Int, val start: Offset, val end: Offset)
 
@@ -780,7 +789,20 @@ private fun PdfPage(
             // Parmağın altında kalan yeri gösteren büyüteç. Kitapta seçilen
             // metin ekranın üstünde yazıyla gösteriliyor; PDF'te sayfa resim
             // olduğu için doğru karşılığı sayfanın kendisini büyütmek.
-            .magnifier(sourceCenter = { lens }, zoom = 1.8f)
+            //
+            // Büyüteç parmağın epeyce yukarısında duruyor: hazır yerleşim
+            // onu parmağın hemen üstüne koyuyor ve elin altında kalıyor.
+            .magnifier(
+                sourceCenter = { lens },
+                magnifierCenter = {
+                    if (lens.isSpecified) {
+                        Offset(lens.x, lens.y - MAGNIFIER_LIFT.toPx())
+                    } else {
+                        Offset.Unspecified
+                    }
+                },
+                zoom = 1.8f,
+            )
             .pointerInput(index, crop) {
                 val scope = this
                 detectTapGestures { offset ->

@@ -58,12 +58,6 @@ data class PdfPageSize(val width: Int, val height: Int) {
 }
 
 /**
- * Taranmış sayfada seçimin sonucu.
- *
- * Üç ayrı durum var ve kullanıcıya söylenecekleri farklı: kelime bulundu,
- * sayfada yazı tanınmadı, tanıma hiç çalıştırılamadı.
- */
-/**
  * Sayfadaki bir metin satırının çerçevesi; oranlar (0..1).
  *
  * Seçimi metin gibi göstermek için gerekiyor: parmakla çizilen dikdörtgen
@@ -137,6 +131,12 @@ private fun lineIndexAt(ordered: List<PdfBand>, x: Float, y: Float): Int {
     } ?: 0
 }
 
+/**
+ * Taranmış sayfada seçimin sonucu.
+ *
+ * Üç ayrı durum var ve kullanıcıya söylenecekleri farklı: kelime bulundu,
+ * sayfada yazı tanınmadı, tanıma hiç çalıştırılamadı.
+ */
 sealed interface OcrOutcome {
     data class Word(val word: PdfWord) : OcrOutcome
 
@@ -150,10 +150,8 @@ sealed interface OcrOutcome {
 /**
  * PDF sayfalarını resme çevirir.
  *
- * Android'in kendi motoru (`PdfRenderer`) sayfayı çiziyor ama metnini
- * vermiyor; metin çıkaran kütüphaneler on megabaytın üzerinde ve
- * uygulamanın tamamı beş megabayt. Yani PDF'te kelime işaretleme yok,
- * okuma ve kaldığın yeri hatırlama var.
+ * Metne iki ayrı yoldan varılıyor: Android 15 ile gelen kendi metin
+ * katmanı, o yoksa sayfa görüntüsünden yazı tanıma.
  *
  * `PdfRenderer` aynı anda tek sayfa açılmasına izin veriyor ve iş
  * parçacığı güvenli değil; bütün çizimler tek bir kilidin arkasından
@@ -278,12 +276,14 @@ class PdfPages private constructor(
             // Bağlam: kelimenin geçtiği cümle. Bloğun tamamı değil —
             // PDF'te bir blok bazen bütün sayfa oluyor ve kart okunmaz
             // hâle geliyordu. Kural kitaptakiyle aynı.
+            //
+            // Sayfanın metni önce tek bir akan metne çevriliyor. Yalnız
+            // kelimenin bulunduğu parçaya bakılsaydı cümle satır sonunda
+            // kesilirdi: PDF'te satır sonu paragraf sonuyla aynı görünüyor,
+            // oysa nokta yoksa cümle devam ediyor.
             val context = runCatching {
-                page.textContents
-                    .map { it.text }
-                    .firstOrNull { it.contains(text, ignoreCase = true) }
-                    ?.let { readingContext(it, text) }
-                    .orEmpty()
+                readingContext(flowText(page.textContents.map { it.text }), text)
+                    .take(MAX_CONTEXT)
             }.getOrDefault("")
 
             PdfWord(
@@ -516,8 +516,10 @@ class PdfPages private constructor(
             top = chosen.minOf { it.top },
             right = chosen.maxOf { it.right },
             bottom = chosen.maxOf { it.bottom },
+            // Bağlam yalnız seçilen satırlardan değil sayfanın tamamından
+            // çıkarılıyor: cümle satır sonunda bitmiyor.
             context = readingContext(
-                chosen.map { it.line }.distinct().joinToString(" "),
+                flowText(groupLines(words).map { row -> row.joinToString(" ") { it.text } }),
                 text,
             ).take(MAX_CONTEXT),
         )
@@ -539,6 +541,32 @@ class PdfPages private constructor(
             val dy = maxOf(word.top - y, 0f, y - word.bottom)
             val dx = maxOf(word.left - x, 0f, x - word.right)
             dy * 4f + dx
+        }
+    }
+
+    /**
+     * Satırları akan bir metne çevirir.
+     *
+     * PDF'te her satır ayrı bir parça olarak geliyor; olduğu gibi
+     * birleştirilirse cümle satır sonunda kesiliyor. Satır sonu paragraf
+     * sonu değil — nokta yoksa cümle devam ediyor.
+     *
+     * Satır sonundaki tire de birleştiriliyor: bir kelime satır sonunda
+     * "keli-" ve "me" diye ikiye bölünmüş olabiliyor.
+     */
+    private fun flowText(parts: List<String>): String = buildString {
+        parts.flatMap { it.split('\n') }.forEach { raw ->
+            val piece = raw.replace(Regex("\\s+"), " ").trim()
+            if (piece.isEmpty()) return@forEach
+            when {
+                isEmpty() -> append(piece)
+                endsWith("-") -> {
+                    setLength(length - 1)
+                    append(piece)
+                }
+
+                else -> append(' ').append(piece)
+            }
         }
     }
 
