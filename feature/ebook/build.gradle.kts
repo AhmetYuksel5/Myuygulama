@@ -54,5 +54,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
 
+    // Taranmış PDF'te sayfa baştan sona resim; kelimeyi ancak görüntüden
+    // tanıyarak bulabiliyoruz.
+    implementation(libs.mlkit.text.recognition)
+
     testImplementation(libs.junit)
 }

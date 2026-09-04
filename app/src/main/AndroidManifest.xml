@@ -45,6 +45,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Merkez">
 
+        <!--
+            Taranmış PDF'te yazı tanıma modeli. Bu satır Play Hizmetleri'ne
+            modeli uygulama kurulur kurulmaz indirmesini söylüyor; olmasa da
+            çalışıyor ama ilk kullanımda beklemek gerekiyor.
+        -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

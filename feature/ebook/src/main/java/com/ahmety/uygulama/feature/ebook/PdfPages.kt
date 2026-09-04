@@ -57,6 +57,22 @@ data class PdfPageSize(val width: Int, val height: Int) {
 }
 
 /**
+ * Taranmış sayfada seçimin sonucu.
+ *
+ * Üç ayrı durum var ve kullanıcıya söylenecekleri farklı: kelime bulundu,
+ * sayfada yazı tanınmadı, tanıma hiç çalıştırılamadı.
+ */
+sealed interface OcrOutcome {
+    data class Word(val word: PdfWord) : OcrOutcome
+
+    /** Tanıma çalıştı ama seçilen yerde kelime yok. */
+    data object Empty : OcrOutcome
+
+    /** Tanıma çalıştırılamadı; çoğunlukla model henüz inmemiş olur. */
+    data class Failed(val message: String) : OcrOutcome
+}
+
+/**
  * PDF sayfalarını resme çevirir.
  *
  * Android'in kendi motoru (`PdfRenderer`) sayfayı çiziyor ama metnini
@@ -74,6 +90,18 @@ class PdfPages private constructor(
 ) : Closeable {
 
     private val mutex = Mutex()
+
+    /**
+     * OCR'ın kendi kilidi. Sayfa çizmenin kilidiyle aynı olamaz: tanıma
+     * önce sayfayı çizdiriyor, tek kilit olsaydı kendini bekleyip
+     * kilitlenirdi.
+     */
+    private val ocrMutex = Mutex()
+
+    private val ocr = PdfOcr()
+
+    /** Tanınan sayfalar. Aynı sayfada ikinci seçim beklemesin diye. */
+    private val ocrCache = LinkedHashMap<Int, List<OcrWord>>()
 
     val pageCount: Int get() = renderer.pageCount
 
@@ -187,6 +215,112 @@ class PdfPages private constructor(
                 context = context.take(MAX_CONTEXT),
             )
         }
+
+    /**
+     * Taranmış sayfada iki nokta arasındaki metin.
+     *
+     * PDF'in kendi metnine bakan yol boş dönerse buraya düşülüyor: sayfa
+     * yüksekçe bir çözünürlükte çizilip görüntüden yazı tanınıyor. Sayfa
+     * bir kez tanınıyor, sonucu saklanıyor — tanıma bir saniyeye yakın
+     * sürüyor ve aynı sayfada ikinci kelimeyi beklemenin anlamı yok.
+     */
+    suspend fun ocrSelection(
+        index: Int,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): OcrOutcome {
+        val words = ocrWords(index).getOrElse { error ->
+            return OcrOutcome.Failed(
+                error.message?.takeIf { it.isNotBlank() } ?: error::class.java.simpleName,
+            )
+        }
+        if (words.isEmpty()) return OcrOutcome.Empty
+        return pick(words, startX, startY, endX, endY)
+            ?.let { OcrOutcome.Word(it) }
+            ?: OcrOutcome.Empty
+    }
+
+    /** Sayfanın tanınmış kelimeleri; ilk seferde çizip tanıyor. */
+    private suspend fun ocrWords(index: Int): Result<List<OcrWord>> = ocrMutex.withLock {
+        ocrCache[index]?.let { return@withLock Result.success(it) }
+
+        val bitmap = render(index, OCR_WIDTH, PdfCrop.FULL)
+            ?: return@withLock Result.failure(IllegalStateException("Sayfa çizilemedi."))
+        // Bitmap elle geri verilmiyor: tanıma iptal edilirse ML Kit onu
+        // hâlâ okuyor olabiliyor ve geri verilmiş bir bitmap'e dokunmak
+        // uygulamayı düşürüyor. Çöp toplayıcı zaten alıyor.
+        val found = runCatching { ocr.words(bitmap) }
+
+        found.onSuccess { list ->
+            ocrCache[index] = list
+            // Bellekte birkaç sayfa yetiyor; okuyucu ileri gidiyor,
+            // gerideki sayfaya dönme ihtimali düşük.
+            while (ocrCache.size > OCR_CACHE) {
+                ocrCache.remove(ocrCache.keys.first())
+            }
+        }
+        found
+    }
+
+    /**
+     * Seçilen aralığa düşen kelimeler.
+     *
+     * Parmak sürüklenmeden kaldırılmışsa aralık bir noktaya iniyor; o
+     * zaman noktanın içine düştüğü kelime, yoksa yakınındaki en yakın
+     * kelime alınıyor — tanınan kutular harflere tam oturmuyor ve tam
+     * isabet beklemek seçimi çoğu zaman boş bırakırdı.
+     */
+    private fun pick(
+        words: List<OcrWord>,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): PdfWord? {
+        val left = minOf(startX, endX)
+        val right = maxOf(startX, endX)
+        val top = minOf(startY, endY)
+        val bottom = maxOf(startY, endY)
+
+        val chosen = if (right - left < POINT_SIZE && bottom - top < POINT_SIZE) {
+            val x = (left + right) / 2
+            val y = (top + bottom) / 2
+            val nearest = words.minByOrNull { gap(it, x, y) } ?: return null
+            if (gap(nearest, x, y) > NEAR) return null
+            listOf(nearest)
+        } else {
+            words.filter {
+                it.right > left && it.left < right && it.bottom > top && it.top < bottom
+            }
+        }
+        if (chosen.isEmpty()) return null
+
+        val text = chosen.joinToString(" ") { it.text }.trim()
+        if (text.isBlank()) return null
+
+        return PdfWord(
+            text = text,
+            left = chosen.minOf { it.left },
+            top = chosen.minOf { it.top },
+            right = chosen.maxOf { it.right },
+            bottom = chosen.maxOf { it.bottom },
+            context = chosen.map { it.line }
+                .distinct()
+                .joinToString(" ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .take(MAX_CONTEXT),
+        )
+    }
+
+    /** Noktanın kelime kutusuna uzaklığı; kutunun içindeyse sıfır. */
+    private fun gap(word: OcrWord, x: Float, y: Float): Float {
+        val dx = maxOf(word.left - x, 0f, x - word.right)
+        val dy = maxOf(word.top - y, 0f, y - word.bottom)
+        return kotlin.math.hypot(dx, dy)
+    }
 
     /** Sayfayı verilen genişlikte çizer; [crop] verilirse o çerçeveye. */
     suspend fun render(index: Int, widthPx: Int, crop: PdfCrop = PdfCrop.FULL): Bitmap? =
@@ -364,6 +498,7 @@ class PdfPages private constructor(
     }
 
     override fun close() {
+        runCatching { ocr.close() }
         runCatching { renderer.close() }
         runCatching { descriptor.close() }
     }
@@ -402,6 +537,24 @@ class PdfPages private constructor(
 
         /** Karta yazılacak bağlamın üst sınırı. */
         private const val MAX_CONTEXT = 400
+
+        /**
+         * Tanıma için sayfanın çizileceği genişlik.
+         *
+         * Tipik bir kitap sayfasında iki yüz nokta/inç civarına denk
+         * geliyor; tanıma için önerilen alt sınırın üstünde, belleği de
+         * zorlamıyor.
+         */
+        private const val OCR_WIDTH = 1600
+
+        /** Bellekte tutulacak tanınmış sayfa sayısı. */
+        private const val OCR_CACHE = 8
+
+        /** Bundan küçük bir aralık sürükleme değil, tek dokunuş sayılıyor. */
+        private const val POINT_SIZE = 0.01f
+
+        /** Tek dokunuşta kelimenin bu kadar yakınına düşmek yetiyor. */
+        private const val NEAR = 0.05f
 
         fun open(file: File): PdfPages? = runCatching {
             val descriptor = ParcelFileDescriptor.open(

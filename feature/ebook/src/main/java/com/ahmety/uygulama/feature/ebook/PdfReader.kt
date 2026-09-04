@@ -90,8 +90,6 @@ data class PdfUiState(
     val crop: PdfCrop = PdfCrop.FULL,
     /** Sayfa numarasına göre işaretler; sayfanın üstüne çiziliyorlar. */
     val marks: Map<Int, List<PdfMark>> = emptyMap(),
-    /** Sayfadaki metne erişilebiliyor mu; Android 15 ile geldi. */
-    val textSupported: Boolean = true,
     /** Açılışta gidilecek sayfa; kaldığın yer. */
     val startPage: Int = 0,
     val loading: Boolean = true,
@@ -140,7 +138,6 @@ class PdfReaderViewModel @Inject constructor(
             // Çerçeve sayfalar göründükten sonra hesaplanıyor: birkaç
             // sayfa çizmek yarım saniye sürebiliyor ve okumanın önünde
             // beklemek anlamsız.
-            _state.value = _state.value.copy(textSupported = opened.textSupported)
             if (crop) {
                 _state.value = _state.value.copy(crop = opened.contentBox())
             }
@@ -159,6 +156,22 @@ class PdfReaderViewModel @Inject constructor(
         endX: Float,
         endY: Float,
     ): PdfWord? = pages?.selection(index, startX, startY, endX, endY)
+
+    /**
+     * Taranmış sayfada seçimi görüntüden okur.
+     *
+     * PDF'in kendi metni boş dönünce buraya düşülüyor; tanıma bir saniyeye
+     * yakın sürdüğü için ayrı bir çağrı olarak duruyor, her seçimde
+     * peşinen çalıştırılmıyor.
+     */
+    suspend fun ocrSelection(
+        index: Int,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): OcrOutcome = pages?.ocrSelection(index, startX, startY, endX, endY)
+        ?: OcrOutcome.Failed("PDF açık değil.")
 
     /** Kelimeyi işaretler ve sayfaya çizer. */
     fun mark(word: PdfWord, page: Int, color: HighlightColor) {
@@ -228,9 +241,9 @@ class PdfReaderViewModel @Inject constructor(
 /**
  * PDF okuyucusu.
  *
- * Sayfalar resim olarak çiziliyor: Android'in kendi motoru metni vermiyor,
- * metin çıkaran kütüphaneler ise uygulamanın tamamından büyük. Bu yüzden
- * PDF'te kelime işaretleme yok — okuma ve kaldığın yer var.
+ * Sayfalar resim olarak çiziliyor. Kelime işaretlemek için metne iki ayrı
+ * yoldan varılıyor: PDF'in kendi metin katmanı (Android 15 ve üstü) ya da
+ * o yoksa sayfanın görüntüsünden yazı tanıma.
  *
  * Sayfalar önceden değil, göründükçe çiziliyor; sekiz yüz sayfalık bir
  * belgeyi baştan çizmek hem beklemek hem belleği doldurmak olurdu. Ölçüler
@@ -257,32 +270,41 @@ fun PdfReaderRoute(
     // okunmuyor. Onun yerine her seçime bir sıra numarası veriliyor.
     var tapped by remember { mutableStateOf<TapSpot?>(null) }
     var selectionSerial by remember { mutableLongStateOf(0L) }
+    // Görüntüden yazı tanınırken; parmak kalktıktan sonra bir saniye
+    // kadar sürüyor ve hiçbir şey olmuyormuş gibi görünmesin diye.
+    var reading by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf<Pick?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     // Parmak basılıyken seçilen aralık; sayfanın üstünde canlı gösteriliyor.
     var dragging by remember { mutableStateOf<DragBox?>(null) }
     val scope = rememberCoroutineScope()
 
+    // İki yol var ve sırası önemli. Önce PDF'in kendi metni deneniyor:
+    // varsa anında ve harfi harfine doğru. Yoksa — taranmış belgede ya da
+    // Android 15'in altındaki telefonlarda — sayfanın görüntüsünden yazı
+    // tanınıyor. İkincisi bir saniyeye yakın sürdüğü için peşinen değil,
+    // ancak birincisi boş dönünce çalıştırılıyor.
     LaunchedEffect(tapped) {
         val spot = tapped ?: return@LaunchedEffect
-        if (!state.textSupported) {
-            notice = "Bu telefonda PDF'in metnine erişilemiyor. " +
-                "Sayfadaki yazıyı okumak Android 15 ile geldi; " +
-                "bu cihaz Android ${android.os.Build.VERSION.RELEASE}."
+        val word = viewModel.selection(spot.page, spot.x, spot.y, spot.endX, spot.endY)
+        if (word != null) {
+            picking = Pick(spot.page, word)
             return@LaunchedEffect
         }
-        val word = viewModel.selection(
-            spot.page,
-            spot.x,
-            spot.y,
-            spot.endX,
-            spot.endY,
-        )
-        if (word == null) {
-            notice = "Burada seçilebilecek metin yok. " +
-                "Sayfa taranmış bir görüntüyse içinde metin bulunmuyor."
-        } else {
-            picking = Pick(spot.page, word)
+        reading = true
+        val outcome = viewModel.ocrSelection(spot.page, spot.x, spot.y, spot.endX, spot.endY)
+        reading = false
+        when (outcome) {
+            is OcrOutcome.Word -> picking = Pick(spot.page, outcome.word)
+            is OcrOutcome.Empty -> {
+                notice = "Burada bir kelime tanınamadı. " +
+                    "Biraz daha geniş seçmeyi ya da sayfayı yakınlaştırmayı dene."
+            }
+            is OcrOutcome.Failed -> {
+                notice = "Yazı tanıma çalıştırılamadı. Model telefona ilk " +
+                    "kullanımda iniyor; internete bağlanıp birkaç dakika " +
+                    "sonra tekrar dene.\n\n${outcome.message}"
+            }
         }
     }
 
@@ -435,6 +457,26 @@ fun PdfReaderRoute(
                     }
                 }
 
+                // Tanıma sürerken. Sayfanın üstünde küçük bir şerit:
+                // parmak kalktıktan sonra bir saniye kadar bir şey
+                // olmuyormuş gibi görünüyordu.
+                if (reading) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.inverseSurface,
+                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(24.dp),
+                    ) {
+                        Text(
+                            text = "Yazı okunuyor…",
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+
                 if (chromeVisible) {
                     val page by remember(listState) {
                         derivedStateOf { listState.firstVisibleItemIndex }
@@ -487,7 +529,7 @@ fun PdfReaderRoute(
     notice?.let { message ->
         AlertDialog(
             onDismissRequest = { notice = null },
-            title = { Text("Metin seçilemiyor") },
+            title = { Text("Kelime bulunamadı") },
             text = { Text(message) },
             confirmButton = { TextButton(onClick = { notice = null }) { Text("Tamam") } },
         )

@@ -27,6 +27,9 @@ junit = "4.13.2"
 okhttp = "4.12.0"
 jsoup = "1.18.3"
 readability4j = "1.0.8"
+# Taranmış PDF'te yazı tanıma. Play Hizmetleri'nden çalışan sürüm: model
+# APK'da taşınmıyor, telefonun kendisinden geliyor.
+mlkitTextRecognition = "19.0.1"
 
 [libraries]
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentFile" }
@@ -71,6 +74,7 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 readability4j = { group = "net.dankito.readability4j", name = "readability4j", version.ref = "readability4j" }
+mlkit-text-recognition = { group = "com.google.android.gms", name = "play-services-mlkit-text-recognition", version.ref = "mlkitTextRecognition" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
