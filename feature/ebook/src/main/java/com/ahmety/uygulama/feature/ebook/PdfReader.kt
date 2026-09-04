@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.magnifier
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.FlowPreview
 import com.ahmety.uygulama.core.designsystem.pinchToZoom
@@ -171,6 +173,10 @@ class PdfReaderViewModel @Inject constructor(
     /** Sayfanın satır çerçeveleri; seçimi metin gibi çizmek için. */
     suspend fun lines(index: Int): List<PdfBand> = pages?.lines(index).orEmpty()
 
+    /** Seçimin başladığı kelimenin çerçevesi; seçim onun başına oturuyor. */
+    suspend fun wordBoxAt(index: Int, x: Float, y: Float): PdfBand? =
+        pages?.wordBoxAt(index, x, y)
+
     /** İki nokta arasındaki metin; noktalar sayfanın oranı olarak. */
     suspend fun selection(
         index: Int,
@@ -306,6 +312,9 @@ fun PdfReaderRoute(
     // sürüyor ve o ana kadar parmağın dikdörtgeni çiziliyor.
     var bandPage by remember { mutableStateOf(-1) }
     var bands by remember { mutableStateOf<List<PdfBand>>(emptyList()) }
+    // Seçimin başladığı kelime. Kelimenin ortasından tutulsa bile seçim
+    // kelimenin başından başlasın diye; bırakırken böyle bir kural yok.
+    var anchor by remember { mutableStateOf<PdfBand?>(null) }
     val scope = rememberCoroutineScope()
 
     // İki yol var ve sırası önemli. Önce PDF'in kendi metni deneniyor:
@@ -343,6 +352,15 @@ fun PdfReaderRoute(
         val loaded = viewModel.lines(page)
         bandPage = page
         bands = loaded
+    }
+
+    // Sürükleme başladığında bir kez: tutulan kelimenin çerçevesi.
+    LaunchedEffect(dragging?.page, dragging?.start) {
+        val drag = dragging
+        // Önceki sürüklemenin çapası bir sonrakine sarkmasın.
+        anchor = null
+        if (drag == null) return@LaunchedEffect
+        anchor = viewModel.wordBoxAt(drag.page, drag.start.x, drag.start.y)
     }
 
     LaunchedEffect(bookId) { viewModel.load(bookId, cropOn) }
@@ -461,6 +479,19 @@ fun PdfReaderRoute(
                         ),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
+                        // Seçim kelimenin başına oturmuş hâli; çapa henüz
+                        // gelmediyse parmağın kendi noktası.
+                        val snapped: (Offset) -> Offset = { raw ->
+                            anchor?.let { box ->
+                                Offset(
+                                    // Sol kenarın bir tık içi: tam kenar
+                                    // bazen kelimenin dışına düşüyor.
+                                    box.left + (box.right - box.left) * 0.05f,
+                                    (box.top + box.bottom) / 2f,
+                                )
+                            } ?: raw
+                        }
+
                         items(state.sizes.size) { index ->
                             PdfPage(
                                 index = index,
@@ -470,7 +501,11 @@ fun PdfReaderRoute(
                                 widthPx = renderWidthPx,
                                 render = viewModel::render,
                                 onTap = { chromeVisible = !chromeVisible },
-                                selecting = if (dragging?.page == index) dragging else null,
+                                selecting = if (dragging?.page == index) {
+                                    dragging?.let { it.copy(start = snapped(it.start)) }
+                                } else {
+                                    null
+                                },
                                 lines = if (bandPage == index) bands else emptyList(),
                                 onSelecting = { start, end ->
                                     dragging = if (start == null || end == null) {
@@ -481,10 +516,11 @@ fun PdfReaderRoute(
                                 },
                                 onSelected = { start, end ->
                                     selectionSerial++
+                                    val from = snapped(start)
                                     tapped = TapSpot(
                                         page = index,
-                                        x = start.x,
-                                        y = start.y,
+                                        x = from.x,
+                                        y = from.y,
                                         endX = end.x,
                                         endY = end.y,
                                         serial = selectionSerial,
@@ -608,6 +644,7 @@ private data class TapSpot(
 /** Renk kutusunda bekleyen seçim. */
 private data class Pick(val page: Int, val word: PdfWord)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PdfPage(
     index: Int,
@@ -630,6 +667,10 @@ private fun PdfPage(
         value = render(index, widthPx, crop)?.asImageBitmap()
     }
 
+    // Parmağın altındaki nokta, piksel olarak. Büyüteç oraya bakıyor;
+    // Unspecified'ken büyüteç hiç görünmüyor.
+    var lens by remember(index) { mutableStateOf(Offset.Unspecified) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -645,6 +686,10 @@ private fun PdfPage(
             .aspectRatio(pageSize.ratio * crop.width / crop.height)
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            // Parmağın altında kalan yeri gösteren büyüteç. Kitapta seçilen
+            // metin ekranın üstünde yazıyla gösteriliyor; PDF'te sayfa resim
+            // olduğu için doğru karşılığı sayfanın kendisini büyütmek.
+            .magnifier(sourceCenter = { lens }, zoom = 1.8f)
             .pointerInput(index, crop) {
                 detectTapGestures(onTap = { onTap() })
             }
@@ -679,17 +724,23 @@ private fun PdfPage(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         start = fractionOf(offset)
                         end = start
+                        lens = offset
                         onSelecting(start, end)
                     },
                     onDrag = { change, _ ->
                         end = fractionOf(change.position)
+                        lens = change.position
                         onSelecting(start, end)
                     },
                     onDragEnd = {
+                        lens = Offset.Unspecified
                         onSelected(start, end)
                         onSelecting(null, null)
                     },
-                    onDragCancel = { onSelecting(null, null) },
+                    onDragCancel = {
+                        lens = Offset.Unspecified
+                        onSelecting(null, null)
+                    },
                 )
             },
     ) {

@@ -297,6 +297,55 @@ class PdfPages private constructor(
         }
 
     /**
+     * Verilen noktadaki kelimenin çerçevesi.
+     *
+     * Seçim başlarken gerekiyor: kelimenin ortasından tutulsa bile seçim
+     * kelimenin başından başlamalı. Bırakırken böyle bir zorunluluk yok —
+     * nerede bırakıldıysa orası.
+     */
+    suspend fun wordBoxAt(index: Int, x: Float, y: Float): PdfBand? {
+        if (textSupported) {
+            textWordBox(index, x, y)?.let { return it }
+        }
+        // Metinden gelmediyse sayfa taranmış demektir. Tanıma seçim için
+        // zaten gerekiyor, burada yapılması boşa gitmiyor.
+        val ordered = groupLines(ocrWords(index).getOrDefault(emptyList())).flatten()
+        val nearest = indexNear(ordered, x, y) ?: return null
+        val word = ordered[nearest]
+        return PdfBand(word.left, word.top, word.right, word.bottom)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private suspend fun textWordBox(index: Int, x: Float, y: Float): PdfBand? =
+        mutex.withLock {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    renderer.openPage(index).use { page ->
+                        val point = SelectionBoundary(
+                            Point(
+                                (x * page.width).toInt().coerceIn(0, page.width - 1),
+                                (y * page.height).toInt().coerceIn(0, page.height - 1),
+                            ),
+                        )
+                        // Başlangıç ve bitiş aynı nokta: platform o noktadaki
+                        // kelimeyi seçiyor. Bize gereken de o kelimenin yeri.
+                        val rects = page.selectContent(point, point)
+                            ?.selectedTextContents
+                            ?.flatMap { it.bounds }
+                            .orEmpty()
+                        if (rects.isEmpty()) return@use null
+                        PdfBand(
+                            left = rects.minOf { it.left } / page.width,
+                            top = rects.minOf { it.top } / page.height,
+                            right = rects.maxOf { it.right } / page.width,
+                            bottom = rects.maxOf { it.bottom } / page.height,
+                        )
+                    }
+                }.getOrNull()
+            }
+        }
+
+    /**
      * Sayfadaki metin satırlarının çerçeveleri.
      *
      * Seçimi metin gibi çizebilmek için gerekiyor. Önce PDF'in kendi metin
