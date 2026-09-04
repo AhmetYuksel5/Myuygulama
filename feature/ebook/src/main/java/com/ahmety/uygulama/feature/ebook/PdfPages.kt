@@ -6,6 +6,8 @@ import com.ahmety.uygulama.core.designsystem.readingContext
 import android.os.Build
 import android.graphics.pdf.models.selection.SelectionBoundary
 import android.graphics.Point
+import android.graphics.pdf.content.PdfPageTextContent
+import android.graphics.RectF
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
@@ -263,10 +265,12 @@ class PdfPages private constructor(
             ) ?: return null
 
             val contents = selection.selectedTextContents
-            // Seçilen metnin kendisi de akan metne çevriliyor: parçalar
-            // satır sonlarıyla geliyor ve olduğu gibi alınırsa iki satırlık
-            // bir öbek kartın başlığına iki satır olarak düşüyor.
-            val text = flowText(contents.map { it.text })
+            // Parçalar yerlerine bakılarak birleştiriliyor: bitişikse
+            // araya boşluk konmuyor. PDF'te bir kelime yazı tipi
+            // ayarlamaları yüzünden birden çok parçaya bölünebiliyor —
+            // "typeface" bu belgede "typefac" ve "e" diye duruyor — ve her
+            // parça sınırına boşluk konursa kelime ikiye ayrılıyor.
+            val text = flowPieces(contents.map { it.asPiece() })
             if (text.isBlank()) return null
 
             val rects = contents.flatMap { it.bounds }
@@ -285,7 +289,7 @@ class PdfPages private constructor(
             // kesilirdi: PDF'te satır sonu paragraf sonuyla aynı görünüyor,
             // oysa nokta yoksa cümle devam ediyor.
             val context = runCatching {
-                readingContext(flowText(page.textContents.map { it.text }), text)
+                readingContext(flowPieces(page.textContents.map { it.asPiece() }), text)
                     .take(MAX_CONTEXT)
             }.getOrDefault("")
 
@@ -324,29 +328,82 @@ class PdfPages private constructor(
             withContext(Dispatchers.IO) {
                 runCatching {
                     renderer.openPage(index).use { page ->
-                        val point = SelectionBoundary(
-                            Point(
-                                (x * page.width).toInt().coerceIn(0, page.width - 1),
-                                (y * page.height).toInt().coerceIn(0, page.height - 1),
-                            ),
-                        )
-                        // Başlangıç ve bitiş aynı nokta: platform o noktadaki
-                        // kelimeyi seçiyor. Bize gereken de o kelimenin yeri.
-                        val rects = page.selectContent(point, point)
-                            ?.selectedTextContents
-                            ?.flatMap { it.bounds }
-                            .orEmpty()
-                        if (rects.isEmpty()) return@use null
+                        val box = wordRect(page, x * page.width, y * page.height)
+                            ?: return@use null
+                        // Bitişik parçalar da kelimeye dahil: PDF'te bir
+                        // kelime birden çok parçaya bölünmüş olabiliyor ve
+                        // platform her parçayı ayrı kelime sayıyor. Bu
+                        // olmadan "typeface" seçilirken "typefac"ta
+                        // duruyordu.
+                        grow(page, box)
                         PdfBand(
-                            left = rects.minOf { it.left } / page.width,
-                            top = rects.minOf { it.top } / page.height,
-                            right = rects.maxOf { it.right } / page.width,
-                            bottom = rects.maxOf { it.bottom } / page.height,
+                            left = box.left / page.width,
+                            top = box.top / page.height,
+                            right = box.right / page.width,
+                            bottom = box.bottom / page.height,
                         )
                     }
                 }.getOrNull()
             }
         }
+
+    /** Noktadaki kelimenin çerçevesi; sayfa pikselinde. */
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private fun wordRect(page: PdfRenderer.Page, x: Float, y: Float): RectF? {
+        val point = SelectionBoundary(
+            Point(
+                x.toInt().coerceIn(0, page.width - 1),
+                y.toInt().coerceIn(0, page.height - 1),
+            ),
+        )
+        // Başlangıç ve bitiş aynı nokta: platform o noktadaki kelimeyi
+        // seçiyor. Bize gereken de o kelimenin yeri.
+        val rects = page.selectContent(point, point)
+            ?.selectedTextContents
+            ?.flatMap { it.bounds }
+            .orEmpty()
+        if (rects.isEmpty()) return null
+        return RectF(
+            rects.minOf { it.left },
+            rects.minOf { it.top },
+            rects.maxOf { it.right },
+            rects.maxOf { it.bottom },
+        )
+    }
+
+    /**
+     * Çerçeveyi iki yanındaki bitişik parçalara genişletir.
+     *
+     * Kutunun hemen sağına ve soluna bakılıyor; oradaki parça araya boşluk
+     * girmeden bitişikse kelimenin parçası sayılıp içeri alınıyor. Sayfa
+     * zaten açık olduğu için bu birkaç ek sorgudan ibaret.
+     */
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private fun grow(page: PdfRenderer.Page, box: RectF) {
+        val middle = box.centerY()
+
+        // Bitişik olmayan ilk parçada duruluyor; devam etmenin anlamı yok
+        // ve her deneme sayfaya bir sorgu daha demek.
+        var merges = 0
+        while (merges < MAX_MERGE) {
+            val next = wordRect(page, box.right + PROBE, middle) ?: break
+            if (next.right <= box.right + PROBE || !joined(box, next)) break
+            box.right = next.right
+            box.top = minOf(box.top, next.top)
+            box.bottom = maxOf(box.bottom, next.bottom)
+            merges++
+        }
+
+        merges = 0
+        while (merges < MAX_MERGE) {
+            val previous = wordRect(page, box.left - PROBE, middle) ?: break
+            if (previous.left >= box.left - PROBE || !joined(previous, box)) break
+            box.left = previous.left
+            box.top = minOf(box.top, previous.top)
+            box.bottom = maxOf(box.bottom, previous.bottom)
+            merges++
+        }
+    }
 
     /**
      * Sayfadaki metin satırlarının çerçeveleri.
@@ -549,6 +606,59 @@ class PdfPages private constructor(
             val dx = maxOf(word.left - x, 0f, x - word.right)
             dy * 4f + dx
         }
+    }
+
+    /**
+     * Yerini bilen bir metin parçası.
+     *
+     * Parçaların arasına boşluk konup konmayacağına yerlerine bakarak
+     * karar veriliyor; metnin kendisine bakarak karar vermenin yolu yok.
+     */
+    private data class Piece(val text: String, val first: RectF?, val last: RectF?)
+
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private fun PdfPageTextContent.asPiece(): Piece =
+        Piece(text, bounds.firstOrNull(), bounds.lastOrNull())
+
+    /**
+     * Parçaları akan bir metne çevirir.
+     *
+     * İki parça aynı satırda ve bitişikse araya boşluk konmuyor: PDF'te bir
+     * kelime yazı tipi ayarlamaları yüzünden birden çok parçaya
+     * bölünebiliyor ve parça sınırı kelime sınırı değil. Gerçek bir boşluk
+     * satır yüksekliğinin beşte biri kadar yer tutuyor; buradaki eşik
+     * onun çok altında, yani ayrı kelimeler yanlışlıkla birleşmiyor.
+     */
+    private fun flowPieces(pieces: List<Piece>): String {
+        val builder = StringBuilder()
+        var previous: RectF? = null
+        pieces.forEach { piece ->
+            val body = piece.text
+                // Satır sonundaki tireleme: "keli-" + "me" tek kelime.
+                .replace(Regex("-\\s*\\n\\s*"), "")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (body.isEmpty()) return@forEach
+            when {
+                builder.isEmpty() -> Unit
+                builder.endsWith("-") -> builder.setLength(builder.length - 1)
+                joined(previous, piece.first) -> Unit
+                else -> builder.append(' ')
+            }
+            builder.append(body)
+            previous = piece.last ?: piece.first
+        }
+        return builder.toString().trim()
+    }
+
+    /** İki parça aynı satırda ve aralarında boşluk yoksa bitişiktir. */
+    private fun joined(previous: RectF?, next: RectF?): Boolean {
+        if (previous == null || next == null) return false
+        val sameLine = previous.bottom > next.top && next.bottom > previous.top
+        if (!sameLine) return false
+        val lineHeight = minOf(previous.height(), next.height()).coerceAtLeast(1f)
+        val gap = next.left - previous.right
+        return gap < lineHeight * TOUCHING
     }
 
     /**
@@ -820,6 +930,19 @@ class PdfPages private constructor(
 
         /** Tek dokunuşta kelimenin bu kadar yakınına düşmek yetiyor. */
         private const val NEAR = 0.05f
+
+        /**
+         * İki parçanın bitişik sayılması için aralarındaki en büyük açıklık;
+         * satır yüksekliğinin oranı olarak. Gerçek bir boşluk bunun bir
+         * buçuk katından geniş.
+         */
+        private const val TOUCHING = 0.15f
+
+        /** Kelimenin yanına bakarken kutudan bu kadar piksel dışarı çıkılıyor. */
+        private const val PROBE = 1.5f
+
+        /** Bir kelimenin en çok kaç parçadan oluşabileceği (her yön için). */
+        private const val MAX_MERGE = 4
 
         fun open(file: File): PdfPages? = runCatching {
             val descriptor = ParcelFileDescriptor.open(
