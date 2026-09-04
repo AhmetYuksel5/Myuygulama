@@ -168,6 +168,9 @@ class PdfReaderViewModel @Inject constructor(
     suspend fun render(index: Int, widthPx: Int, crop: PdfCrop): Bitmap? =
         pages?.render(index, widthPx, crop)
 
+    /** Sayfanın satır çerçeveleri; seçimi metin gibi çizmek için. */
+    suspend fun lines(index: Int): List<PdfBand> = pages?.lines(index).orEmpty()
+
     /** İki nokta arasındaki metin; noktalar sayfanın oranı olarak. */
     suspend fun selection(
         index: Int,
@@ -298,6 +301,11 @@ fun PdfReaderRoute(
     var notice by remember { mutableStateOf<String?>(null) }
     // Parmak basılıyken seçilen aralık; sayfanın üstünde canlı gösteriliyor.
     var dragging by remember { mutableStateOf<DragBox?>(null) }
+    // Seçimin çizileceği satır çerçeveleri. Sürükleme başlayınca yükleniyor:
+    // metni olan sayfada anında geliyor, taranmış sayfada tanıma kadar
+    // sürüyor ve o ana kadar parmağın dikdörtgeni çiziliyor.
+    var bandPage by remember { mutableStateOf(-1) }
+    var bands by remember { mutableStateOf<List<PdfBand>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
     // İki yol var ve sırası önemli. Önce PDF'in kendi metni deneniyor:
@@ -327,6 +335,14 @@ fun PdfReaderRoute(
                     "sonra tekrar dene.\n\n${outcome.message}"
             }
         }
+    }
+
+    LaunchedEffect(dragging?.page) {
+        val page = dragging?.page ?: return@LaunchedEffect
+        if (bandPage == page) return@LaunchedEffect
+        val loaded = viewModel.lines(page)
+        bandPage = page
+        bands = loaded
     }
 
     LaunchedEffect(bookId) { viewModel.load(bookId, cropOn) }
@@ -455,6 +471,7 @@ fun PdfReaderRoute(
                                 render = viewModel::render,
                                 onTap = { chromeVisible = !chromeVisible },
                                 selecting = if (dragging?.page == index) dragging else null,
+                                lines = if (bandPage == index) bands else emptyList(),
                                 onSelecting = { start, end ->
                                     dragging = if (start == null || end == null) {
                                         null
@@ -602,6 +619,8 @@ private fun PdfPage(
     onTap: () -> Unit,
     /** Parmak basılıyken sürüklenen aralık; bu sayfada değilse null. */
     selecting: DragBox?,
+    /** Sayfanın satır çerçeveleri; seçim bunlara göre çiziliyor. */
+    lines: List<PdfBand>,
     /** Sürüklerken: aralık ekranda gösterilsin diye. Bitince ikisi de null. */
     onSelecting: (start: Offset?, end: Offset?) -> Unit,
     onSelected: (start: Offset, end: Offset) -> Unit,
@@ -696,22 +715,44 @@ private fun PdfPage(
                 // Parmak altındaki aralık: ne seçtiğini bırakmadan görmek
                 // için. Gerçek kelime sınırları bırakınca belli oluyor.
                 selecting?.let { drag ->
-                    val left = (minOf(drag.start.x, drag.end.x) - crop.left) /
-                        crop.width * boxWidth
-                    val right = (maxOf(drag.start.x, drag.end.x) - crop.left) /
-                        crop.width * boxWidth
-                    val top = (minOf(drag.start.y, drag.end.y) - crop.top) /
-                        crop.height * boxHeight
-                    val bottom = (maxOf(drag.start.y, drag.end.y) - crop.top) /
-                        crop.height * boxHeight
-                    drawRect(
-                        color = Color(0xFF4FA3F7).copy(alpha = 0.25f),
-                        topLeft = Offset(left, top),
-                        size = Size(
-                            (right - left).coerceAtLeast(6f),
-                            (bottom - top).coerceAtLeast(6f),
-                        ),
-                    )
+                    // Seçim satır satır çiziliyor: ilk satır tutulan yerden
+                    // satır sonuna, aradakiler baştan sona, son satır satır
+                    // başından bırakılan yere. Parmağın çizdiği dikdörtgen
+                    // değil — metin seçimi kutu değildir.
+                    //
+                    // Satırlar henüz gelmediyse (taranmış sayfada tanıma
+                    // sürüyor) geçici olarak parmağın dikdörtgeni çiziliyor;
+                    // hiçbir şey göstermemekten iyi.
+                    val boxes = selectionBands(
+                        lines = lines,
+                        startX = drag.start.x,
+                        startY = drag.start.y,
+                        endX = drag.end.x,
+                        endY = drag.end.y,
+                    ).ifEmpty {
+                        listOf(
+                            PdfBand(
+                                left = minOf(drag.start.x, drag.end.x),
+                                top = minOf(drag.start.y, drag.end.y),
+                                right = maxOf(drag.start.x, drag.end.x),
+                                bottom = maxOf(drag.start.y, drag.end.y),
+                            ),
+                        )
+                    }
+                    boxes.forEach { band ->
+                        val left = (band.left - crop.left) / crop.width * boxWidth
+                        val right = (band.right - crop.left) / crop.width * boxWidth
+                        val top = (band.top - crop.top) / crop.height * boxHeight
+                        val bottom = (band.bottom - crop.top) / crop.height * boxHeight
+                        drawRect(
+                            color = Color(0xFF4FA3F7).copy(alpha = 0.25f),
+                            topLeft = Offset(left, top),
+                            size = Size(
+                                (right - left).coerceAtLeast(6f),
+                                (bottom - top).coerceAtLeast(6f),
+                            ),
+                        )
+                    }
                 }
                 marks.forEach { mark ->
                     val left = (mark.spot.left - crop.left) / crop.width * boxWidth

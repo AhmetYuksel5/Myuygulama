@@ -63,6 +63,80 @@ data class PdfPageSize(val width: Int, val height: Int) {
  * Üç ayrı durum var ve kullanıcıya söylenecekleri farklı: kelime bulundu,
  * sayfada yazı tanınmadı, tanıma hiç çalıştırılamadı.
  */
+/**
+ * Sayfadaki bir metin satırının çerçevesi; oranlar (0..1).
+ *
+ * Seçimi metin gibi göstermek için gerekiyor: parmakla çizilen dikdörtgen
+ * değil, satır satır şeritler. Kitapta seçim böyle görünüyor.
+ */
+data class PdfBand(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+)
+
+/**
+ * İki nokta arasındaki seçimin şeritleri.
+ *
+ * Metin seçimi dikdörtgen değil: ilk satır tutulan yerden satır sonuna,
+ * aradaki satırlar baştan sona, son satır satır başından bırakılan yere
+ * kadar. Kitaptaki seçimin biçimi bu; PDF'te de aynısı çizilsin diye
+ * burada hesaplanıyor.
+ */
+fun selectionBands(
+    lines: List<PdfBand>,
+    startX: Float,
+    startY: Float,
+    endX: Float,
+    endY: Float,
+): List<PdfBand> {
+    if (lines.isEmpty()) return emptyList()
+    val ordered = lines.sortedWith(compareBy({ it.top }, { it.left }))
+    val first = lineIndexAt(ordered, startX, startY)
+    val last = lineIndexAt(ordered, endX, endY)
+
+    // Parmağın hangi sırayla gittiği önemli değil; seçim yukarıdan aşağı.
+    val forward = first <= last
+    val from = if (forward) first else last
+    val to = if (forward) last else first
+    val fromX = if (forward) startX else endX
+    val toX = if (forward) endX else startX
+
+    if (from == to) {
+        val line = ordered[from]
+        return listOf(
+            line.copy(
+                left = minOf(fromX, toX).coerceIn(line.left, line.right),
+                right = maxOf(fromX, toX).coerceIn(line.left, line.right),
+            ),
+        )
+    }
+    return buildList {
+        add(ordered[from].let { it.copy(left = fromX.coerceIn(it.left, it.right)) })
+        for (i in from + 1 until to) add(ordered[i])
+        add(ordered[to].let { it.copy(right = toX.coerceIn(it.left, it.right)) })
+    }
+}
+
+/** Noktanın düştüğü satır; hiçbirinin içinde değilse en yakını. */
+private fun lineIndexAt(ordered: List<PdfBand>, x: Float, y: Float): Int {
+    val inside = ordered.indexOfFirst { y >= it.top && y <= it.bottom }
+    if (inside >= 0) {
+        // Aynı hizada birden çok şerit olabilir (iki sütun); yataya da bak.
+        val sameRow = ordered.withIndex().filter { y >= it.value.top && y <= it.value.bottom }
+        return sameRow.minByOrNull { (_, band) ->
+            maxOf(band.left - x, 0f, x - band.right)
+        }?.index ?: inside
+    }
+    return ordered.indices.minByOrNull { i ->
+        val band = ordered[i]
+        val dy = maxOf(band.top - y, 0f, y - band.bottom)
+        val dx = maxOf(band.left - x, 0f, x - band.right)
+        dy * 4f + dx
+    } ?: 0
+}
+
 sealed interface OcrOutcome {
     data class Word(val word: PdfWord) : OcrOutcome
 
@@ -103,6 +177,11 @@ class PdfPages private constructor(
 
     /** Tanınan sayfalar. Aynı sayfada ikinci seçim beklemesin diye. */
     private val ocrCache = LinkedHashMap<Int, List<OcrWord>>()
+
+    private val bandMutex = Mutex()
+
+    /** Sayfaların satır çerçeveleri; seçimi çizerken kullanılıyor. */
+    private val bandCache = LinkedHashMap<Int, List<PdfBand>>()
 
     val pageCount: Int get() = renderer.pageCount
 
@@ -218,6 +297,83 @@ class PdfPages private constructor(
         }
 
     /**
+     * Sayfadaki metin satırlarının çerçeveleri.
+     *
+     * Seçimi metin gibi çizebilmek için gerekiyor. Önce PDF'in kendi metin
+     * yerleşimi deneniyor — anında geliyor; yoksa tanınan kelimeler
+     * satırlara toplanıyor.
+     */
+    suspend fun lines(index: Int): List<PdfBand> = bandMutex.withLock {
+        bandCache[index]?.let { return@withLock it }
+
+        val fromText = if (textSupported) textBands(index) else emptyList()
+        val bands = fromText.ifEmpty { ocrBands(index) }
+
+        bandCache[index] = bands
+        while (bandCache.size > BAND_CACHE) {
+            bandCache.remove(bandCache.keys.first())
+        }
+        bands
+    }
+
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private suspend fun textBands(index: Int): List<PdfBand> = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                renderer.openPage(index).use { page ->
+                    val width = page.width.toFloat().coerceAtLeast(1f)
+                    val height = page.height.toFloat().coerceAtLeast(1f)
+                    page.textContents
+                        .flatMap { it.bounds }
+                        .map {
+                            PdfBand(
+                                left = it.left / width,
+                                top = it.top / height,
+                                right = it.right / width,
+                                bottom = it.bottom / height,
+                            )
+                        }
+                        .filter { it.right > it.left && it.bottom > it.top }
+                }
+            }.getOrDefault(emptyList())
+        }
+    }
+
+    private suspend fun ocrBands(index: Int): List<PdfBand> =
+        groupLines(ocrWords(index).getOrDefault(emptyList())).map { line ->
+            PdfBand(
+                left = line.minOf { it.left },
+                top = line.minOf { it.top },
+                right = line.maxOf { it.right },
+                bottom = line.maxOf { it.bottom },
+            )
+        }
+
+    /**
+     * Tanınan kelimeleri satırlara toplar; her satır soldan sağa sıralı.
+     *
+     * Aynı satır sayılmak için dikey olarak örtüşmek yetiyor: tanıma
+     * kutuları harflere tam oturmuyor ve tepe noktalarını karşılaştırmak
+     * aynı satırdaki kelimeleri ayırıyordu.
+     */
+    private fun groupLines(words: List<OcrWord>): List<List<OcrWord>> {
+        if (words.isEmpty()) return emptyList()
+        val rows = mutableListOf<MutableList<OcrWord>>()
+        words.sortedBy { it.top }.forEach { word ->
+            val middle = (word.top + word.bottom) / 2
+            val row = rows.lastOrNull { existing ->
+                val top = existing.minOf { it.top }
+                val bottom = existing.maxOf { it.bottom }
+                middle in top..bottom
+            }
+            if (row == null) rows.add(mutableListOf(word)) else row.add(word)
+        }
+        return rows
+            .map { row -> row.sortedBy { it.left } }
+            .sortedBy { row -> row.minOf { it.top } }
+    }
+
+    /**
      * Taranmış sayfada iki nokta arasındaki metin.
      *
      * PDF'in kendi metnine bakan yol boş dönerse buraya düşülüyor: sayfa
@@ -266,12 +422,17 @@ class PdfPages private constructor(
     }
 
     /**
-     * Seçilen aralığa düşen kelimeler.
+     * Seçilen kelimeler; **okuma sırasına göre**.
      *
-     * Parmak sürüklenmeden kaldırılmışsa aralık bir noktaya iniyor; o
-     * zaman noktanın içine düştüğü kelime, yoksa yakınındaki en yakın
-     * kelime alınıyor — tanınan kutular harflere tam oturmuyor ve tam
-     * isabet beklemek seçimi çoğu zaman boş bırakırdı.
+     * Aradaki her şey değil de iki noktanın çevrelediği dikdörtgene düşen
+     * kelimeler alınsaydı seçim metin gibi değil, kutu gibi davranırdı:
+     * satır ortasından başlayıp aşağı sürüklerken satırların baş tarafı
+     * dışarıda kalırdı. Kitapta seçim nasılsa burada da öyle — tutulan
+     * kelimeden bırakılan kelimeye kadar aradaki her kelime.
+     *
+     * Parmak sürüklenmeden kaldırılmışsa tek kelime seçiliyor; noktanın
+     * içine düştüğü kelime, yoksa en yakını — tanıma kutuları harflere tam
+     * oturmuyor ve tam isabet beklemek seçimi çoğu zaman boş bırakırdı.
      */
     private fun pick(
         words: List<OcrWord>,
@@ -280,21 +441,20 @@ class PdfPages private constructor(
         endX: Float,
         endY: Float,
     ): PdfWord? {
-        val left = minOf(startX, endX)
-        val right = maxOf(startX, endX)
-        val top = minOf(startY, endY)
-        val bottom = maxOf(startY, endY)
+        val ordered = groupLines(words).flatten()
+        if (ordered.isEmpty()) return null
 
-        val chosen = if (right - left < POINT_SIZE && bottom - top < POINT_SIZE) {
-            val x = (left + right) / 2
-            val y = (top + bottom) / 2
-            val nearest = words.minByOrNull { gap(it, x, y) } ?: return null
-            if (gap(nearest, x, y) > NEAR) return null
+        val tap = kotlin.math.abs(endX - startX) < POINT_SIZE &&
+            kotlin.math.abs(endY - startY) < POINT_SIZE
+
+        val chosen = if (tap) {
+            val nearest = ordered.minByOrNull { gap(it, startX, startY) } ?: return null
+            if (gap(nearest, startX, startY) > NEAR) return null
             listOf(nearest)
         } else {
-            words.filter {
-                it.right > left && it.left < right && it.bottom > top && it.top < bottom
-            }
+            val a = indexNear(ordered, startX, startY) ?: return null
+            val b = indexNear(ordered, endX, endY) ?: return null
+            ordered.subList(minOf(a, b), maxOf(a, b) + 1)
         }
         if (chosen.isEmpty()) return null
 
@@ -312,6 +472,25 @@ class PdfPages private constructor(
                 text,
             ).take(MAX_CONTEXT),
         )
+    }
+
+    /**
+     * Noktaya karşılık gelen kelimenin sırası.
+     *
+     * Satır önce geliyor: parmak satırın sağ ucunu geçtiğinde bir alttaki
+     * satırın başındaki kelime değil, o satırın son kelimesi seçilmeli.
+     */
+    private fun indexNear(ordered: List<OcrWord>, x: Float, y: Float): Int? {
+        val onRow = ordered.withIndex().filter { y >= it.value.top && y <= it.value.bottom }
+        if (onRow.isNotEmpty()) {
+            return onRow.minByOrNull { maxOf(it.value.left - x, 0f, x - it.value.right) }?.index
+        }
+        return ordered.indices.minByOrNull { i ->
+            val word = ordered[i]
+            val dy = maxOf(word.top - y, 0f, y - word.bottom)
+            val dx = maxOf(word.left - x, 0f, x - word.right)
+            dy * 4f + dx
+        }
     }
 
     /** Noktanın kelime kutusuna uzaklığı; kutunun içindeyse sıfır. */
@@ -548,6 +727,9 @@ class PdfPages private constructor(
 
         /** Bellekte tutulacak tanınmış sayfa sayısı. */
         private const val OCR_CACHE = 8
+
+        /** Bellekte tutulacak satır çerçevesi sayfası. */
+        private const val BAND_CACHE = 8
 
         /** Bundan küçük bir aralık sürükleme değil, tek dokunuş sayılıyor. */
         private const val POINT_SIZE = 0.01f
