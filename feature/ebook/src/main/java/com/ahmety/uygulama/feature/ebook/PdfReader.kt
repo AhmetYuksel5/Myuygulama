@@ -105,6 +105,8 @@ data class PdfMark(
     val word: String,
     val spot: PdfSpot,
     val color: HighlightColor,
+    /** İşaretlenirken saklanan cümle; kutuya tekrar dokununca gösteriliyor. */
+    val context: String = "",
 )
 
 @HiltViewModel
@@ -232,7 +234,7 @@ class PdfReaderViewModel @Inject constructor(
             .mapNotNull { entry ->
                 val spot = HighlightRef.spot(entry.source) ?: return@mapNotNull null
                 val color = HighlightRef.color(entry.source) ?: return@mapNotNull null
-                PdfMark(entry.title, spot, color)
+                PdfMark(entry.title, spot, color, entry.body)
             }
             .groupBy { it.spot.page }
         _state.value = _state.value.copy(marks = grouped)
@@ -500,7 +502,36 @@ fun PdfReaderRoute(
                                 marks = state.marks[index].orEmpty(),
                                 widthPx = renderWidthPx,
                                 render = viewModel::render,
-                                onTap = { chromeVisible = !chromeVisible },
+                                onTap = { spot ->
+                                    // İşaretli bir kelimeye dokunmak onu
+                                    // düzenlemek demek: rengini değiştir ya
+                                    // da kaldır. Boş yere dokunmak çubukları
+                                    // açıp kapatmaya devam ediyor.
+                                    val hit = state.marks[index]
+                                        .orEmpty()
+                                        .firstOrNull { mark ->
+                                            spot.x >= mark.spot.left &&
+                                                spot.x <= mark.spot.right &&
+                                                spot.y >= mark.spot.top &&
+                                                spot.y <= mark.spot.bottom
+                                        }
+                                    if (hit == null) {
+                                        chromeVisible = !chromeVisible
+                                    } else {
+                                        picking = Pick(
+                                            page = index,
+                                            word = PdfWord(
+                                                text = hit.word,
+                                                left = hit.spot.left,
+                                                top = hit.spot.top,
+                                                right = hit.spot.right,
+                                                bottom = hit.spot.bottom,
+                                                context = hit.context,
+                                            ),
+                                            current = hit.color,
+                                        )
+                                    }
+                                },
                                 selecting = if (dragging?.page == index) {
                                     dragging?.let { it.copy(start = snapped(it.start)) }
                                 } else {
@@ -587,7 +618,7 @@ fun PdfReaderRoute(
         // Kitaptaki renk kutusunun aynısı: aynı kalemler, aynı anlamlar.
         ColorPickerDialog(
             request = PendingHighlight(pick.word.text, pick.word.context),
-            current = null,
+            current = pick.current,
             gloss = gloss,
             onDismiss = {
                 picking = null
@@ -641,8 +672,17 @@ private data class TapSpot(
     val serial: Long,
 )
 
-/** Renk kutusunda bekleyen seçim. */
-private data class Pick(val page: Int, val word: PdfWord)
+/**
+ * Renk kutusunda bekleyen seçim.
+ *
+ * [current] doluysa var olan bir işaret düzenleniyor demektir: kutuda o
+ * renk seçili görünüyor ve "Kaldır" çıkıyor.
+ */
+private data class Pick(
+    val page: Int,
+    val word: PdfWord,
+    val current: HighlightColor? = null,
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -653,7 +693,8 @@ private fun PdfPage(
     marks: List<PdfMark>,
     widthPx: Int,
     render: suspend (Int, Int, PdfCrop) -> Bitmap?,
-    onTap: () -> Unit,
+    /** Sayfaya dokunuldu; nokta sayfanın oranı olarak. */
+    onTap: (Offset) -> Unit,
     /** Parmak basılıyken sürüklenen aralık; bu sayfada değilse null. */
     selecting: DragBox?,
     /** Sayfanın satır çerçeveleri; seçim bunlara göre çiziliyor. */
@@ -691,7 +732,17 @@ private fun PdfPage(
             // olduğu için doğru karşılığı sayfanın kendisini büyütmek.
             .magnifier(sourceCenter = { lens }, zoom = 1.8f)
             .pointerInput(index, crop) {
-                detectTapGestures(onTap = { onTap() })
+                val scope = this
+                detectTapGestures { offset ->
+                    val boxWidth = scope.size.width.toFloat().coerceAtLeast(1f)
+                    val boxHeight = scope.size.height.toFloat().coerceAtLeast(1f)
+                    onTap(
+                        Offset(
+                            crop.left + (offset.x / boxWidth) * crop.width,
+                            crop.top + (offset.y / boxHeight) * crop.height,
+                        ),
+                    )
+                }
             }
             // Metin seçme: parmağı basılı tut, istersen sürükle, bırak.
             // Okurken beklenen hareket bu; çift dokunuş metin kutularının
