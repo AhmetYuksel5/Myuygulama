@@ -15,6 +15,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
+import androidx.compose.runtime.DisposableEffect
+import com.ahmety.uygulama.core.database.sync.SyncMode
 import androidx.compose.material3.MaterialTheme
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.OutlinedButton
@@ -35,9 +38,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 /**
  * İki telefon arasındaki senkronun kurulum ekranı.
  *
- * Taşıyıcı şimdilik "paylaşılan klasör": Syncthing, FolderSync ya da benzeri
- * bir araçla eşlediğin herhangi bir klasör olabilir. Google Drive'ı uygulama
- * içinden kullanan taşıyıcı bunun üstüne eklenecek; veri biçimi aynı kalacak.
+ * İki yol var. **Aynı ağ**: telefonlar birbirini yerel ağda bulup dosyaları
+ * doğrudan veriyor — bulut yok, hesap yok, üçüncü uygulama yok.
+ * **Paylaşılan klasör**: bir klasör seçilir ve o klasörü iki telefon
+ * arasında taşımak başka bir aracın işidir (Syncthing, FolderSync). Veri
+ * biçimi ikisinde de aynı; yolu değiştirmek veriyi bozmuyor.
  */
 @Composable
 fun SyncScreen(
@@ -48,6 +53,12 @@ fun SyncScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var keyInput by remember { mutableStateOf("") }
+
+    // Duyuru ve sunucu yalnızca bu ekran açıkken çalışıyor.
+    DisposableEffect(Unit) {
+        viewModel.startPeering()
+        onDispose { viewModel.stopPeering() }
+    }
 
     val folderPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
@@ -74,7 +85,67 @@ fun SyncScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("1. Paylaşılan klasör", style = MaterialTheme.typography.titleMedium)
+                Text("1. Yol", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.mode == SyncMode.LAN,
+                        onClick = { viewModel.setMode(SyncMode.LAN) },
+                        label = { Text("Aynı ağ") },
+                    )
+                    FilterChip(
+                        selected = state.mode == SyncMode.FOLDER,
+                        onClick = { viewModel.setMode(SyncMode.FOLDER) },
+                        label = { Text("Paylaşılan klasör") },
+                    )
+                }
+                Text(
+                    text = if (state.mode == SyncMode.LAN) {
+                        "İki telefon da aynı Wi-Fi'de ve bu ekranda açık olsun; " +
+                            "birbirlerini kendileri buluyor. Eşleştirme yok — " +
+                            "aynı kurtarma anahtarını taşımak eşleşmek demek."
+                    } else {
+                        "Bir klasör seç. Dikkat: uygulama o klasörü iki telefon " +
+                            "arasında taşımıyor, bunu Syncthing gibi bir araç yapmalı. " +
+                            "Google Drive Android'in klasör seçicisinde çıkmadığı için " +
+                            "Drive klasörü seçilemiyor."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (state.mode == SyncMode.LAN) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("2. Cihazlar", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Bu cihaz: ${state.deviceName}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = when {
+                            !state.listening -> "Ağ dinlenemiyor."
+                            state.peers.isEmpty() -> "Henüz başka cihaz görünmüyor."
+                            else -> "Bulundu: " + state.peers.joinToString(", ")
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        if (state.mode == SyncMode.FOLDER) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("2. Paylaşılan klasör", style = MaterialTheme.typography.titleMedium)
                 Text(
                     text = state.folderLabel?.let { "Seçili: $it" } ?: "Henüz seçilmedi.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -89,16 +160,19 @@ fun SyncScreen(
                 }
             }
         }
+        }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("2. Kurtarma anahtarı", style = MaterialTheme.typography.titleMedium)
+                Text("3. Kurtarma anahtarı", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "Klasöre yazılan her şey bu anahtarla şifrelenir. " +
-                        "Birinci telefonda oluştur, ikinci telefona aynısını gir.",
+                    text = "Dışarı çıkan her şey bu anahtarla şifrelenir. " +
+                        "Birinci telefonda oluştur, ikinci telefona aynısını gir. " +
+                        "Ağ yolunda eşleştirme de bununla oluyor: aynı anahtarı " +
+                        "taşımayan cihaz görünmüyor bile.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

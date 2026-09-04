@@ -6,6 +6,13 @@
     <!-- Uygulama içi güncelleme: indirilen APK'yı sistem kurulum ekranına verebilmek için. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+        Aynı ağdaki ikinci telefonu bulmak için: cihazlar birbirine yayın
+        paketiyle duyuruluyor ve bazı telefonlar bu paketleri ancak
+        çoklu yayın kilidi alınmışken teslim ediyor.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -43,7 +50,15 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Merkez">
+        android:theme="@style/Theme.Merkez"
+        android:usesCleartextTraffic="true">
+        <!--
+            Düz HTTP yalnızca aynı ağdaki ikinci telefonla konuşurken
+            kullanılıyor; yerel ağda sertifika almanın yolu yok. Dışarı
+            giden her istek (OpenAI, Open Library, güncelleme) adresinde
+            https yazdığı için bundan etkilenmiyor. Taşınan dosyalar da
+            zaten kurtarma anahtarıyla şifreli.
+        -->
 
         <!--
             Taranmış PDF'te yazı tanıma modeli. Bu satır Play Hizmetleri'ne

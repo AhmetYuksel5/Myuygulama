@@ -28,6 +28,15 @@ interface SyncTransport {
     suspend fun read(deviceFolder: String, fileName: String): ByteArray?
 
     suspend fun write(deviceFolder: String, fileName: String, bytes: ByteArray): Boolean
+
+    /**
+     * Dışa yazma bittikten sonra çağrılır.
+     *
+     * Paylaşılan klasörde yapacak bir şey yok — dosyalar zaten ortak yere
+     * yazıldı. Ağ üzerinden konuşan taşıyıcı burada kendi dosyalarını
+     * karşı tarafa gönderiyor.
+     */
+    suspend fun publish() = Unit
 }
 
 /**

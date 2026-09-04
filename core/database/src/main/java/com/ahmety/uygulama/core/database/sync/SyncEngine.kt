@@ -46,7 +46,7 @@ class SyncEngine @Inject constructor(
     private val syncStateDao: SyncStateDao,
     private val applier: ChangeApplier,
     private val crypto: SyncCrypto,
-    private val transport: DocumentTreeTransport,
+    private val transport: ActiveTransport,
     private val json: Json,
     @DeviceId private val deviceId: String,
     private val now: Now,
@@ -58,6 +58,10 @@ class SyncEngine @Inject constructor(
 
         val exported = export()
         if (exported < 0) return SyncOutcome(error = SyncError.WRITE_FAILED)
+
+        // Ağ yolunda kendi dosyalarımızı karşı tarafa burada gönderiyoruz;
+        // klasör yolunda yapacak bir şey yok.
+        transport.publish()
 
         val imported = import()
         return SyncOutcome(

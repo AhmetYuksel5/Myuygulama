@@ -3,6 +3,9 @@ package com.ahmety.uygulama.ui.sync
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ahmety.uygulama.core.database.sync.ActiveTransport
+import com.ahmety.uygulama.core.database.sync.LanPeer
+import com.ahmety.uygulama.core.database.sync.SyncMode
 import com.ahmety.uygulama.core.database.sync.DocumentTreeTransport
 import com.ahmety.uygulama.core.database.sync.SyncCrypto
 import com.ahmety.uygulama.core.database.sync.SyncEngine
@@ -20,12 +23,20 @@ data class SyncUiState(
     val recoveryKey: String? = null,
     val running: Boolean = false,
     val message: String? = null,
+    val mode: SyncMode = SyncMode.LAN,
+    /** Bu cihazın ağda görünen adı. */
+    val deviceName: String = "",
+    /** Ağda bulunan Merkez cihazları. */
+    val peers: List<String> = emptyList(),
+    val listening: Boolean = false,
 )
 
 @HiltViewModel
 class SyncViewModel @Inject constructor(
     private val engine: SyncEngine,
     private val transport: DocumentTreeTransport,
+    private val active: ActiveTransport,
+    private val peer: LanPeer,
     private val crypto: SyncCrypto,
 ) : ViewModel() {
 
@@ -34,12 +45,41 @@ class SyncViewModel @Inject constructor(
 
     init {
         refresh()
+        viewModelScope.launch {
+            peer.peers.collect { found ->
+                _uiState.value = _uiState.value.copy(peers = found.map { it.name })
+            }
+        }
+        viewModelScope.launch {
+            peer.running.collect { on ->
+                _uiState.value = _uiState.value.copy(listening = on)
+            }
+        }
+    }
+
+    /**
+     * Ağ yolunda cihazın duyurusu ve sunucusu ekran açıkken çalışıyor:
+     * arka planda sürekli açık tutmak pili yiyor ve iki telefon da bu
+     * ekrandayken zaten yetiyor.
+     */
+    fun startPeering() {
+        if (active.mode == SyncMode.LAN) peer.start()
+    }
+
+    fun stopPeering() = peer.stop()
+
+    fun setMode(mode: SyncMode) {
+        active.mode = mode
+        if (mode == SyncMode.LAN) peer.start() else peer.stop()
+        refresh()
     }
 
     private fun refresh() {
         _uiState.value = _uiState.value.copy(
             folderLabel = transport.folderUri()?.lastPathSegment,
             recoveryKey = crypto.currentKey(),
+            mode = active.mode,
+            deviceName = peer.deviceName,
         )
     }
 
@@ -88,7 +128,9 @@ class SyncViewModel @Inject constructor(
 }
 
 private fun describe(outcome: SyncOutcome): String = when (outcome.error) {
-    SyncError.NO_FOLDER -> "Önce paylaşılan klasörü seç."
+    SyncError.NO_FOLDER ->
+        "Hazır değil: klasör yolunda klasörü seç, ağ yolunda ikinci telefonun " +
+            "da bu ekranda açık olması gerekiyor."
     SyncError.NO_KEY -> "Önce kurtarma anahtarını oluştur veya gir."
     SyncError.WRITE_FAILED -> "Klasöre yazılamadı. Erişim izni hâlâ geçerli mi?"
     SyncError.DECRYPT_FAILED ->
