@@ -93,21 +93,35 @@ fun SyncScreen(
                         label = { Text("Aynı ağ") },
                     )
                     FilterChip(
+                        selected = state.mode == SyncMode.GITHUB,
+                        onClick = { viewModel.setMode(SyncMode.GITHUB) },
+                        label = { Text("GitHub") },
+                    )
+                    FilterChip(
                         selected = state.mode == SyncMode.FOLDER,
                         onClick = { viewModel.setMode(SyncMode.FOLDER) },
-                        label = { Text("Paylaşılan klasör") },
+                        label = { Text("Klasör") },
                     )
                 }
                 Text(
-                    text = if (state.mode == SyncMode.LAN) {
-                        "İki telefon da aynı Wi-Fi'de ve bu ekranda açık olsun; " +
-                            "birbirlerini kendileri buluyor. Eşleştirme yok — " +
-                            "aynı kurtarma anahtarını taşımak eşleşmek demek."
-                    } else {
-                        "Bir klasör seç. Dikkat: uygulama o klasörü iki telefon " +
-                            "arasında taşımıyor, bunu Syncthing gibi bir araç yapmalı. " +
-                            "Google Drive Android'in klasör seçicisinde çıkmadığı için " +
-                            "Drive klasörü seçilemiyor."
+                    text = when (state.mode) {
+                        SyncMode.LAN ->
+                            "İki telefon da aynı Wi-Fi'de ve bu ekranda açık olsun; " +
+                                "birbirlerini kendileri buluyor. Eşleştirme yok — aynı " +
+                                "kurtarma anahtarını taşımak eşleşmek demek. En hızlısı " +
+                                "ve internete hiç çıkmıyor."
+
+                        SyncMode.GITHUB ->
+                            "Mobil veriyle de çalışır ve telefonların aynı anda açık " +
+                                "olması gerekmez; her telefon canı istediğinde " +
+                                "senkronlanır. Giden her şey şifreli, GitHub da " +
+                                "anlamsız baytlar görüyor."
+
+                        SyncMode.FOLDER ->
+                            "Bir klasör seç. Dikkat: uygulama o klasörü iki telefon " +
+                                "arasında taşımıyor, bunu Syncthing gibi bir araç " +
+                                "yapmalı. Google Drive Android'in klasör seçicisinde " +
+                                "çıkmadığı için Drive klasörü seçilemiyor."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -135,6 +149,67 @@ fun SyncScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+        }
+
+        if (state.mode == SyncMode.GITHUB) {
+            var repository by remember(state.repository) { mutableStateOf(state.repository) }
+            var token by remember { mutableStateOf("") }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("2. GitHub deposu", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "GitHub'da özel bir depo aç (örneğin merkez-senkron) ve " +
+                            "içerik yazma yetkisi olan bir erişim anahtarı üret. " +
+                            "Deponun özel olması şart.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = repository,
+                        onValueChange = { repository = it },
+                        singleLine = true,
+                        label = { Text("kullanıcı/depo") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (state.maskedToken.isNotBlank()) {
+                        Text(
+                            text = "Kayıtlı anahtar: ${state.maskedToken}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = token,
+                        onValueChange = { token = it },
+                        singleLine = true,
+                        label = {
+                            Text(
+                                if (state.maskedToken.isBlank()) {
+                                    "Erişim anahtarı"
+                                } else {
+                                    "Yeni anahtar (boş bırakırsan aynısı kalır)"
+                                },
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                viewModel.setGitHub(repository, token)
+                                token = ""
+                            },
+                        ) { Text("Kaydet") }
+                        if (state.maskedToken.isNotBlank()) {
+                            OutlinedButton(onClick = viewModel::clearGitHub) { Text("Kaldır") }
+                        }
+                    }
                 }
             }
         }

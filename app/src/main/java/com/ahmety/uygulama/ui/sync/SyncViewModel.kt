@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.database.sync.ActiveTransport
+import com.ahmety.uygulama.core.database.sync.GitHubTransport
 import com.ahmety.uygulama.core.database.sync.LanPeer
 import com.ahmety.uygulama.core.database.sync.SyncMode
 import com.ahmety.uygulama.core.database.sync.DocumentTreeTransport
@@ -29,6 +30,9 @@ data class SyncUiState(
     /** Ağda bulunan Merkez cihazları. */
     val peers: List<String> = emptyList(),
     val listening: Boolean = false,
+    /** GitHub yolu: "kullanıcı/depo" ve maskelenmiş anahtar. */
+    val repository: String = "",
+    val maskedToken: String = "",
 )
 
 @HiltViewModel
@@ -37,6 +41,7 @@ class SyncViewModel @Inject constructor(
     private val transport: DocumentTreeTransport,
     private val active: ActiveTransport,
     private val peer: LanPeer,
+    private val github: GitHubTransport,
     private val crypto: SyncCrypto,
 ) : ViewModel() {
 
@@ -74,13 +79,47 @@ class SyncViewModel @Inject constructor(
         refresh()
     }
 
+    /** Hazır değil uyarısının yol başına değişen karşılığı. */
+    private fun notReady(): String = when (active.mode) {
+        SyncMode.LAN ->
+            "İkinci telefon görünmüyor. İkisi de aynı Wi-Fi'de ve bu ekranda açık mı?"
+
+        SyncMode.GITHUB -> "Önce GitHub deposunu ve erişim anahtarını gir."
+        SyncMode.FOLDER -> "Önce paylaşılan klasörü seç."
+    }
+
     private fun refresh() {
         _uiState.value = _uiState.value.copy(
             folderLabel = transport.folderUri()?.lastPathSegment,
             recoveryKey = crypto.currentKey(),
             mode = active.mode,
             deviceName = peer.deviceName,
+            repository = github.repository,
+            maskedToken = github.maskedToken(),
         )
+    }
+
+    /**
+     * GitHub deposunu ve anahtarını kaydeder.
+     *
+     * Anahtar ekranda bir daha tam hâliyle görünmüyor; yalnızca maskesi.
+     */
+    fun setGitHub(repository: String, token: String) {
+        github.repository = repository
+        if (token.isNotBlank()) github.token = token
+        _uiState.value = _uiState.value.copy(
+            message = if (github.configured) {
+                "GitHub ayarlandı."
+            } else {
+                "Depo \"kullanıcı/depo\" biçiminde olmalı ve anahtar boş kalmamalı."
+            },
+        )
+        refresh()
+    }
+
+    fun clearGitHub() {
+        github.clear()
+        refresh()
     }
 
     fun setFolder(uri: Uri) {
@@ -117,7 +156,11 @@ class SyncViewModel @Inject constructor(
             val outcome = engine.sync()
             _uiState.value = _uiState.value.copy(
                 running = false,
-                message = describe(outcome),
+                message = if (outcome.error == SyncError.NO_FOLDER) {
+                    notReady()
+                } else {
+                    describe(outcome)
+                },
             )
         }
     }
@@ -132,7 +175,9 @@ private fun describe(outcome: SyncOutcome): String = when (outcome.error) {
         "Hazır değil: klasör yolunda klasörü seç, ağ yolunda ikinci telefonun " +
             "da bu ekranda açık olması gerekiyor."
     SyncError.NO_KEY -> "Önce kurtarma anahtarını oluştur veya gir."
-    SyncError.WRITE_FAILED -> "Klasöre yazılamadı. Erişim izni hâlâ geçerli mi?"
+    SyncError.WRITE_FAILED ->
+        "Yazılamadı. Klasör yolunda erişim izni, GitHub yolunda depo adı ve " +
+            "anahtar hâlâ geçerli mi?"
     SyncError.DECRYPT_FAILED ->
         "Karşı cihazın dosyaları çözülemedi — iki cihazda aynı kurtarma anahtarı var mı?"
 

@@ -12,6 +12,9 @@ enum class SyncMode {
 
     /** Aynı ağdaki ikinci telefonla doğrudan. */
     LAN,
+
+    /** GitHub'daki özel bir depo üzerinden; mobil veriyle de çalışıyor. */
+    GITHUB,
 }
 
 /**
@@ -25,6 +28,7 @@ class ActiveTransport @Inject constructor(
     @ApplicationContext context: Context,
     private val folder: DocumentTreeTransport,
     private val lan: LanTransport,
+    private val github: GitHubTransport,
 ) : SyncTransport {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -34,7 +38,12 @@ class ActiveTransport @Inject constructor(
             .getOrDefault(SyncMode.LAN)
         set(value) = prefs.edit().putString(KEY_MODE, value.name).apply()
 
-    private val current: SyncTransport get() = if (mode == SyncMode.LAN) lan else folder
+    private val current: SyncTransport
+        get() = when (mode) {
+            SyncMode.LAN -> lan
+            SyncMode.GITHUB -> github
+            SyncMode.FOLDER -> folder
+        }
 
     override suspend fun isReady(): Boolean = current.isReady()
 
