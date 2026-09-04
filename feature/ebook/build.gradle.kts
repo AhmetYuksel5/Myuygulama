@@ -54,6 +54,10 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
 
+    // Open Library'den kapak indirmek için. Uygulamada zaten var, eklenen
+    // kilobayt yok.
+    implementation(libs.okhttp)
+
     // Taranmış PDF'te sayfa baştan sona resim; kelimeyi ancak görüntüden
     // tanıyarak bulabiliyoruz.
     implementation(libs.mlkit.text.recognition)

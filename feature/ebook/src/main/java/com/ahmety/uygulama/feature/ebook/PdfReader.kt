@@ -81,6 +81,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.ahmety.uygulama.core.ai.OpenAiClient
@@ -317,6 +318,10 @@ fun PdfReaderRoute(
     // Seçimin başladığı kelime. Kelimenin ortasından tutulsa bile seçim
     // kelimenin başından başlasın diye; bırakırken böyle bir kural yok.
     var anchor by remember { mutableStateOf<PdfBand?>(null) }
+    // Parmağın o an üstünde olduğu kelime. Seçim harf harf değil kelime
+    // kelime uzuyor: bir kelimeye dokunmak o kelimenin tamamını seçiyor,
+    // yana kaydırmak kelime ekliyor.
+    var focus by remember { mutableStateOf<PdfBand?>(null) }
     val scope = rememberCoroutineScope()
 
     // İki yol var ve sırası önemli. Önce PDF'in kendi metni deneniyor:
@@ -359,10 +364,23 @@ fun PdfReaderRoute(
     // Sürükleme başladığında bir kez: tutulan kelimenin çerçevesi.
     LaunchedEffect(dragging?.page, dragging?.start) {
         val drag = dragging
-        // Önceki sürüklemenin çapası bir sonrakine sarkmasın.
+        // Önceki sürüklemenin kelimeleri bir sonrakine sarkmasın.
         anchor = null
+        focus = null
         if (drag == null) return@LaunchedEffect
         anchor = viewModel.wordBoxAt(drag.page, drag.start.x, drag.start.y)
+    }
+
+    // Parmak gezerken altındaki kelime. Sorgu sırayla yapılıyor ve yenisi
+    // geldiğinde eskisi bırakılıyor; parmağın her karesi için ayrı bir
+    // sorgu birikmiyor.
+    LaunchedEffect(dragging?.page) {
+        val page = dragging?.page ?: return@LaunchedEffect
+        snapshotFlow { dragging?.end }
+            .distinctUntilChanged()
+            .collectLatest { end ->
+                focus = end?.let { viewModel.wordBoxAt(page, it.x, it.y) }
+            }
     }
 
     LaunchedEffect(bookId) { viewModel.load(bookId, cropOn) }
@@ -481,17 +499,22 @@ fun PdfReaderRoute(
                         ),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        // Seçim kelimenin başına oturmuş hâli; çapa henüz
-                        // gelmediyse parmağın kendi noktası.
-                        val snapped: (Offset) -> Offset = { raw ->
-                            anchor?.let { box ->
-                                Offset(
-                                    // Sol kenarın bir tık içi: tam kenar
-                                    // bazen kelimenin dışına düşüyor.
-                                    box.left + (box.right - box.left) * 0.05f,
-                                    (box.top + box.bottom) / 2f,
-                                )
-                            } ?: raw
+                        // Seçimin kelimelere oturmuş iki ucu.
+                        //
+                        // Tutulan kelime ile parmağın üstündeki kelime
+                        // hangisi önce geliyorsa seçim ondan başlıyor ve
+                        // diğerinin sonunda bitiyor; iki kelimenin de
+                        // tamamı içeride kalıyor. Geriye doğru sürüklemek
+                        // de böylece çalışıyor.
+                        val span: (Offset, Offset) -> Pair<Offset, Offset> = { from, to ->
+                            val held = anchor
+                            val under = focus
+                            when {
+                                held == null -> from to to
+                                under == null -> wordStart(held) to wordEnd(held)
+                                comesFirst(held, under) -> wordStart(held) to wordEnd(under)
+                                else -> wordStart(under) to wordEnd(held)
+                            }
                         }
 
                         items(state.sizes.size) { index ->
@@ -533,7 +556,10 @@ fun PdfReaderRoute(
                                     }
                                 },
                                 selecting = if (dragging?.page == index) {
-                                    dragging?.let { it.copy(start = snapped(it.start)) }
+                                    dragging?.let { drag ->
+                                        val (from, to) = span(drag.start, drag.end)
+                                        drag.copy(start = from, end = to)
+                                    }
                                 } else {
                                     null
                                 },
@@ -547,13 +573,13 @@ fun PdfReaderRoute(
                                 },
                                 onSelected = { start, end ->
                                     selectionSerial++
-                                    val from = snapped(start)
+                                    val (from, to) = span(start, end)
                                     tapped = TapSpot(
                                         page = index,
                                         x = from.x,
                                         y = from.y,
-                                        endX = end.x,
-                                        endY = end.y,
+                                        endX = to.x,
+                                        endY = to.y,
                                         serial = selectionSerial,
                                     )
                                 },
@@ -651,6 +677,30 @@ fun PdfReaderRoute(
     }
 }
 
+
+/**
+ * İki kelimeden hangisi metinde önce geliyor.
+ *
+ * Aynı satırdaysalar soldaki, değilse yukarıdaki. Satır kararı dikey
+ * örtüşmeye bakıyor: kutuların tepe noktaları aynı satırda bile birkaç
+ * piksel oynuyor.
+ */
+private fun comesFirst(a: PdfBand, b: PdfBand): Boolean {
+    val sameRow = a.bottom > b.top && b.bottom > a.top
+    return if (sameRow) a.left <= b.left else a.top < b.top
+}
+
+/** Kelimenin başı; tam kenar bazen kelimenin dışına düştüğü için bir tık içi. */
+private fun wordStart(word: PdfBand) = Offset(
+    word.left + (word.right - word.left) * 0.05f,
+    (word.top + word.bottom) / 2f,
+)
+
+/** Kelimenin sonu. */
+private fun wordEnd(word: PdfBand) = Offset(
+    word.right - (word.right - word.left) * 0.05f,
+    (word.top + word.bottom) / 2f,
+)
 
 /** Parmak basılıyken sürüklenen aralık; sayfanın üstünde çiziliyor. */
 private data class DragBox(val page: Int, val start: Offset, val end: Offset)
@@ -822,26 +872,16 @@ private fun PdfPage(
                     // başından bırakılan yere. Parmağın çizdiği dikdörtgen
                     // değil — metin seçimi kutu değildir.
                     //
-                    // Satırlar henüz gelmediyse (taranmış sayfada tanıma
-                    // sürüyor) geçici olarak parmağın dikdörtgeni çiziliyor;
-                    // hiçbir şey göstermemekten iyi.
-                    val boxes = selectionBands(
+                    // Satırlar henüz gelmediyse hiçbir şey çizilmiyor.
+                    // Parmağın dikdörtgeni bir işe yaramıyor; metin seçimi
+                    // kutu değil.
+                    selectionBands(
                         lines = lines,
                         startX = drag.start.x,
                         startY = drag.start.y,
                         endX = drag.end.x,
                         endY = drag.end.y,
-                    ).ifEmpty {
-                        listOf(
-                            PdfBand(
-                                left = minOf(drag.start.x, drag.end.x),
-                                top = minOf(drag.start.y, drag.end.y),
-                                right = maxOf(drag.start.x, drag.end.x),
-                                bottom = maxOf(drag.start.y, drag.end.y),
-                            ),
-                        )
-                    }
-                    boxes.forEach { band ->
+                    ).forEach { band ->
                         val left = (band.left - crop.left) / crop.width * boxWidth
                         val right = (band.right - crop.left) / crop.width * boxWidth
                         val top = (band.top - crop.top) / crop.height * boxHeight

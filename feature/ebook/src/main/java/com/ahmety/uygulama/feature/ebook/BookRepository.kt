@@ -45,6 +45,7 @@ class BookRepository @Inject constructor(
     private val entryRepository: EntryRepository,
     private val progressStore: VocabProgressRepository,
     private val covers: BookCoverStore,
+    private val openLibrary: OpenLibraryCovers,
 ) {
 
     private val readerPrefs = context.getSharedPreferences("merkez_kitap", Context.MODE_PRIVATE)
@@ -483,6 +484,12 @@ class BookRepository @Inject constructor(
     }
 
     fun clearCover(bookId: Long) = covers.delete(bookId)
+
+    /** Kapağı Open Library'den getirir; bulunamazsa false. */
+    suspend fun fetchCover(bookId: Long, title: String): Boolean {
+        val bytes = openLibrary.find(title) ?: return false
+        return covers.save(bookId, bytes)
+    }
 
     /** Kitapta en son okunan bölüm — kaldığın yerden devam edebilmek için. */
     fun lastChapter(bookId: Long): Int = readerPrefs.getInt("chapter_$bookId", 0)

@@ -80,6 +80,29 @@ class BookShelfViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Kapağı internetten getirir.
+     *
+     * Open Library'nin kapsamı dar; bulunamaması olağan bir sonuç, hata
+     * değil. O yüzden bulunamayınca elle koyma yolu hatırlatılıyor.
+     */
+    fun fetchCover(book: Entry) {
+        _state.value = _state.value.copy(message = "Kapak aranıyor…")
+        viewModelScope.launch {
+            val found = runCatching { repository.fetchCover(book.id, book.title) }
+                .getOrDefault(false)
+            if (found) coverVersion++
+            _state.value = _state.value.copy(
+                message = if (found) {
+                    "Kapak bulundu."
+                } else {
+                    "Open Library'de kapak bulunamadı. " +
+                        "\"İnternette kapak ara\" ile bulup \"Kapak seç\" ile koyabilirsin."
+                },
+            )
+        }
+    }
+
     fun clearCover(bookId: Long) {
         repository.clearCover(bookId)
         coverVersion++

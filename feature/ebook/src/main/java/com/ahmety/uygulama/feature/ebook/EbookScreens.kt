@@ -233,6 +233,7 @@ fun BookShelfRoute(
                         }
                     },
                     onClearCover = { viewModel.clearCover(book.id) },
+                    onFetchCover = { viewModel.fetchCover(book) },
                 )
             }
         }
@@ -320,6 +321,7 @@ private fun BookCard(
     onPickCover: () -> Unit,
     onSearchCover: () -> Unit,
     onClearCover: () -> Unit,
+    onFetchCover: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
@@ -406,6 +408,15 @@ private fun BookCard(
                             renaming = true
                         },
                     )
+                    if (!film) {
+                        DropdownMenuItem(
+                            text = { Text("Kapağı internetten getir") },
+                            onClick = {
+                                menuOpen = false
+                                onFetchCover()
+                            },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Kapak seç") },
                         onClick = {
