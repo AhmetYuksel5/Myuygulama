@@ -840,8 +840,6 @@ private fun PdfPage(
             // Kırpılmış sayfanın eni = sayfa_eni × kırpma_eni, boyu da
             // sayfa_boyu × kırpma_boyu; oran ikisinin bölümü.
             .aspectRatio(pageSize.ratio * crop.width / crop.height)
-            .clip(RoundedCornerShape(4.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .pointerInput(index, crop) {
                 val scope = this
                 detectTapGestures { offset ->
@@ -906,6 +904,16 @@ private fun PdfPage(
                 )
             },
     ) {
+        // Sayfanın kendisi kırpılıyor, dıştaki kutu değil: büyüteç
+        // sayfanın üstüne taşabilsin diye. Kırpma dışta olduğunda cam
+        // sayfanın tepesinde kesiliyor ve parmağın altına inmek zorunda
+        // kalıyordu.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        ) {
         bitmap?.let { image ->
             Image(
                 bitmap = image,
@@ -971,6 +979,7 @@ private fun PdfPage(
                 }
             }
         }
+        }
 
         // Büyüteç.
         //
@@ -992,29 +1001,31 @@ private fun PdfPage(
 
                 val glassWidth = MAGNIFIER_WIDTH.toPx().coerceAtMost(boxWidth)
                 val glassHeight = MAGNIFIER_HEIGHT.toPx()
-                val lift = MAGNIFIER_LIFT.toPx()
 
                 // Yatayda sayfanın dışına taşmıyor.
                 val centerX = lens.x.coerceIn(
                     glassWidth / 2f,
                     (boxWidth - glassWidth / 2f).coerceAtLeast(glassWidth / 2f),
                 )
-                // Yukarıda yer kalmadıysa parmağın altına geçiyor; sayfanın
-                // ilk satırını okurken büyüteç ekranın dışında kalıyordu.
-                val above = lens.y - lift
-                val centerY = if (above - glassHeight / 2f >= 0f) above else lens.y + lift
+                // Cam **her zaman** parmağın üstünde. Sayfanın tepesinde
+                // yer kalmadığında sayfanın dışına taşıyor: dıştaki kutu
+                // kırpmadığı için orası çizilebiliyor. Parmağın altına
+                // inmek seçtiğin yeri elinle kapatmak demekti.
                 val left = centerX - glassWidth / 2f
-                val top = centerY - glassHeight / 2f
+                val top = lens.y - MAGNIFIER_LIFT.toPx() - glassHeight / 2f
 
-                // Kaynak: parmağın çevresinde, büyütme oranınca küçük bir alan.
+                // Kaynak: parmağın çevresinde, büyütme oranınca küçük bir
+                // alan. Önce kutu pikselinde hesaplanıyor, çünkü seçim
+                // şeritleri de aynı çerçeveye göre çizilecek.
+                val windowWidth = glassWidth / MAGNIFIER_ZOOM
+                val windowHeight = glassHeight / MAGNIFIER_ZOOM
+                val windowLeft = (lens.x - windowWidth / 2f)
+                    .coerceIn(0f, (boxWidth - windowWidth).coerceAtLeast(0f))
+                val windowTop = (lens.y - windowHeight / 2f)
+                    .coerceIn(0f, (boxHeight - windowHeight).coerceAtLeast(0f))
+
                 val scaleX = page.width / boxWidth
                 val scaleY = page.height / boxHeight
-                val sourceWidth = glassWidth / MAGNIFIER_ZOOM * scaleX
-                val sourceHeight = glassHeight / MAGNIFIER_ZOOM * scaleY
-                val sourceLeft = (lens.x * scaleX - sourceWidth / 2f)
-                    .coerceIn(0f, (page.width - sourceWidth).coerceAtLeast(0f))
-                val sourceTop = (lens.y * scaleY - sourceHeight / 2f)
-                    .coerceIn(0f, (page.height - sourceHeight).coerceAtLeast(0f))
 
                 val corner = CornerRadius(glassHeight / 2f)
                 val frame = Rect(Offset(left, top), Size(glassWidth, glassHeight))
@@ -1030,12 +1041,12 @@ private fun PdfPage(
                     drawImage(
                         image = page,
                         srcOffset = IntOffset(
-                            sourceLeft.roundToInt(),
-                            sourceTop.roundToInt(),
+                            (windowLeft * scaleX).roundToInt(),
+                            (windowTop * scaleY).roundToInt(),
                         ),
                         srcSize = IntSize(
-                            sourceWidth.roundToInt().coerceAtLeast(1),
-                            sourceHeight.roundToInt().coerceAtLeast(1),
+                            (windowWidth * scaleX).roundToInt().coerceAtLeast(1),
+                            (windowHeight * scaleY).roundToInt().coerceAtLeast(1),
                         ),
                         dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
                         dstSize = IntSize(
@@ -1043,6 +1054,36 @@ private fun PdfPage(
                             glassHeight.roundToInt().coerceAtLeast(1),
                         ),
                     )
+
+                    // Seçim camın içinde de görünüyor. Büyütecin işe
+                    // yaraması için neyin seçildiğini göstermesi gerekiyor;
+                    // yalnız sayfayı büyütmek "nereye bastım" sorusuna
+                    // cevap veriyor ama "neyi seçtim" sorusuna vermiyor.
+                    selecting?.let { drag ->
+                        selectionBands(
+                            lines = lines,
+                            startX = drag.start.x,
+                            startY = drag.start.y,
+                            endX = drag.end.x,
+                            endY = drag.end.y,
+                        ).forEach { band ->
+                            val bandLeft = (band.left - crop.left) / crop.width * boxWidth
+                            val bandRight = (band.right - crop.left) / crop.width * boxWidth
+                            val bandTop = (band.top - crop.top) / crop.height * boxHeight
+                            val bandBottom = (band.bottom - crop.top) / crop.height * boxHeight
+                            drawRect(
+                                color = Color(0xFF4FA3F7).copy(alpha = 0.3f),
+                                topLeft = Offset(
+                                    (bandLeft - windowLeft) * MAGNIFIER_ZOOM + left,
+                                    (bandTop - windowTop) * MAGNIFIER_ZOOM + top,
+                                ),
+                                size = Size(
+                                    (bandRight - bandLeft) * MAGNIFIER_ZOOM,
+                                    (bandBottom - bandTop) * MAGNIFIER_ZOOM,
+                                ),
+                            )
+                        }
+                    }
                 }
                 drawRoundRect(
                     color = Color(0x33000000),

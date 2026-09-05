@@ -1,23 +1,28 @@
 package com.ahmety.uygulama.feature.ebook
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.ahmety.uygulama.core.ai.WordInfo
+import com.ahmety.uygulama.core.designsystem.WordCard
+import com.ahmety.uygulama.core.model.VocabWord
 
-/** Okurken açılan ayrıntı kutusunun durumu. */
+/** Okurken açılan kelime kartının durumu. */
 data class WordDetail(
     val word: String,
     /** Kelimenin geçtiği cümle; örnek çoğaltırken aynı bağlam gidiyor. */
@@ -28,15 +33,14 @@ data class WordDetail(
 )
 
 /**
- * Kelimenin tamamı: karşılık, tanım, örnekler, kök, aile, eş ve karşıt
- * anlamlılar.
+ * Kelime kartı, okurken.
  *
- * Destedeki kartın okurken açılan hâli. Kartın kendisine gitmek okumayı
- * bölüyor ve kelime henüz işaretlenmemişse destede bir kart da yok;
- * buradaki kutu ikisini de gerektirmiyor.
+ * Kartın kendisi destedekiyle **aynı** bileşen: ortak katmandaki
+ * [WordCard]. Buraya ayrı bir kart yazmak, birini değiştirince ötekinin
+ * geride kalması demekti — üstelik zaten beğenilen bir kart varken.
  *
- * Deste kartının aynısı değil — orada tekrar programı, görsel ve soru
- * sorma da var. Burada yalnız okurken lazım olan kısmı duruyor.
+ * Deste ekranına gitmek yerine burada açılıyor: gitmek okumayı bölüyor ve
+ * kelime henüz işaretlenmemişse destede kart da yok.
  */
 @Composable
 fun WordDetailDialog(
@@ -44,108 +48,79 @@ fun WordDetailDialog(
     onMoreExamples: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(detail.word) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
                 val info = detail.info
-                when {
-                    detail.busy && info == null -> {
-                        CircularProgressIndicator()
-                        Text("Kelime kartı hazırlanıyor…")
-                    }
-
-                    detail.error.isNotBlank() && info == null -> Text(
-                        text = detail.error,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-
-                    info != null -> {
-                        if (info.meaning.isNotBlank()) {
-                            Text(
-                                text = info.meaning,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                        if (info.definition.isNotBlank()) {
-                            Text(
-                                text = info.definition,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (info.reading.isNotBlank()) {
-                            Section("Okunuş", info.reading)
-                        }
-
-                        if (info.examples.isNotEmpty()) {
-                            HorizontalDivider()
-                            info.examples.forEachIndexed { index, example ->
-                                Text(
-                                    text = "${index + 1}. $example",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                            // Destedeki kartla aynı: üç örnek çoğu zaman
-                            // yetiyor, yetmediğinde üç tane daha geliyor.
-                            TextButton(
-                                enabled = !detail.busy,
-                                onClick = onMoreExamples,
-                            ) {
-                                Text(if (detail.busy) "Getiriliyor…" else "+ örnek")
-                            }
-                        }
-
-                        if (info.root.isNotBlank()) Section("Kök", info.root)
-                        if (info.family.isNotEmpty()) {
-                            Section("Aile", info.family.joinToString(" · "))
-                        }
-                        if (info.synonyms.isNotEmpty()) {
-                            Section("Eş anlamlı", info.synonyms.joinToString(" · "))
-                        }
-                        if (info.antonyms.isNotEmpty()) {
-                            Section("Karşıt", info.antonyms.joinToString(" · "))
-                        }
-                        if (info.related.isNotEmpty()) {
-                            Section("İlgili", info.related.joinToString(" · "))
-                        }
-                        if (info.confusions.isNotEmpty()) {
-                            Section("Karıştırılan", info.confusions.joinToString(" · "))
-                        }
-                        info.collocations.forEach { group ->
-                            Section(group.pattern, group.words.joinToString(" · "))
-                        }
-
-                        if (detail.error.isNotBlank()) {
+                if (info == null) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        if (detail.error.isBlank()) {
+                            CircularProgressIndicator()
+                            Text("Kelime kartı hazırlanıyor…")
+                        } else {
                             Text(
                                 text = detail.error,
-                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
+                } else {
+                    WordCard(
+                        word = info.toVocabWord(detail.context),
+                        tint = Color.Transparent,
+                        interactive = false,
+                        revealed = true,
+                        enriching = detail.busy,
+                        onMoreExamples = onMoreExamples,
+                        // Aynı pencere her kelime için yeniden kullanılıyor;
+                        // konum kelimeye bağlanmazsa yeni kart öncekinin
+                        // bıraktığı yerden açılıyor.
+                        scrollState = rememberSaveable(
+                            detail.word,
+                            saver = ScrollState.Saver,
+                        ) { ScrollState(0) },
+                    )
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
-    )
-}
-
-@Composable
-private fun Section(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.End),
+            ) { Text("Kapat") }
+        }
     }
 }
+
+/**
+ * Kart, destedeki kelime biçimini bekliyor.
+ *
+ * Okurken kelime henüz destede olmayabiliyor; kartı göstermek için
+ * kaydetmeyi şart koşmak yanlış olurdu, o yüzden gelen bilgi geçici bir
+ * kelimeye çevriliyor.
+ */
+private fun WordInfo.toVocabWord(context: String) = VocabWord(
+    word = word,
+    meaning = meaning,
+    definition = definition,
+    reading = reading,
+    examples = examples,
+    related = related,
+    synonyms = synonyms,
+    antonyms = antonyms,
+    root = root,
+    family = family,
+    confusions = confusions,
+    collocations = collocations,
+    answers = answers,
+    context = context,
+)
