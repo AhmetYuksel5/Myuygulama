@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -390,6 +391,8 @@ fun ColorPickerDialog(
     onRemove: () -> Unit,
     /** Kısa anlam; verilmezse kutuda o satır hiç görünmüyor. */
     gloss: WordGloss? = null,
+    /** Kelime kartının tamamını açar; verilmezse düğme çıkmıyor. */
+    onDetail: (() -> Unit)? = null,
 ) {
     var keepContext by remember { mutableStateOf(true) }
 
@@ -457,6 +460,16 @@ fun ColorPickerDialog(
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
+                }
+
+                // Kısa karşılık her zaman yetmiyor: kök, örnekler, eş ve
+                // karşıt anlamlılar okurken de gerekebiliyor. Kartın
+                // tamamı bir dokunuş uzakta dursun.
+                if (onDetail != null) {
+                    TextButton(
+                        onClick = onDetail,
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    ) { Text("Ayrıntı") }
                 }
 
                 if (request.sentence.isNotBlank()) {

@@ -304,6 +304,11 @@ fun VocabRoute(
                         } else {
                             null
                         },
+                        onMoreExamples = if (aiReady) {
+                            { viewModel.addMoreExamples(top) }
+                        } else {
+                            null
+                        },
                         onKnown = { viewModel.markKnown(top, it) },
                         onLearning = { viewModel.markLearning(top, it) },
                         onIgnore = { viewModel.markIgnored(top, it) },
@@ -426,6 +431,11 @@ fun VocabRoute(
             },
             onAsk = if (aiReady) {
                 { viewModel.openQuestion(fresh) }
+            } else {
+                null
+            },
+            onMoreExamples = if (aiReady) {
+                { viewModel.addMoreExamples(fresh) }
             } else {
                 null
             },
@@ -566,6 +576,7 @@ private fun WordCardDialog(
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
     onAsk: (() -> Unit)?,
+    onMoreExamples: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     Dialog(
@@ -590,6 +601,7 @@ private fun WordCardDialog(
                     enriching = enriching,
                     onEnrich = onEnrich,
                     onAsk = onAsk,
+                    onMoreExamples = onMoreExamples,
                     // Aynı pencere her kelime için yeniden kullanılıyor;
                     // konum kelimeye bağlanmazsa yeni kart öncekinin
                     // bıraktığı yerden açılıyor.
@@ -1380,6 +1392,7 @@ private fun SwipeableCard(
     enriching: Boolean,
     onEnrich: (() -> Unit)?,
     onAsk: (() -> Unit)?,
+    onMoreExamples: (() -> Unit)? = null,
     onKnown: (Boolean) -> Unit,
     onLearning: (Boolean) -> Unit,
     onIgnore: (Boolean) -> Unit,
@@ -1593,6 +1606,7 @@ private fun SwipeableCard(
             enriching = enriching,
             onEnrich = onEnrich,
             onAsk = onAsk,
+            onMoreExamples = onMoreExamples,
             revealed = revealed,
             onToggleReveal = {
                 revealed = !revealed
@@ -1656,6 +1670,8 @@ private fun WordCard(
     enriching: Boolean = false,
     onEnrich: (() -> Unit)? = null,
     onAsk: (() -> Unit)? = null,
+    /** Örnekleri çoğaltır; her basışta üç örnek daha geliyor. */
+    onMoreExamples: (() -> Unit)? = null,
     revealed: Boolean = false,
     onToggleReveal: () -> Unit = {},
     onLongPress: () -> Unit = {},
@@ -1894,6 +1910,20 @@ private fun WordCard(
                                 number = index + 1,
                                 text = example,
                             )
+                        }
+                        // Örnekler listenin dibinde çoğaltılıyor: üç örnek
+                        // bir kelimeyi anlamaya çoğu zaman yetiyor ama
+                        // yetmediğinde menüyü açmak gerekiyordu.
+                        if (onMoreExamples != null) {
+                            TextButton(
+                                enabled = !enriching,
+                                onClick = onMoreExamples,
+                            ) {
+                                Text(
+                                    text = if (enriching) "Getiriliyor…" else "+ örnek",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
                         }
                     }
 

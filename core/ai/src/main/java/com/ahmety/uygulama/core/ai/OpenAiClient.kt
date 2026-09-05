@@ -163,13 +163,20 @@ class OpenAiClient @Inject constructor(
         if (word.isBlank()) return AiResult.Failed("Kelime boş.")
 
         val instruction = buildString {
-            append("Give the Turkish meaning of the given English word or phrase ")
-            append("AS IT IS USED in the passage, in ONE line of at most twelve ")
-            append("words. Start with the Turkish equivalent(s). If the sense is ")
-            append("figurative or idiomatic, give that sense, not the literal one. ")
-            append("If the input is a phrase, translate the phrase, not its words ")
-            append("one by one. No quotation marks, no markdown, no preamble, no ")
-            append("full stop at the end, and never repeat the English word itself.")
+            append("Translate the given English text into Turkish, AS IT IS USED ")
+            append("in the passage. ")
+            // Tek kelimede karşılık, öbekte çeviri isteniyor: ikisine tek
+            // bir uzunluk vermek yanlıştı. Kısa tutmayı emretmek uzun bir
+            // seçimde özete dönüyordu — cümlenin yarısı kayboluyordu.
+            append("A single word gets its Turkish equivalent(s) in a few words. ")
+            append("Anything longer gets a COMPLETE translation: translate every ")
+            append("part of it, do not summarise, do not shorten, do not leave ")
+            append("anything out. The translation may be as long as the original. ")
+            append("If the sense is figurative or idiomatic, give that sense, not ")
+            append("the literal one, and translate a phrase as a phrase rather ")
+            append("than word by word. ")
+            append("No quotation marks, no markdown, no preamble, and never ")
+            append("repeat the English text itself.")
         }
 
         val userText = buildString {
@@ -183,7 +190,9 @@ class OpenAiClient @Inject constructor(
             // büyük model bir satırlık karşılık için gereksiz pahalı.
             put("model", AiSettings.GLOSS_MODEL)
             put("temperature", 0.2)
-            put("max_tokens", 60)
+            // Uzun bir seçimin çevirisi kesilmesin diye geniş bir sınır;
+            // tek kelimede zaten birkaç belirteç harcanıyor.
+            put("max_tokens", 700)
             put(
                 "messages",
                 JSONArray()

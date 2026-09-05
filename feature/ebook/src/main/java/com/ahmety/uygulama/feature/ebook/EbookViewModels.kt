@@ -260,6 +260,35 @@ class BookReaderViewModel @Inject constructor(
         _gloss.value = WordGloss()
     }
 
+    /** Okurken açılan kelime kartı. */
+    private val _detail = MutableStateFlow<WordDetail?>(null)
+    val detail: StateFlow<WordDetail?> = _detail.asStateFlow()
+
+    fun openDetail(word: String, context: String) {
+        viewModelScope.launch {
+            lookup.detail(_detail, word, context, _state.value.book?.title.orEmpty())
+        }
+    }
+
+    /** Karta üç örnek daha ekler. */
+    fun moreExamples() {
+        val current = _detail.value ?: return
+        if (current.busy) return
+        viewModelScope.launch {
+            lookup.detail(
+                state = _detail,
+                word = current.word,
+                context = current.context,
+                sourceName = _state.value.book?.title.orEmpty(),
+                more = current.info,
+            )
+        }
+    }
+
+    fun closeDetail() {
+        _detail.value = null
+    }
+
     private var bookId: Long = 0L
 
     /** Bölüm başlangıçlarının karakter toplamı; ilerleme yüzdesi için. */

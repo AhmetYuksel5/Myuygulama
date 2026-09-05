@@ -2,6 +2,7 @@ package com.ahmety.uygulama.feature.ebook
 
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.ai.WordInfo
 import com.ahmety.uygulama.core.designsystem.WordGloss
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -46,6 +47,50 @@ class GlossLookup(private val openAi: OpenAiClient) {
             }
 
             is AiResult.Failed -> state.value = WordGloss(error = result.reason)
+        }
+    }
+
+    /**
+     * Kelimenin kartı: karşılık, tanım, örnekler, kök, aile.
+     *
+     * [more] verilirse eldeki karta yeni örnekler ekleniyor — aynı sorgu
+     * ikinci kez çalıştırılıp gelenler mevcutlara katılıyor; kart ekranında
+     * "örnek çoğalt" da böyle çalışıyor.
+     */
+    suspend fun detail(
+        state: MutableStateFlow<WordDetail?>,
+        word: String,
+        context: String,
+        sourceName: String = "",
+        more: WordInfo? = null,
+    ) {
+        val trimmed = word.trim()
+        if (trimmed.isEmpty()) return
+        state.value = WordDetail(trimmed, context, more, busy = true)
+        when (val result = openAi.describeWord(trimmed, context, sourceName = sourceName)) {
+            is AiResult.Ok -> {
+                val fresh = result.value
+                state.value = WordDetail(
+                    word = trimmed,
+                    context = context,
+                    info = if (more == null) {
+                        fresh
+                    } else {
+                        more.copy(
+                            examples = (more.examples + fresh.examples).distinct(),
+                            related = (more.related + fresh.related).distinct(),
+                            family = (more.family + fresh.family).distinct(),
+                        )
+                    },
+                )
+            }
+
+            is AiResult.Failed -> state.value = WordDetail(
+                word = trimmed,
+                context = context,
+                info = more,
+                error = result.reason,
+            )
         }
     }
 }

@@ -143,6 +143,33 @@ class PdfReaderViewModel @Inject constructor(
         _gloss.value = WordGloss()
     }
 
+    /** Okurken açılan kelime kartı. */
+    private val _detail = MutableStateFlow<WordDetail?>(null)
+    val detail: StateFlow<WordDetail?> = _detail.asStateFlow()
+
+    fun openDetail(word: String, context: String) {
+        viewModelScope.launch { lookup.detail(_detail, word, context, _state.value.title) }
+    }
+
+    /** Karta üç örnek daha ekler. */
+    fun moreExamples() {
+        val current = _detail.value ?: return
+        if (current.busy) return
+        viewModelScope.launch {
+            lookup.detail(
+                state = _detail,
+                word = current.word,
+                context = current.context,
+                sourceName = _state.value.title,
+                more = current.info,
+            )
+        }
+    }
+
+    fun closeDetail() {
+        _detail.value = null
+    }
+
     private var pages: PdfPages? = null
     private var bookId: Long = 0L
 
@@ -299,6 +326,7 @@ fun PdfReaderRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val gloss by viewModel.gloss.collectAsStateWithLifecycle()
+    val detail by viewModel.detail.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val prefs = remember { ReaderPrefs(context) }
@@ -655,6 +683,7 @@ fun PdfReaderRoute(
             request = PendingHighlight(pick.word.text, pick.word.context),
             current = pick.current,
             gloss = gloss,
+            onDetail = { viewModel.openDetail(pick.word.text, pick.word.context) },
             onDismiss = {
                 picking = null
                 viewModel.clearGloss()
@@ -673,6 +702,14 @@ fun PdfReaderRoute(
                 picking = null
                 viewModel.clearGloss()
             },
+        )
+    }
+
+    detail?.let { card ->
+        WordDetailDialog(
+            detail = card,
+            onMoreExamples = viewModel::moreExamples,
+            onDismiss = viewModel::closeDetail,
         )
     }
 
