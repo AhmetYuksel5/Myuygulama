@@ -6,6 +6,14 @@ import com.ahmety.uygulama.core.designsystem.PendingHighlight
 import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.material3.TextButton
@@ -15,8 +23,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.magnifier
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.FlowPreview
 import com.ahmety.uygulama.core.designsystem.pinchToZoom
@@ -713,6 +719,18 @@ private fun wordEnd(word: PdfBand) = Offset(
  */
 private val MAGNIFIER_LIFT = 110.dp
 
+/** Camın ölçüsü: bir satır metni rahat alacak kadar geniş, o kadar yüksek. */
+private val MAGNIFIER_WIDTH = 240.dp
+private val MAGNIFIER_HEIGHT = 76.dp
+
+/**
+ * Büyütme oranı.
+ *
+ * Sayfa ekran genişliğinde çizildiği için kaynakta fazladan çözünürlük
+ * yok; iki kattan fazlası okunaklılık katmıyor, yalnızca bulanıklaştırıyor.
+ */
+private const val MAGNIFIER_ZOOM = 2f
+
 /** Parmak basılıyken sürüklenen aralık; sayfanın üstünde çiziliyor. */
 private data class DragBox(val page: Int, val start: Offset, val end: Offset)
 
@@ -745,7 +763,6 @@ private data class Pick(
     val current: HighlightColor? = null,
 )
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PdfPage(
     index: Int,
@@ -788,23 +805,6 @@ private fun PdfPage(
             .aspectRatio(pageSize.ratio * crop.width / crop.height)
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            // Parmağın altında kalan yeri gösteren büyüteç. Kitapta seçilen
-            // metin ekranın üstünde yazıyla gösteriliyor; PDF'te sayfa resim
-            // olduğu için doğru karşılığı sayfanın kendisini büyütmek.
-            //
-            // Büyüteç parmağın epeyce yukarısında duruyor: hazır yerleşim
-            // onu parmağın hemen üstüne koyuyor ve elin altında kalıyor.
-            .magnifier(
-                sourceCenter = { lens },
-                magnifierCenter = {
-                    if (lens.isSpecified) {
-                        Offset(lens.x, lens.y - MAGNIFIER_LIFT.toPx())
-                    } else {
-                        Offset.Unspecified
-                    }
-                },
-                zoom = 1.8f,
-            )
             .pointerInput(index, crop) {
                 val scope = this
                 detectTapGestures { offset ->
@@ -932,6 +932,88 @@ private fun PdfPage(
                         size = Size(right - left, bottom - top),
                     )
                 }
+            }
+        }
+
+        // Büyüteç.
+        //
+        // Platformun hazır büyüteci (Modifier.magnifier) hiçbir şey
+        // göstermiyordu ve neden göstermediğini buradan görmenin yolu yok.
+        // Sayfanın resmi zaten elimizde; onun bir parçasını büyütüp
+        // çizmek hem her sürümde aynı çalışıyor hem de yerini ve boyunu
+        // biz seçiyoruz.
+        val page = bitmap
+        if (page != null) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                // Parmağın yeri çizim sırasında okunuyor, bileşen kurulurken
+                // değil: yoksa parmağın her kıpırdayışı yerleşimi yeniden
+                // hesaplatırdı, oysa değişen tek şey çizim.
+                if (!lens.isSpecified) return@Canvas
+                val boxWidth = this.size.width
+                val boxHeight = this.size.height
+                if (boxWidth <= 0f || boxHeight <= 0f) return@Canvas
+
+                val glassWidth = MAGNIFIER_WIDTH.toPx().coerceAtMost(boxWidth)
+                val glassHeight = MAGNIFIER_HEIGHT.toPx()
+                val lift = MAGNIFIER_LIFT.toPx()
+
+                // Yatayda sayfanın dışına taşmıyor.
+                val centerX = lens.x.coerceIn(
+                    glassWidth / 2f,
+                    (boxWidth - glassWidth / 2f).coerceAtLeast(glassWidth / 2f),
+                )
+                // Yukarıda yer kalmadıysa parmağın altına geçiyor; sayfanın
+                // ilk satırını okurken büyüteç ekranın dışında kalıyordu.
+                val above = lens.y - lift
+                val centerY = if (above - glassHeight / 2f >= 0f) above else lens.y + lift
+                val left = centerX - glassWidth / 2f
+                val top = centerY - glassHeight / 2f
+
+                // Kaynak: parmağın çevresinde, büyütme oranınca küçük bir alan.
+                val scaleX = page.width / boxWidth
+                val scaleY = page.height / boxHeight
+                val sourceWidth = glassWidth / MAGNIFIER_ZOOM * scaleX
+                val sourceHeight = glassHeight / MAGNIFIER_ZOOM * scaleY
+                val sourceLeft = (lens.x * scaleX - sourceWidth / 2f)
+                    .coerceIn(0f, (page.width - sourceWidth).coerceAtLeast(0f))
+                val sourceTop = (lens.y * scaleY - sourceHeight / 2f)
+                    .coerceIn(0f, (page.height - sourceHeight).coerceAtLeast(0f))
+
+                val corner = CornerRadius(glassHeight / 2f)
+                val frame = Rect(Offset(left, top), Size(glassWidth, glassHeight))
+                val shape = Path().apply { addRoundRect(RoundRect(frame, corner)) }
+
+                clipPath(shape) {
+                    // Sayfa saydam gelirse camın arkası boş kalmasın.
+                    drawRect(
+                        color = Color.White,
+                        topLeft = Offset(left, top),
+                        size = Size(glassWidth, glassHeight),
+                    )
+                    drawImage(
+                        image = page,
+                        srcOffset = IntOffset(
+                            sourceLeft.roundToInt(),
+                            sourceTop.roundToInt(),
+                        ),
+                        srcSize = IntSize(
+                            sourceWidth.roundToInt().coerceAtLeast(1),
+                            sourceHeight.roundToInt().coerceAtLeast(1),
+                        ),
+                        dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
+                        dstSize = IntSize(
+                            glassWidth.roundToInt().coerceAtLeast(1),
+                            glassHeight.roundToInt().coerceAtLeast(1),
+                        ),
+                    )
+                }
+                drawRoundRect(
+                    color = Color(0x33000000),
+                    topLeft = Offset(left, top),
+                    size = Size(glassWidth, glassHeight),
+                    cornerRadius = corner,
+                    style = Stroke(width = 2.dp.toPx()),
+                )
             }
         }
     }
