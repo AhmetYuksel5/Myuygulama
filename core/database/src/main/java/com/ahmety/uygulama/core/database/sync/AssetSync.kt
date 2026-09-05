@@ -47,7 +47,23 @@ class AssetSync @Inject constructor(
     /** @return gönderilen parça sayısı */
     suspend fun push(): Int = withContext(Dispatchers.IO) {
         var sent = 0
-        val already = runCatching { transport.fileNames(myFolder) }.getOrDefault(emptyList())
+
+        // Yalnız kendi klasörümüze değil **bütün** dosya klasörlerine
+        // bakılıyor.
+        //
+        // Karşı telefondan gelen kitap bizde de aynı klasöre yazılıyor ve
+        // yalnız kendi klasörümüze bakılınca "bunu hiç göndermemişim"
+        // sanılıyordu: ikinci telefon aldığı bütün PDF'leri kendi adına
+        // geri yüklüyordu. Hem her senkron dakikalar sürüyordu hem de
+        // deponun içinde her kitabın iki kopyası birikiyordu.
+        val already = runCatching { transport.deviceFolders() }
+            .getOrDefault(emptyList())
+            .filter { it.endsWith(ASSET_SUFFIX) }
+            .plus(myFolder)
+            .distinct()
+            .flatMap { folder ->
+                runCatching { transport.fileNames(folder) }.getOrDefault(emptyList())
+            }
             .toSet()
 
         FOLDERS.forEach { folder ->
