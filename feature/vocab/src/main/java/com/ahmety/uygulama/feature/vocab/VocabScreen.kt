@@ -95,6 +95,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ahmety.uygulama.core.designsystem.CHIP_BLUE
+import com.ahmety.uygulama.core.designsystem.CHIP_RED
+import com.ahmety.uygulama.core.designsystem.DECISION_LATER
+import com.ahmety.uygulama.core.designsystem.DECISION_LEARNED
+import com.ahmety.uygulama.core.designsystem.DECISION_SKIP
+import com.ahmety.uygulama.core.designsystem.DECISION_STUDIED
 import com.ahmety.uygulama.core.designsystem.WordCard
 import com.ahmety.uygulama.core.designsystem.parseCollocations
 import com.ahmety.uygulama.core.model.Collocation

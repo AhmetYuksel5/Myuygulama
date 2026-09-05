@@ -607,15 +607,15 @@ private fun cleanOpposite(word: String): String =
  * Dört kaydırma kararının rengi. Kartın üstündeki yazının ve zeminin
  * rengi aynı yerden geliyor ki ikisi birbiriyle çelişmesin.
  */
-private val DECISION_LEARNED = Color(0xFF1565C0)
-private val DECISION_STUDIED = Color(0xFF2E7D32)
-private val DECISION_LATER = Color(0xFFE65100)
-private val DECISION_SKIP = Color(0xFF616161)
+val DECISION_LEARNED = Color(0xFF1565C0)
+val DECISION_STUDIED = Color(0xFF2E7D32)
+val DECISION_LATER = Color(0xFFE65100)
+val DECISION_SKIP = Color(0xFF616161)
 
-private val CHIP_BLUE = Color(0xFF1565C0)
+val CHIP_BLUE = Color(0xFF1565C0)
 
 /** Zıt anlamlılar için; beyaz yazıyı her iki temada da taşıyor. */
-private val CHIP_RED = Color(0xFFB3261E)
+val CHIP_RED = Color(0xFFB3261E)
 
 /**
  * Bir kullanım kalıbı: solda kalıbın adı, sağında o kalıptaki kelimeler.
