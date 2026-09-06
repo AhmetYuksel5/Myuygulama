@@ -67,3 +67,26 @@ gösterilmiyor.
 - Bir şey yapmadan önce ne yapacağını söyle; kullanıcı bunu açıkça istedi.
 - Bir varsayımın yanlış çıkarsa üstünü örtme, düzelt ve söyle.
 - Yorumlar Türkçe ve "neden" anlatır, "ne" değil.
+
+## Tarayıcı sürümü (`docs/`)
+
+Abisinin iPhone'u için aynı uygulamanın tarayıcı sürümü. GitHub Pages
+bu daldaki `docs/` klasöründen yayınlıyor; her gönderimde kendiliğinden
+güncelleniyor, APK ile ilgisi yok. Yalnız `docs/` değişen bir gönderim
+için Android derlemesi gereksiz — o gönderimler `[skip ci]` taşımalı.
+
+- Çerçeve yok, derleme adımı yok: düz ES modülleri, IndexedDB, elle
+  yazılmış ZIP okuyucu (`js/epub.js`), pdf.js `lib/` altında.
+- Dosyalar: `js/app.js` (ekranlar, okuyucu, seçim kutusu, liste),
+  `js/depo.js` (IndexedDB: kitap, dosya, kelime, ayar, sozluk),
+  `js/yapayzeka.js` (OpenAI yönergeleri), `js/tekrar.js` (tekrar
+  merdiveni), `app.css`, `index.html`, `sw.js`.
+- `sw.js` içindeki `SURUM` her değişiklikte artırılmalı; yoksa telefon
+  eski dosyaları önbellekten okumaya devam ediyor.
+- Doğrulama: `node --input-type=module -e 'import("./docs/js/app.js")'`
+  sözdizimini kontrol ediyor ("document is not defined" hatası normal,
+  modül yüklenmiş demek). Saf fonksiyonlar Node'da ayrıca deneniyor.
+- Kararlar: sistem seçimi kapalı, seçimi kendimiz yapıyoruz (iPhone'un
+  menüsüne madde eklenemiyor); işaret anahtarı noktalamasız; yapay zekâ
+  cevabında yalnız iki dil (Türkçe + metnin kendi dili); bir kez alınan
+  çeviri/kart `sozluk` deposunda kalıyor.
