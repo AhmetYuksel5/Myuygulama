@@ -270,6 +270,11 @@ async function oku(id) {
     }
     const oge = document.createElement(p.baslik ? "h3" : "p");
     oge.innerHTML = kelimele(p.yazi, isaretler);
+    // Arapça paragraf sağdan sola. Kitap başına değil paragraf başına
+    // bakılıyor: Arapça kitaplarda İngilizce alıntılar, İngilizce
+    // kitaplarda Arapça alıntılar oluyor ve ikisi de kendi yönünde
+    // durmalı.
+    if (arapcaMi(p.yazi)) oge.dir = "rtl";
     govde.append(oge);
   });
   ekran.append(govde);
@@ -990,6 +995,19 @@ function yap(etiket, yazi, sinif) {
   if (yazi) oge.textContent = yazi;
   if (sinif) oge.className = sinif;
   return oge;
+}
+
+/**
+ * Metin Arapça mı.
+ *
+ * Tek bir Arap harfi yetmiyor — İngilizce bir cümlenin içindeki tek
+ * kelime bütün paragrafı ters çevirirdi. Harflerin belirgin bir kısmı
+ * Arapçaysa yön değişiyor.
+ */
+function arapcaMi(yazi) {
+  const arap = (yazi.match(/[\u0600-\u06FF]/g) || []).length;
+  const harf = (yazi.match(/\p{L}/gu) || []).length;
+  return harf > 0 && arap / harf > 0.4;
 }
 
 /** Kitabın adından türeyen sabit bir renk; kapağı olmayan kitap tanınsın. */

@@ -292,3 +292,11 @@ input, select, textarea {
 
 /* PDF'te tam tersi: seçimi sistemin kendisi yapıyor. */
 .metin-katmani { -webkit-user-select: text; user-select: text; }
+
+/* Arapça paragraf sağdan sola ve biraz daha büyük: harfler Latin
+   alfabesinden küçük çiziliyor, aynı puntoda okunmuyor. */
+#okuma [dir="rtl"] {
+  text-align: right;
+  font-size: 1.15em;
+  line-height: 1.9;
+}

@@ -101,18 +101,27 @@ export function bilgi(ayarlar, secim, baglam, eser) {
  * JSON isteniyor ki kartın alanlarına dağıtılabilsin.
  */
 export async function kart(ayarlar, secim, baglam, eser) {
+  // Her alanın dili tek tek yazılı.
+  //
+  // Önce yalnız alan adları sayılmıştı ve model karşılığı da açıklamayı
+  // da İngilizce dolduruyordu: kart baştan aşağı İngilizce çıkıyordu.
+  // Kartın işi kelimeyi öğretmek; anlatan kısım Türkçe olmalı, öğretilen
+  // kısım (tanım, örnekler, kökendaşlar) İngilizce kalmalı.
   const yonerge = [
-    "You are a bilingual English-Turkish dictionary for an adult learner.",
-    "Return JSON with these keys and nothing else:",
-    '"karsilik" (Turkish equivalents, a few words),',
-    '"tanim" (a short English definition),',
-    '"ornekler" (3 short English example sentences),',
-    '"kok" (the origin: root, language, literal sense — one line, or ""),',
-    '"aile" (other English words from the same root),',
-    '"esanlam" (English synonyms), "karsit" (English antonyms),',
-    '"birliktelik" (typical collocations, as short phrases).',
+    "You are a bilingual English-Turkish dictionary for an adult Turkish",
+    "learner of English. Return JSON with exactly these keys and nothing",
+    "else. The language of each value is fixed:",
+    '"karsilik": the Turkish equivalent(s), IN TURKISH, a few words.',
+    '"tanim": a short definition of the word IN ENGLISH (this is what the',
+    "learner is studying).",
+    '"ornekler": 3 short example sentences IN ENGLISH.',
+    '"kok": the origin explained IN TURKISH, one line, e.g.',
+    '"morph- (Yun. morphē = şekil)". Empty string if there is nothing to say.',
+    '"aile": other ENGLISH words from the same root.',
+    '"esanlam": ENGLISH synonyms. "karsit": ENGLISH antonyms.',
+    '"birliktelik": typical ENGLISH collocations, as short phrases.',
     "Choose the sense that fits the passage. Keep every list at most six",
-    "items. Use plain text inside the values; no markdown.",
+    "items. Plain text inside the values; no markdown.",
   ].join(" ");
 
   const sonuc = await sor(ayarlar, yonerge, istekMetni(secim, baglam, eser), 900);
