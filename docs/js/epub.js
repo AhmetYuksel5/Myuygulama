@@ -123,6 +123,8 @@ export async function epubOku(tampon) {
     });
   });
 
+  const kapak = kapakYolu(opf, kaynaklar, kok);
+
   const bolumler = [];
   const sira = etiket(opf, "itemref");
   for (const oge of sira) {
@@ -134,7 +136,30 @@ export async function epubOku(tampon) {
     if (bolum.paragraflar.length) bolumler.push(bolum);
   }
 
-  return { ad, yazar, bolumler };
+  return { ad, yazar, kapak, bolumler };
+}
+
+/**
+ * Kapak görselinin ZIP içindeki yolu.
+ *
+ * Kitaplar kapağı üç ayrı biçimde işaretliyor ve hiçbiri her kitapta
+ * yok: EPUB 3'te künyedeki "cover-image" özelliği, EPUB 2'de
+ * metadata'daki "cover" satırının gösterdiği kayıt, hiçbiri yoksa adında
+ * "cover" geçen bir resim. Üçü de deneniyor.
+ */
+function kapakYolu(opf, kaynaklar, kok) {
+  const ozellikli = etiket(opf, "item")
+    .find(x => (x.getAttribute("properties") || "").includes("cover-image"));
+  if (ozellikli) return kok + (ozellikli.getAttribute("href") || "");
+
+  const isaret = etiket(opf, "meta").find(x => x.getAttribute("name") === "cover");
+  const kayit = isaret && kaynaklar.get(isaret.getAttribute("content"));
+  if (kayit && kayit.tur.startsWith("image/")) return kayit.yol;
+
+  for (const [, deger] of kaynaklar) {
+    if (deger.tur.startsWith("image/") && /cover|kapak/i.test(deger.yol)) return deger.yol;
+  }
+  return "";
 }
 
 /**

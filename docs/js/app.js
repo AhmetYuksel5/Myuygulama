@@ -110,6 +110,9 @@ async function kitaplik() {
     const kart = yap("button", "", "kart");
     const sirt = yap("div", (k.ad[0] || "?").toUpperCase(), "sirt");
     sirt.style.background = renkTohumu(k.ad);
+    // Kapak varsa harfin yerini alıyor; yoksa adından türeyen renkli
+    // sırt kalıyor, o da kitabı rafta tanıtmaya yetiyor.
+    if (k.kapak) kapagiKoy(k, sirt);
     const bilgi = yap("div", "", "bilgi");
     bilgi.append(yap("b", k.ad));
     if (k.yazar) bilgi.append(yap("span", k.yazar));
@@ -139,6 +142,7 @@ async function kitapSil(kitap) {
   if (!confirm(`"${kitap.ad}" silinsin mi? İşaretlediğin kelimeler kalır.`)) return;
   await depo.kitapSil(kitap.id);
   await depo.dosyaSil(kitap.id);
+  await depo.dosyaSil(`${kitap.id}-kapak`);
   git("kitaplik");
 }
 
@@ -169,11 +173,27 @@ async function kitapEkle(dosya) {
     } else {
       const kitap = await epubOku(tampon);
       await depo.dosyaYaz(id, tampon);
+
+      // Kapak bir kez çıkarılıp ayrı saklanıyor: kitaplığı çizerken
+      // koca EPUB'ı açmak için sebep kalmasın.
+      let kapakVar = false;
+      if (kitap.kapak) {
+        const zip = await zipAc(tampon);
+        const bayt = await zip.oku(kitap.kapak);
+        if (bayt) {
+          await depo.dosyaYaz(`${id}-kapak`, bayt.buffer.slice(
+            bayt.byteOffset, bayt.byteOffset + bayt.byteLength,
+          ));
+          kapakVar = true;
+        }
+      }
+
       await depo.kitapYaz({
         id,
         tur: "epub",
         ad: kitap.ad,
         yazar: kitap.yazar,
+        kapak: kapakVar ? turBul(kitap.kapak) : "",
         bolumler: kitap.bolumler,
         bolum: 0,
         acildi: Date.now(),
@@ -268,6 +288,7 @@ async function oku(id) {
   ekran.append(alt);
 
   govde.addEventListener("click", kelimeyeDokun);
+  secimiKur(govde);
   tercihleriUygula();
 
   /*
@@ -303,6 +324,107 @@ async function oku(id) {
 }
 
 let okumaTemizle = null;
+
+/** Rafta kitabın kendi kapağı. */
+async function kapagiKoy(kitap, sirt) {
+  const dosya = await depo.dosya(`${kitap.id}-kapak`);
+  if (!dosya) return;
+  const adres = URL.createObjectURL(new Blob([dosya.veri], { type: kitap.kapak }));
+  acikAdresler.push(adres);
+  sirt.textContent = "";
+  sirt.style.background = `center/cover no-repeat url("${adres}")`;
+}
+
+/**
+ * Kendi seçim aracımız.
+ *
+ * iPhone'un kendi seçimi devrede olduğunda basılı tutunca sistemin
+ * büyüteci ve ardından sistemin menüsü çıkıyor; o menüye kendi
+ * maddemizi ekleyemiyoruz ve kullanıcı seçtiği şeyi bize
+ * ulaştıramıyor. Bu yüzden metinde sistem seçimi kapalı (CSS'te
+ * user-select yok) ve seçimi burada kendimiz yapıyoruz.
+ *
+ * Metin zaten kelime kelime kutulanmış olduğu için iş, parmağın altındaki
+ * kelimeyi bulup aradakileri boyamaktan ibaret.
+ *
+ * PDF tarafında bunun tersini yaptık: orada sayfa bir resim, sistemin
+ * seçimi hem büyüteci hem tutamakları bedavaya getiriyor ve kaybedecek
+ * bir şey yok.
+ */
+function secimiKur(govde) {
+  const kelimeler = [...govde.querySelectorAll("span.k")];
+  kelimeler.forEach((k, i) => (k.dataset.sira = i));
+
+  let zamanlayici = null;
+  let bas = -1;
+  let son = -1;
+  let seciyor = false;
+
+  const kelimeBul = (x, y) => {
+    const oge = document.elementFromPoint(x, y);
+    return oge && oge.closest ? oge.closest("span.k") : null;
+  };
+
+  const boya = () => {
+    const [a, b] = [Math.min(bas, son), Math.max(bas, son)];
+    kelimeler.forEach((k, i) => k.classList.toggle("secim", i >= a && i <= b));
+  };
+
+  const temizle = () => {
+    kelimeler.forEach(k => k.classList.remove("secim"));
+  };
+
+  govde.addEventListener("touchstart", olay => {
+    const kelime = olay.target.closest?.("span.k");
+    if (!kelime) return;
+    bas = son = Number(kelime.dataset.sira);
+    zamanlayici = setTimeout(() => {
+      seciyor = true;
+      boya();
+    }, 350);
+  }, { passive: true });
+
+  // Bu dinleyici pasif değil: seçim sürerken sayfanın kaymaması için
+  // hareketi durdurmak gerekiyor.
+  govde.addEventListener("touchmove", olay => {
+    if (!seciyor) {
+      // Parmak kaydıysa bu bir kaydırma; seçimi hiç başlatma.
+      clearTimeout(zamanlayici);
+      return;
+    }
+    olay.preventDefault();
+    const nokta = olay.touches[0];
+    const kelime = kelimeBul(nokta.clientX, nokta.clientY);
+    if (!kelime) return;
+    son = Number(kelime.dataset.sira);
+    boya();
+  }, { passive: false });
+
+  const bitir = () => {
+    clearTimeout(zamanlayici);
+    if (!seciyor) return;
+    seciyor = false;
+    const [a, b] = [Math.min(bas, son), Math.max(bas, son)];
+    const secim = kelimeler.slice(a, b + 1).map(k => k.textContent).join(" ");
+    temizle();
+    // Tıklama olayı bunun ardından da geliyor; tek kelime kutusunu
+    // ikinci kez açmasın diye işaretliyoruz.
+    secimBitti = Date.now();
+    if (secim.trim()) {
+      const paragraf = kelimeler[a].closest("p, h3")?.textContent || "";
+      kutuyuAc(secim, pencere(paragraf, secim));
+    }
+  };
+
+  govde.addEventListener("touchend", bitir, { passive: true });
+  govde.addEventListener("touchcancel", () => {
+    clearTimeout(zamanlayici);
+    seciyor = false;
+    temizle();
+  }, { passive: true });
+}
+
+let secimBitti = 0;
 
 /** Sayfada duran görsellerin ömrü; bölüm değişince serbest bırakılıyor. */
 let acikAdresler = [];
@@ -551,6 +673,9 @@ function kutuyuKapat() {
 async function kelimeyeDokun(e) {
   const oge = e.target.closest("span.k");
   if (!oge || !acikKitap) return;
+  // Uzun basıp bıraktıktan hemen sonra tarayıcı bir de tıklama
+  // gönderiyor; kutu iki kez açılmasın.
+  if (Date.now() - secimBitti < 500) return;
   const paragraf = oge.closest("p, h3")?.textContent || "";
   kutuyuAc(oge.textContent, pencere(paragraf, oge.textContent));
 }

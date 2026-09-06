@@ -277,3 +277,18 @@ input, select, textarea {
 .kelime-kart .ornekler li { margin-bottom: 6px; font-size: 15px; }
 .kart-bolum { display: flex; gap: 8px; margin-bottom: 4px; font-size: 14px; }
 .kart-bolum .etiket { color: var(--vurgu); min-width: 62px; flex: none; }
+
+/*
+  Okuma metninde sistemin kendi seçimi kapalı.
+  iPhone'un seçim aracı devreye girdiğinde sistemin menüsü çıkıyor ve o
+  menüye kendi maddemizi ekleyemiyoruz; seçimi kendimiz yapıyoruz.
+*/
+#okuma {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#okuma span.k.secim { background: rgba(79,163,247,.4); border-radius: 3px; }
+
+/* PDF'te tam tersi: seçimi sistemin kendisi yapıyor. */
+.metin-katmani { -webkit-user-select: text; user-select: text; }
