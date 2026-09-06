@@ -99,7 +99,7 @@ async function kitaplik() {
 
   if (!kitaplar.length) {
     ekran.append(yap("div",
-      "Raf boş. Bir EPUB yükle: okurken kelimelere dokunup işaretlediklerin destene düşer.",
+      "Raf boş. Bir EPUB yükle: okurken kelimelere dokunup işaretlediklerin listene düşer.",
       "bos"));
     return;
   }
@@ -125,14 +125,25 @@ async function kitaplik() {
       bilgi.append(cizik);
     }
     kart.append(sirt, bilgi);
-    kart.onclick = () => oku(k.id);
-    // Uzun basmak silme soruyor; kitaplıkta ayrı bir menü kurmaya değmez.
+    // Uzun basmak (masaüstünde sağ tuş) kitabın menüsünü açıyor. Parmak
+    // kalkınca tarayıcı bir de tıklama gönderiyor; menü açıldıysa o
+    // tıklama kitabı açmamalı.
     let zaman;
+    let menuAcildi = false;
+    kart.onclick = () => {
+      if (menuAcildi) { menuAcildi = false; return; }
+      oku(k.id);
+    };
     kart.addEventListener("touchstart", () => {
-      zaman = setTimeout(() => kitapSil(k), 600);
+      zaman = setTimeout(() => { menuAcildi = true; kitapMenusu(k); }, 600);
     }, { passive: true });
     ["touchend", "touchmove", "touchcancel"].forEach(o =>
       kart.addEventListener(o, () => clearTimeout(zaman), { passive: true }));
+    kart.addEventListener("contextmenu", e => {
+      e.preventDefault();
+      clearTimeout(zaman);
+      kitapMenusu(k);
+    });
     liste.append(kart);
   });
   ekran.append(liste);
@@ -144,6 +155,164 @@ async function kitapSil(kitap) {
   await depo.dosyaSil(kitap.id);
   await depo.dosyaSil(`${kitap.id}-kapak`);
   git("kitaplik");
+}
+
+// --- Kitap menüsü ----------------------------------------------------
+
+/**
+ * Tek seferlik alt pencere: içeriği verilen kutu, dışına dokununca
+ * kapanıyor ve belgeden siliniyor. Seçim kutusundan ayrı, çünkü o
+ * kutunun bölmeleri sabit ve seçime bağlı.
+ */
+function pencereAc(icerik) {
+  const perde = yap("div", "", "perde");
+  const kutu = yap("div", "", "kutu");
+  kutu.append(...icerik);
+  perde.append(kutu);
+  perde.onclick = e => { if (e.target === perde) perde.remove(); };
+  document.body.append(perde);
+  return perde;
+}
+
+function kitapMenusu(kitap) {
+  // İki yol aynı anda açmasın: Android'de uzun basma hem bizim sayacı
+  // hem tarayıcının sağ tuş olayını tetikliyor.
+  if (document.querySelector(".perde")) return;
+  const madde = (yazi, islem, sinif = "") => {
+    const dugme = yap("button", yazi, `menu-madde ${sinif}`.trim());
+    dugme.onclick = () => { perde.remove(); islem(); };
+    return dugme;
+  };
+  const perde = pencereAc([
+    yap("div", kitap.ad, "menu-baslik"),
+    madde("Yeniden adlandır", () => adlandir(kitap)),
+    madde("Kapağı değiştir", () => kapakEkrani(kitap)),
+    madde("Sil", () => kitapSil(kitap), "tehlike"),
+  ]);
+}
+
+function alan(etiket, deger) {
+  const sarma = yap("label", etiket);
+  const giris = Object.assign(document.createElement("input"), { value: deger });
+  sarma.append(giris);
+  return { sarma, giris };
+}
+
+async function adlandir(kitap) {
+  const ad = alan("Kitabın adı", kitap.ad);
+  const yazar = alan("Yazar", kitap.yazar || "");
+  const kaydet = yap("button", "Kaydet", "dolu");
+  kaydet.onclick = async () => {
+    const yeniAd = ad.giris.value.trim();
+    if (!yeniAd) { ad.giris.focus(); return; }
+    const guncel = await depo.kitap(kitap.id);
+    await depo.kitapYaz({ ...guncel, ad: yeniAd, yazar: yazar.giris.value.trim() });
+    // Listedeki kelimeler kitabın adını kendi üstünde taşıyor; eski adla
+    // kalmasınlar.
+    for (const k of await depo.kelimeler()) {
+      if (k.kitap === kitap.id) await depo.kelimeYaz({ ...k, eser: yeniAd });
+    }
+    perde.remove();
+    git("kitaplik");
+  };
+  const perde = pencereAc([
+    yap("div", "Yeniden adlandır", "menu-baslik"),
+    ad.sarma, yazar.sarma, kaydet,
+  ]);
+  ad.giris.focus();
+  ad.giris.select();
+}
+
+/**
+ * Kapak ekranı: şimdiki kapak, telefondan görsel seçme, kaldırma.
+ *
+ * Seçilen görsel küçültülerek saklanıyor. Telefon fotoğrafı on
+ * megabayt; kitaplıkta 44 piksellik bir sırt için depoya o kadar yük
+ * bindirmenin anlamı yok.
+ */
+async function kapakEkrani(kitap) {
+  const onizleme = yap("div", (kitap.ad[0] || "?").toUpperCase(), "kapak-onizleme");
+  onizleme.style.background = renkTohumu(kitap.ad);
+  if (kitap.kapak) kapagiKoy(kitap, onizleme);
+
+  const secici = Object.assign(document.createElement("input"), {
+    type: "file", accept: "image/*",
+  });
+  secici.hidden = true;
+
+  // null: dokunulmadı; "" : kaldırıldı; nesne: yeni görsel.
+  let yeni = null;
+  const sec = yap("button", "Telefondan görsel seç", "tonlu");
+  sec.onclick = () => secici.click();
+  secici.onchange = async () => {
+    const dosya = secici.files[0];
+    if (!dosya) return;
+    sec.disabled = true;
+    try {
+      yeni = await kapagiKucult(dosya);
+      const adres = URL.createObjectURL(new Blob([yeni.veri], { type: yeni.tur }));
+      acikAdresler.push(adres);
+      onizleme.textContent = "";
+      onizleme.style.background = `center/cover no-repeat url("${adres}")`;
+    } catch (e) {
+      uyari.textContent = `Görsel okunamadı: ${e?.message || e}`;
+    }
+    sec.disabled = false;
+  };
+
+  const kaldir = yap("button", "Kapağı kaldır", "cizgili");
+  kaldir.hidden = !kitap.kapak;
+  kaldir.onclick = () => {
+    yeni = "";
+    onizleme.textContent = (kitap.ad[0] || "?").toUpperCase();
+    onizleme.style.background = renkTohumu(kitap.ad);
+    kaldir.hidden = true;
+  };
+
+  const uyari = yap("div", "", "kucuk uyari");
+  const kaydet = yap("button", "Kaydet", "dolu");
+  kaydet.onclick = async () => {
+    const guncel = await depo.kitap(kitap.id);
+    if (yeni === "") {
+      await depo.dosyaSil(`${kitap.id}-kapak`);
+      await depo.kitapYaz({ ...guncel, kapak: "" });
+    } else if (yeni) {
+      await depo.dosyaYaz(`${kitap.id}-kapak`, yeni.veri);
+      await depo.kitapYaz({ ...guncel, kapak: yeni.tur });
+    }
+    perde.remove();
+    git("kitaplik");
+  };
+
+  const satir = yap("div", "", "satir");
+  satir.append(sec, kaldir);
+  const perde = pencereAc([
+    yap("div", "Kapak", "menu-baslik"),
+    onizleme, satir, secici, uyari, kaydet,
+  ]);
+}
+
+/** Görseli en çok 480×720 JPEG'e indirir; okunamazsa olduğu gibi bırakır. */
+async function kapagiKucult(dosya) {
+  const adres = URL.createObjectURL(dosya);
+  try {
+    const resim = await new Promise((tamam, hata) => {
+      const r = new Image();
+      r.onload = () => tamam(r);
+      r.onerror = () => hata(new Error("tarayıcı bu biçimi açamadı"));
+      r.src = adres;
+    });
+    const oran = Math.min(1, 480 / resim.naturalWidth, 720 / resim.naturalHeight);
+    const tuval = document.createElement("canvas");
+    tuval.width = Math.round(resim.naturalWidth * oran);
+    tuval.height = Math.round(resim.naturalHeight * oran);
+    tuval.getContext("2d").drawImage(resim, 0, 0, tuval.width, tuval.height);
+    const blob = await new Promise(t => tuval.toBlob(t, "image/jpeg", 0.85));
+    if (!blob) throw new Error("küçültülemedi");
+    return { veri: await blob.arrayBuffer(), tur: "image/jpeg" };
+  } finally {
+    URL.revokeObjectURL(adres);
+  }
 }
 
 async function kitapEkle(dosya) {
@@ -985,7 +1154,7 @@ function kartiCiz(k) {
 
 async function deste() {
   const kelimeler = await depo.kelimeler();
-  ekran.append(yap("h1", "Deste"));
+  ekran.append(yap("h1", "Liste"));
 
   if (!kelimeler.length) {
     ekran.append(yap("div",
@@ -1061,7 +1230,7 @@ function tekrarEkrani(kuyruk) {
     if (!kelime) {
       ekran.append(yap("h1", "Bitti"));
       ekran.append(yap("p", "Bugünlük tekrar tamamlandı.", "sonuk"));
-      const don = yap("button", "Desteye dön", "dolu");
+      const don = yap("button", "Listeye dön", "dolu");
       don.onclick = () => git("deste");
       ekran.append(don);
       return;
