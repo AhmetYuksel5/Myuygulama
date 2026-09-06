@@ -1,0 +1,200 @@
+/*
+  Android uygulamasındaki "mürekkep ve kâğıt" paletinin karşılığı.
+  Okuma yüzeyi kâğıt gibi kırık beyaz, arayüz ondan bir ton koyu.
+*/
+:root {
+  --kagit: #faf7f0;
+  --zemin: #f2ede3;
+  --murekkep: #22201c;
+  --sonuk: #6b6459;
+  --cizgi: #ddd5c7;
+  --vurgu: #3d5afe;
+
+  --sari: #ffc93c;
+  --mavi: #4fa3f7;
+  --yesil: #5fc46b;
+  --kirmizi: #f2708a;
+
+  --ust: env(safe-area-inset-top);
+  --alt: env(safe-area-inset-bottom);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --kagit: #14161a;
+    --zemin: #1b1e24;
+    --murekkep: #c6c2bb;
+    --sonuk: #8d877e;
+    --cizgi: #2c3038;
+    --vurgu: #8ea2ff;
+  }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  background: var(--kagit);
+  color: var(--murekkep);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* Alt çubuk sabit; içerik onun altına girmesin. */
+  padding-bottom: calc(58px + var(--alt));
+  overscroll-behavior-y: none;
+}
+
+main { padding: calc(12px + var(--ust)) 16px 24px; max-width: 720px; margin: 0 auto; }
+
+h1 { font-size: 22px; margin: 4px 0 16px; }
+h2 { font-size: 17px; margin: 20px 0 8px; }
+p { margin: 0 0 12px; }
+.sonuk { color: var(--sonuk); }
+.kucuk { font-size: 14px; }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.dolu, .tonlu, .cizgili {
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dolu { background: var(--vurgu); color: #fff; }
+.tonlu { background: var(--zemin); color: var(--murekkep); }
+.cizgili { border: 1px solid var(--cizgi); }
+button:disabled { opacity: .5; }
+
+/* --- Alt çubuk --- */
+#cubuk {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  background: var(--kagit);
+  border-top: 1px solid var(--cizgi);
+  padding-bottom: var(--alt);
+  z-index: 20;
+}
+#cubuk button {
+  flex: 1;
+  padding: 12px 0 14px;
+  font-size: 13px;
+  color: var(--sonuk);
+}
+#cubuk button.secili { color: var(--vurgu); font-weight: 700; }
+
+/* --- Kitaplık --- */
+.kart {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--cizgi);
+  border-radius: 14px;
+  margin-bottom: 10px;
+  width: 100%;
+  text-align: right;
+}
+.sirt {
+  width: 44px; height: 62px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 20px; color: #fff;
+  flex: none;
+}
+.kart .bilgi { flex: 1; text-align: start; min-width: 0; }
+.kart .bilgi b { display: block; font-size: 16px; }
+.kart .bilgi span { font-size: 13px; color: var(--sonuk); }
+.cizik { height: 3px; background: var(--cizgi); border-radius: 2px; margin-top: 8px; }
+.cizik i { display: block; height: 100%; background: var(--vurgu); border-radius: 2px; }
+
+/* --- Okuyucu --- */
+#okuma {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: var(--punto, 19px);
+  line-height: 1.68;
+}
+#okuma p { margin: 0 0 1.1em; }
+#okuma h3 { font-size: 1.15em; margin: 1.4em 0 .6em; }
+#okuma img { max-width: 100%; height: auto; border-radius: 8px; }
+
+/* İşaretli kelime. Kalem renkleri Android'dekiyle aynı tonlar. */
+mark { border-radius: 3px; padding: 0 1px; background: transparent; color: inherit; }
+mark.YELLOW { background: rgba(255,201,60,.55); }
+mark.BLUE   { background: rgba(79,163,247,.45); }
+mark.GREEN  { background: rgba(95,196,107,.45); }
+mark.RED    { background: rgba(242,112,138,.45); }
+
+.okuma-cubuk {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.okuma-cubuk .baslik { flex: 1; font-size: 14px; color: var(--sonuk);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Seçim kutusu --- */
+#perde {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.35);
+  display: grid; place-items: center;
+  padding: 20px;
+  z-index: 40;
+}
+#kutu {
+  background: var(--kagit);
+  border-radius: 22px;
+  padding: 20px;
+  width: 100%; max-width: 420px;
+  max-height: 80vh; overflow-y: auto;
+}
+#kutu-secim { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+#kutu-ceviri { font-size: 15px; }
+#kutu-kalemler { display: flex; gap: 14px; margin: 14px 0; }
+#kutu-kalemler span {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: inline-block;
+}
+#kutu-kalemler span.secili { outline: 3px solid var(--murekkep); outline-offset: 2px; }
+#kutu-dugmeler { display: flex; gap: 8px; }
+#kutu-dugmeler button { flex: 1; }
+#kutu-not { margin-top: 14px; font-size: 15px; white-space: pre-wrap; }
+
+/* --- Deste --- */
+.kelime {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--cizgi);
+  width: 100%; text-align: start;
+}
+.kelime b { font-size: 16px; }
+.kelime span { font-size: 14px; color: var(--sonuk); flex: 1; }
+
+#tekrar-kart {
+  border: 1px solid var(--cizgi);
+  border-radius: 20px;
+  padding: 24px 18px;
+  min-height: 260px;
+  display: flex; flex-direction: column; justify-content: center;
+  text-align: center;
+  margin-bottom: 16px;
+}
+#tekrar-kart .yuz { font-size: 26px; font-weight: 800; }
+#tekrar-kart .arka { margin-top: 14px; text-align: start; }
+.satir { display: flex; gap: 8px; }
+.satir button { flex: 1; }
+
+label { display: block; font-size: 14px; color: var(--sonuk); margin: 14px 0 4px; }
+input, select, textarea {
+  font: inherit; width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--cizgi);
+  border-radius: 12px;
+  background: var(--kagit);
+  color: var(--murekkep);
+}
+.uyari { color: #b3261e; }
+.bos { text-align: center; color: var(--sonuk); padding: 40px 10px; }

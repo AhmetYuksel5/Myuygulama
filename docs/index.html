@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<!--
+  viewport-fit=cover: iPhone'da ana ekrandan açılınca uygulama çentiğin
+  altına kadar uzanıyor; kenar boşluklarını CSS'teki güvenli alan
+  değişkenleriyle veriyoruz.
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Merkez">
+<meta name="theme-color" content="#faf7f0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="app.css">
+<title>Merkez</title>
+</head>
+<body>
+
+<main id="ekran"></main>
+
+<nav id="cubuk">
+  <button data-git="kitaplik" class="secili">Kitaplık</button>
+  <button data-git="deste">Deste</button>
+  <button data-git="ayarlar">Ayarlar</button>
+</nav>
+
+<!-- Seçim kutusu. Android'deki renk kutusunun aynısı. -->
+<div id="perde" hidden>
+  <div id="kutu" role="dialog" aria-modal="true">
+    <p id="kutu-secim"></p>
+    <p id="kutu-ceviri" class="sonuc"></p>
+    <div id="kutu-kalemler"></div>
+    <div id="kutu-dugmeler">
+      <button id="kutu-bilgi" class="tonlu">Bilgi al</button>
+      <button id="kutu-ayrinti" class="tonlu">Ayrıntı</button>
+    </div>
+    <div id="kutu-not" class="sonuc"></div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
