@@ -377,15 +377,55 @@ function secimiKur(govde) {
 
   const temizle = () => {
     kelimeler.forEach(k => k.classList.remove("secim"));
+    camiKapat();
+  };
+
+  /*
+   * Büyüteç.
+   *
+   * Android'deki camın karşılığı. Orada sayfa bir resim olduğu için
+   * resmin bir parçası büyütülüyordu; burada metin canlı, o yüzden
+   * seçilen kelimeler büyük puntoyla gösteriliyor. İkisinin de derdi
+   * aynı: parmağın altında kalanı görebilmek.
+   *
+   * Parmağın bir parmak boyu yukarısında duruyor; yukarıda yer
+   * kalmadığında altına geçiyor, yoksa sayfanın ilk satırlarında ekranın
+   * dışında kalıyor.
+   */
+  const camiGoster = (x, y) => {
+    let cam = document.getElementById("cam");
+    if (!cam) {
+      cam = yap("div", "");
+      cam.id = "cam";
+      document.body.append(cam);
+    }
+    const [a, b] = [Math.min(bas, son), Math.max(bas, son)];
+    cam.textContent = kelimeler.slice(a, b + 1).map(k => k.textContent).join(" ");
+    cam.hidden = false;
+
+    const yukari = 110;
+    const ustte = y - yukari;
+    cam.style.top = `${ustte > 60 ? ustte : y + yukari}px`;
+    // Yatayda ekranın dışına taşmasın; genişliği ölçtükten sonra
+    // ortalanıyor.
+    const yari = cam.offsetWidth / 2;
+    cam.style.left = `${Math.min(Math.max(x, yari + 8), window.innerWidth - yari - 8)}px`;
+  };
+
+  const camiKapat = () => {
+    const cam = document.getElementById("cam");
+    if (cam) cam.hidden = true;
   };
 
   govde.addEventListener("touchstart", olay => {
     const kelime = olay.target.closest?.("span.k");
     if (!kelime) return;
     bas = son = Number(kelime.dataset.sira);
+    const nokta = olay.touches[0];
     zamanlayici = setTimeout(() => {
       seciyor = true;
       boya();
+      camiGoster(nokta.clientX, nokta.clientY);
     }, 350);
   }, { passive: true });
 
@@ -403,6 +443,7 @@ function secimiKur(govde) {
     if (!kelime) return;
     son = Number(kelime.dataset.sira);
     boya();
+    camiGoster(nokta.clientX, nokta.clientY);
   }, { passive: false });
 
   const bitir = () => {
@@ -412,6 +453,7 @@ function secimiKur(govde) {
     const [a, b] = [Math.min(bas, son), Math.max(bas, son)];
     const secim = kelimeler.slice(a, b + 1).map(k => k.textContent).join(" ");
     temizle();
+    camiKapat();
     // Tıklama olayı bunun ardından da geliyor; tek kelime kutusunu
     // ikinci kez açmasın diye işaretliyoruz.
     secimBitti = Date.now();
@@ -799,7 +841,18 @@ function kartiCiz(k) {
 
   if (k.ornekler?.length) {
     const liste = yap("ol", "", "ornekler");
-    k.ornekler.forEach(o => liste.append(yap("li", o)));
+    k.ornekler.forEach(o => {
+      const madde = document.createElement("li");
+      // Örnek iki satır: İngilizce cümle ve altında Türkçesi. Model
+      // bazen düz metin döndürüyor, o zaman tek satır kalıyor.
+      if (typeof o === "string") {
+        madde.textContent = o;
+      } else {
+        madde.append(yap("div", o.en || ""));
+        if (o.tr) madde.append(yap("div", o.tr, "kucuk sonuk"));
+      }
+      liste.append(madde);
+    });
     kart.append(liste);
   }
 

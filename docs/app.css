@@ -300,3 +300,29 @@ input, select, textarea {
   font-size: 1.15em;
   line-height: 1.9;
 }
+
+/*
+  Büyüteç.
+  Android'de sayfa resim olduğu için resmin parçası büyütülüyor; burada
+  metin canlı olduğu için seçilen kelimeler büyük puntoyla gösteriliyor.
+  Derdi aynı: parmağın altında kalanı görmek.
+*/
+#cam {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  max-width: 78vw;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--kagit);
+  color: var(--murekkep);
+  border: 1px solid var(--cizgi);
+  box-shadow: 0 8px 24px rgba(0,0,0,.28);
+  font-size: 22px;
+  font-family: Georgia, "Times New Roman", serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+#cam[hidden] { display: none; }
