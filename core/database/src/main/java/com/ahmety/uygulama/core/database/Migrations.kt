@@ -94,5 +94,14 @@ internal val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/** Kaldığın yer artık satır hassasiyetinde. */
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE reading_progress ADD COLUMN scrollOffset INTEGER NOT NULL DEFAULT 0",
+        )
+    }
+}
+
 internal val ALL_MIGRATIONS =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)

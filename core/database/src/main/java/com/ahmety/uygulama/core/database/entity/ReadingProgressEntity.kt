@@ -23,6 +23,17 @@ data class ReadingProgressEntity(
     @PrimaryKey val entryUuid: String,
     val chapter: Int = 0,
     val paragraph: Int = 0,
+    /**
+     * Tepedeki paragrafın ne kadarı yukarıda kaldı; piksel.
+     *
+     * Paragraf numarası tek başına yetmiyor: uzun bir paragrafın
+     * ortasındayken kitabı kapatıp açınca o paragrafın başına dönülüyor ve
+     * okunan yer bulunana kadar aranıyor. Bu sayı ekranın tepesindeki
+     * satırı geri getiriyor.
+     *
+     * Adı "scrollOffset"; "offset" SQL'in kendi kelimesi.
+     */
+    val scrollOffset: Int = 0,
     val page: Int = 0,
     val percent: Int = 0,
     val updatedAt: Long,

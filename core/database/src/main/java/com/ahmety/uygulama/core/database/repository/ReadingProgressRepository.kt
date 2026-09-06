@@ -40,6 +40,7 @@ class ReadingProgressRepository @Inject constructor(
         paragraph: Int? = null,
         page: Int? = null,
         percent: Int? = null,
+        scrollOffset: Int? = null,
     ) {
         if (entryUuid.isBlank()) return
         val existing = dao.get(entryUuid)
@@ -49,6 +50,7 @@ class ReadingProgressRepository @Inject constructor(
             paragraph = paragraph ?: existing?.paragraph ?: 0,
             page = page ?: existing?.page ?: 0,
             percent = (percent ?: existing?.percent ?: 0).coerceIn(0, 100),
+            scrollOffset = scrollOffset ?: existing?.scrollOffset ?: 0,
             updatedAt = now.millis(),
         )
         // Değişen bir şey yoksa günlüğe satır bırakmıyoruz: okurken her
@@ -58,7 +60,8 @@ class ReadingProgressRepository @Inject constructor(
             existing.chapter == updated.chapter &&
             existing.paragraph == updated.paragraph &&
             existing.page == updated.page &&
-            existing.percent == updated.percent
+            existing.percent == updated.percent &&
+            existing.scrollOffset == updated.scrollOffset
         ) {
             return
         }

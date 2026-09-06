@@ -23,6 +23,38 @@ const KALEMLER = ["YELLOW", "BLUE", "GREEN", "RED"];
 
 let ayarlar = { anahtar: "", model: "gpt-4o-mini" };
 
+/**
+ * Okuma tercihleri.
+ *
+ * Zemin renkleri Android'dekilerin aynısı. Gece zemininin metni bilerek
+ * arayüzünkinden sönük: siyah üstüne beyaz uzun okumada yoruyor.
+ */
+const ZEMINLER = {
+  kagit: { ad: "Kâğıt", zemin: "#faf7f0", yazi: "#22201c" },
+  krem: { ad: "Krem", zemin: "#f3eada", yazi: "#2b2620" },
+  gece: { ad: "Gece", zemin: "#14161a", yazi: "#c6c2bb" },
+  murekkep: { ad: "Mürekkep", zemin: "#000000", yazi: "#b9b5ae" },
+};
+
+let okumaTercihi = { punto: 19, zemin: "kagit", kenar: 16 };
+
+function tercihleriUygula() {
+  const z = ZEMINLER[okumaTercihi.zemin] || ZEMINLER.kagit;
+  const govde = document.getElementById("okuma");
+  if (!govde) return;
+  govde.style.fontSize = `${okumaTercihi.punto}px`;
+  govde.style.padding = `0 ${okumaTercihi.kenar}px`;
+  // Okuma zemini sayfanın tamamını kaplıyor: metnin çevresinde başka
+  // renkte bir şerit kalması okumayı bozuyor.
+  document.body.style.background = z.zemin;
+  document.body.style.color = z.yazi;
+}
+
+function tercihleriBirak() {
+  document.body.style.background = "";
+  document.body.style.color = "";
+}
+
 // --- Yönlendirme -----------------------------------------------------
 
 // Anahtarlar alt çubuktaki data-git değerleriyle birebir aynı olmak
@@ -33,6 +65,8 @@ let acikKitap = null;
 async function git(ad) {
   acikKitap = null;
   if (pdfTemizle) pdfTemizle();
+  if (okumaTemizle) okumaTemizle();
+  tercihleriBirak();
   cubuk.querySelectorAll("button").forEach(d =>
     d.classList.toggle("secili", d.dataset.git === ad));
   cubuk.hidden = false;
@@ -181,10 +215,12 @@ async function oku(id) {
   const bolum = kitap.bolumler[kitap.bolum] || kitap.bolumler[0];
 
   const ust = yap("div", "", "okuma-cubuk");
-  const geri = yap("button", "‹ Kitaplık", "cizgili");
+  const geri = yap("button", "‹", "cizgili");
   geri.onclick = () => git("kitaplik");
+  const gorunum = yap("button", "Aa", "cizgili");
+  gorunum.onclick = gorunumKutusu;
   ust.append(geri, yap("div",
-    `${kitap.ad} · ${(kitap.bolum || 0) + 1}/${kitap.bolumler.length}`, "baslik"));
+    `${kitap.ad} · ${(kitap.bolum || 0) + 1}/${kitap.bolumler.length}`, "baslik"), gorunum);
   ekran.append(ust);
 
   const govde = yap("div", "");
@@ -208,8 +244,90 @@ async function oku(id) {
   alt.append(onceki, sonraki);
   ekran.append(alt);
 
-  window.scrollTo(0, 0);
   govde.addEventListener("click", kelimeyeDokun);
+  tercihleriUygula();
+
+  /*
+   * Kaldığın **satır**.
+   *
+   * Bölüm ya da paragraf numarası yetmiyordu: uzun bir paragrafın
+   * ortasındayken kitabı kapatıp açınca başa dönülüyordu. Sayfanın
+   * kaydırma konumu olduğu gibi saklanıyor; ekranın tepesindeki satır
+   * neyse onunla devam ediyor.
+   *
+   * Yerleşim oturmadan geri dönmek işe yaramıyor, o yüzden bir kare
+   * bekleniyor.
+   */
+  requestAnimationFrame(() => {
+    window.scrollTo(0, kitap.kaydirma || 0);
+  });
+
+  let bekleyen;
+  const konumuYaz = () => {
+    clearTimeout(bekleyen);
+    bekleyen = setTimeout(async () => {
+      if (acikKitap?.id !== kitap.id) return;
+      kitap.kaydirma = Math.round(window.scrollY);
+      await depo.kitapYaz(kitap);
+    }, 400);
+  };
+  window.addEventListener("scroll", konumuYaz, { passive: true });
+  okumaTemizle = () => {
+    window.removeEventListener("scroll", konumuYaz);
+    clearTimeout(bekleyen);
+    okumaTemizle = null;
+  };
+}
+
+let okumaTemizle = null;
+
+/** Görünüm kutusu: punto, zemin, kenar boşluğu. */
+function gorunumKutusu() {
+  const eski = document.getElementById("gorunum-kutusu");
+  if (eski) return eski.remove();
+
+  const kutu = yap("div", "");
+  kutu.id = "gorunum-kutusu";
+
+  const kademe = (ad, deger, eksi, arti) => {
+    const satir = yap("div", "", "olcu");
+    satir.append(yap("span", ad));
+    const az = yap("button", "−", "cizgili");
+    const cok = yap("button", "+", "cizgili");
+    const sayi = yap("b", String(deger));
+    az.onclick = () => { eksi(); sayi.textContent = okumaTercihi[ad === "Punto" ? "punto" : "kenar"]; };
+    cok.onclick = () => { arti(); sayi.textContent = okumaTercihi[ad === "Punto" ? "punto" : "kenar"]; };
+    satir.append(az, sayi, cok);
+    return satir;
+  };
+
+  const yaz = async () => {
+    tercihleriUygula();
+    await depo.ayarYaz("okuma", JSON.stringify(okumaTercihi));
+  };
+
+  const zeminler = yap("div", "", "satir");
+  Object.entries(ZEMINLER).forEach(([anahtar, z]) => {
+    const dugme = yap("button", z.ad, anahtar === okumaTercihi.zemin ? "dolu" : "tonlu");
+    dugme.onclick = () => {
+      okumaTercihi.zemin = anahtar;
+      yaz();
+      kutu.remove();
+      gorunumKutusu();
+    };
+    zeminler.append(dugme);
+  });
+
+  kutu.append(
+    kademe("Punto", okumaTercihi.punto,
+      () => { okumaTercihi.punto = Math.max(14, okumaTercihi.punto - 1); yaz(); },
+      () => { okumaTercihi.punto = Math.min(30, okumaTercihi.punto + 1); yaz(); }),
+    kademe("Kenar", okumaTercihi.kenar,
+      () => { okumaTercihi.kenar = Math.max(0, okumaTercihi.kenar - 4); yaz(); },
+      () => { okumaTercihi.kenar = Math.min(48, okumaTercihi.kenar + 4); yaz(); }),
+    zeminler,
+  );
+  ekran.querySelector(".okuma-cubuk").after(kutu);
 }
 
 async function bolumeGit(kitap, yon) {
@@ -444,6 +562,7 @@ kutuBilgi.onclick = async () => {
   kutuBilgi.disabled = false;
   kutuBilgi.textContent = "Bilgi al";
   if (!secili) return;
+  kutuNot.innerHTML = "";
   kutuNot.textContent = sonuc.metin || sonuc.hata;
   kutuNot.className = sonuc.metin ? "sonuc" : "sonuc uyari";
 };
@@ -456,22 +575,49 @@ kutuAyrinti.onclick = async () => {
   kutuAyrinti.disabled = false;
   kutuAyrinti.textContent = "Ayrıntı";
   if (!secili) return;
+  kutuNot.innerHTML = "";
   kutuNot.className = "sonuc";
-  kutuNot.textContent = sonuc.kart ? kartMetni(sonuc.kart) : sonuc.hata;
-  if (!sonuc.kart) kutuNot.className = "sonuc uyari";
+  if (sonuc.kart) {
+    kutuNot.append(kartiCiz(sonuc.kart));
+  } else {
+    kutuNot.className = "sonuc uyari";
+    kutuNot.textContent = sonuc.hata;
+  }
 };
 
-function kartMetni(k) {
-  const satirlar = [];
-  if (k.karsilik) satirlar.push(k.karsilik);
-  if (k.tanim) satirlar.push(k.tanim);
-  (k.ornekler || []).forEach((o, i) => satirlar.push(`${i + 1}. ${o}`));
-  if (k.kok) satirlar.push(`Kök: ${k.kok}`);
-  if (k.aile?.length) satirlar.push(`Aile: ${k.aile.join(" · ")}`);
-  if (k.esanlam?.length) satirlar.push(`Eş: ${k.esanlam.join(" · ")}`);
-  if (k.karsit?.length) satirlar.push(`Karşıt: ${k.karsit.join(" · ")}`);
-  if (k.birliktelik?.length) satirlar.push(`Birlikte: ${k.birliktelik.join(" · ")}`);
-  return satirlar.join("\n");
+/**
+ * Kelime kartı.
+ *
+ * Düz metin olarak tek blokta yazılıyordu ve okunmuyordu: karşılık,
+ * örnekler ve kök aynı gri yığının içinde kayboluyordu. Android'deki
+ * kartın bölümleri burada da ayrı ayrı duruyor.
+ */
+function kartiCiz(k) {
+  const kart = yap("div", "", "kelime-kart");
+
+  if (k.karsilik) kart.append(yap("p", k.karsilik, "karsilik"));
+  if (k.tanim) kart.append(yap("p", k.tanim, "tanim"));
+
+  if (k.ornekler?.length) {
+    const liste = yap("ol", "", "ornekler");
+    k.ornekler.forEach(o => liste.append(yap("li", o)));
+    kart.append(liste);
+  }
+
+  const bolum = (etiket, deger) => {
+    if (!deger || (Array.isArray(deger) && !deger.length)) return;
+    const satir = yap("div", "", "kart-bolum");
+    satir.append(yap("span", etiket, "etiket"));
+    satir.append(yap("span", Array.isArray(deger) ? deger.join(" · ") : deger));
+    kart.append(satir);
+  };
+
+  bolum("Kök", k.kok);
+  bolum("Aile", k.aile);
+  bolum("Eş", k.esanlam);
+  bolum("Karşıt", k.karsit);
+  bolum("Birlikte", k.birliktelik);
+  return kart;
 }
 
 // --- Deste -----------------------------------------------------------
@@ -685,6 +831,9 @@ window.addEventListener("unhandledrejection", e => hataGoster(e.reason));
       anahtar: await depo.ayar("anahtar", ""),
       model: await depo.ayar("model", "gpt-4o-mini"),
     };
+    try {
+      okumaTercihi = { ...okumaTercihi, ...JSON.parse(await depo.ayar("okuma", "{}")) };
+    } catch { /* bozuk kayıt varsayılanı bozmasın */ }
     await git("kitaplik");
   } catch (e) {
     hataGoster(e);

@@ -521,10 +521,17 @@ class BookRepository @Inject constructor(
     }
 
     /** Bölüm içinde kaldığın paragraf — bölüm başına atmamak için. */
-    suspend fun lastParagraph(bookId: Long): Int = current(bookId)?.paragraph ?: 0
+    /**
+     * Kaldığın yer: tepedeki paragraf ve onun ne kadarının yukarıda
+     * kaldığı. İkisi birlikte ekranın en üstündeki satırı geri getiriyor.
+     */
+    suspend fun lastSpot(bookId: Long): Pair<Int, Int> {
+        val kayit = current(bookId) ?: return 0 to 0
+        return kayit.paragraph to kayit.scrollOffset
+    }
 
-    suspend fun saveLastParagraph(bookId: Long, index: Int) {
-        progress.save(uuidOf(bookId), paragraph = index)
+    suspend fun saveLastParagraph(bookId: Long, index: Int, offset: Int = 0) {
+        progress.save(uuidOf(bookId), paragraph = index, scrollOffset = offset)
     }
 
     /**

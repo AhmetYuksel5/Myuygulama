@@ -637,20 +637,29 @@ fun BookReaderRoute(
             val chapter = book.chapters.getOrNull(state.chapterIndex)
             val listState = rememberLazyListState()
 
-            // Kitap ilk açıldığında kaldığın paragrafa dön; ileri doğru bölüm
-            // değiştirdiğinde metnin başından başla.
+            // Kitap ilk açıldığında bıraktığın **satıra** dön.
+            //
+            // Yalnız paragrafa dönmek yetmiyordu: uzun bir paragrafın
+            // ortasındayken kitabı kapatıp açınca o paragrafın başına
+            // düşüyor ve okunan yer aranıyordu. Paragrafın ne kadarının
+            // yukarıda kaldığı da saklanıyor, ikisi birlikte ekranın
+            // tepesindeki satırı geri getiriyor.
             LaunchedEffect(state.chapterIndex, book) {
                 val last = (chapter?.paragraphs?.lastIndex ?: 0).coerceAtLeast(0)
-                val target = viewModel.lastParagraph()
-                runCatching { listState.scrollToItem(target.coerceIn(0, last)) }
+                val (target, offset) = viewModel.lastSpot()
+                runCatching {
+                    listState.scrollToItem(target.coerceIn(0, last), offset.coerceAtLeast(0))
+                }
             }
 
             // Nerede kaldığını sürekli değil, durulunca kaydediyoruz.
             LaunchedEffect(listState, state.chapterIndex) {
-                snapshotFlow { listState.firstVisibleItemIndex }
-                    .collectLatest { index ->
+                snapshotFlow {
+                    listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                }
+                    .collectLatest { (index, offset) ->
                         delay(400)
-                        viewModel.savePosition(index)
+                        viewModel.savePosition(index, offset)
                     }
             }
 

@@ -343,7 +343,7 @@ class BookReaderViewModel @Inject constructor(
      * Bölüm değiştirmek zaten 0 yazdığı için ileri geçişte metnin başından
      * başlanıyor.
      */
-    suspend fun lastParagraph(): Int = repository.lastParagraph(bookId)
+    suspend fun lastSpot(): Pair<Int, Int> = repository.lastSpot(bookId)
 
     fun selectChapter(index: Int) {
         val chapters = _state.value.book?.chapters.orEmpty()
@@ -361,8 +361,8 @@ class BookReaderViewModel @Inject constructor(
     }
 
     /** Okurken kaldığın paragrafı kaydeder. */
-    fun savePosition(paragraphIndex: Int) {
-        viewModelScope.launch { repository.saveLastParagraph(bookId, paragraphIndex) }
+    fun savePosition(paragraphIndex: Int, offset: Int) {
+        viewModelScope.launch { repository.saveLastParagraph(bookId, paragraphIndex, offset) }
     }
 
     /** Bölüm içindeki bir resim; okuyucu çizerken istiyor. */

@@ -251,3 +251,29 @@ input, select, textarea {
   z-index: 30;
   box-shadow: 0 6px 20px rgba(0,0,0,.25);
 }
+
+/* --- Görünüm kutusu --- */
+#gorunum-kutusu {
+  border: 1px solid var(--cizgi);
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--kagit);
+}
+#gorunum-kutusu .olcu {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+#gorunum-kutusu .olcu span:first-child { flex: 1; font-size: 14px; }
+#gorunum-kutusu .olcu button { width: 40px; padding: 6px 0; text-align: center; }
+#gorunum-kutusu .olcu b { min-width: 28px; text-align: center; }
+#gorunum-kutusu .satir button { font-size: 13px; padding: 8px 10px; }
+
+/* --- Kelime kartı --- */
+.kelime-kart { text-align: start; }
+.kelime-kart .karsilik { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.kelime-kart .tanim { color: var(--sonuk); font-size: 14px; }
+.kelime-kart .ornekler { margin: 10px 0; padding-inline-start: 20px; }
+.kelime-kart .ornekler li { margin-bottom: 6px; font-size: 15px; }
+.kart-bolum { display: flex; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+.kart-bolum .etiket { color: var(--vurgu); min-width: 62px; flex: none; }
