@@ -47,7 +47,10 @@ function is(magaza, kip, islem) {
   return ac().then(db => new Promise((tamam, hata) => {
     const t = db.transaction(magaza, kip);
     const sonuc = islem(t.objectStore(magaza));
-    t.oncomplete = () => tamam(sonuc && sonuc.result !== undefined ? sonuc.result : sonuc);
+    // Kayıt bulunamadığında result undefined oluyor; "undefined ise
+    // isteğin kendisini döndür" demek, çağırana bir istek nesnesi
+    // veriyordu ve o nesne her koşulda doğru sayılıyordu.
+    t.oncomplete = () => tamam(sonuc instanceof IDBRequest ? sonuc.result : sonuc);
     t.onerror = () => hata(t.error);
   }));
 }

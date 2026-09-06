@@ -24,7 +24,9 @@ let ayarlar = { anahtar: "", model: "gpt-4o-mini" };
 
 // --- Yönlendirme -----------------------------------------------------
 
-const sayfalar = { kitaplik, deste, ayarlarEkrani };
+// Anahtarlar alt çubuktaki data-git değerleriyle birebir aynı olmak
+// zorunda; "ayarlarEkrani" yazılıydı ve o sekme hiç açılmıyordu.
+const sayfalar = { kitaplik, deste, ayarlar: ayarlarEkrani };
 let acikKitap = null;
 
 async function git(ad) {
@@ -534,12 +536,34 @@ function renkTohumu(ad) {
 
 // --- Açılış ----------------------------------------------------------
 
+/**
+ * Hata ekranı.
+ *
+ * Bir şey patladığında sayfa sessizce boş kalıyordu ve elde "hiçbir şey
+ * çıkmadı"dan başka bilgi olmuyordu. Artık hata ekrana yazılıyor: neyin
+ * bozulduğunu görmeden düzeltmenin yolu yok.
+ */
+function hataGoster(sebep) {
+  const kutu = yap("div", "", "bos");
+  kutu.append(yap("p", "Bir şeyler ters gitti.", "uyari"));
+  kutu.append(yap("p", String(sebep && sebep.message || sebep), "kucuk"));
+  ekran.innerHTML = "";
+  ekran.append(kutu);
+}
+
+window.addEventListener("error", e => hataGoster(e.error || e.message));
+window.addEventListener("unhandledrejection", e => hataGoster(e.reason));
+
 (async () => {
-  ayarlar = {
-    anahtar: await depo.ayar("anahtar", ""),
-    model: await depo.ayar("model", "gpt-4o-mini"),
-  };
-  await git("kitaplik");
+  try {
+    ayarlar = {
+      anahtar: await depo.ayar("anahtar", ""),
+      model: await depo.ayar("model", "gpt-4o-mini"),
+    };
+    await git("kitaplik");
+  } catch (e) {
+    hataGoster(e);
+  }
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
