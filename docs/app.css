@@ -351,14 +351,77 @@ input, select, textarea {
 #gorunum-kutusu .olcu b { min-width: 28px; text-align: center; }
 #gorunum-kutusu .satir button { font-size: 13px; padding: 8px 10px; }
 
-/* --- Kelime kartı --- */
-.kelime-kart { text-align: start; }
-.kelime-kart .karsilik { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
-.kelime-kart .tanim { color: var(--sonuk); font-size: 14px; }
-.kelime-kart .ornekler { margin: 10px 0; padding-inline-start: 20px; }
-.kelime-kart .ornekler li { margin-bottom: 6px; font-size: 15px; }
-.kart-bolum { display: flex; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+/*
+  --- Kelime kartı ---
+
+  Bütün ölçüler kartın kendi --punto değişkeninden türüyor; A+ / A− yalnız
+  o değişkeni değiştiriyor ve kart yeniden çizilmeden büyüyüp küçülüyor.
+
+  Kaynak dili (.ar) her yerde Türkçeden (.tr) büyük. Sebebi Arapça:
+  harekeli yazı küçük puntoda okunmuyor, harekeler birbirine giriyor.
+  Satır yüksekliği de bu yüzden geniş — harekeler üstte yer istiyor.
+*/
+.kelime-kart { text-align: start; --punto: 16px; }
+.kelime-kart .ar { font-size: calc(var(--punto) * 1.35); line-height: 1.95; }
+.kelime-kart .tr { font-size: calc(var(--punto) * 0.85); color: var(--sonuk); }
+
+.kart-punto { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px; }
+.punto-dugme {
+  border: 1px solid var(--cizgi);
+  background: none;
+  color: var(--vurgu);
+  border-radius: 8px;
+  padding: 3px 12px;
+  font-size: 14px;
+}
+
+.kart-baslik {
+  text-align: center;
+  font-weight: 700;
+  font-size: calc(var(--punto) * 2.1);
+  line-height: 1.7;
+}
+.kart-okunus { text-align: center; color: var(--sonuk); margin-bottom: 6px; }
+
+.kelime-kart .karsilik {
+  text-align: center;
+  font-weight: 700;
+  color: var(--vurgu);
+  font-size: calc(var(--punto) * 1.05);
+  margin: 8px 0 6px;
+}
+.kelime-kart .tanim { text-align: center; margin-bottom: 12px; }
+
+.kelime-kart .ornekler { margin: 12px 0; padding-inline-start: 22px; }
+.kelime-kart .ornekler li { margin-bottom: 10px; }
+
+.kart-bolum {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: calc(var(--punto) * 0.85);
+  align-items: baseline;
+}
 .kart-bolum .etiket { color: var(--vurgu); min-width: 62px; flex: none; }
+.kart-deger { min-width: 0; }
+
+/* Eş anlamlı mavi, karşıt kırmızı, ilgili gri — Android'deki kartla aynı. */
+.baloncuklar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.baloncuk { border-radius: 999px; padding: 5px 14px; line-height: 1.4; }
+.baloncuk.es { background: var(--mavi); color: #10233a; }
+.baloncuk.karsit { background: var(--kirmizi); color: #3a1018; }
+.baloncuk.ilgili { background: var(--cizgi); color: var(--murekkep); }
+.baloncuk .tr { color: inherit; opacity: 0.75; }
+
+.kart-ayrac {
+  margin: 14px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--cizgi);
+  color: var(--vurgu);
+  text-align: center;
+  font-size: calc(var(--punto) * 0.85);
+}
+.karistirma { margin-bottom: 4px; }
 
 /*
   Okuma metninde sistemin kendi seçimi kapalı.

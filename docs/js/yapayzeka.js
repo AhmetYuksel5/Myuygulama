@@ -161,22 +161,108 @@ export async function cumle(ayarlar, secim, baglam, eser) {
   return { ceviri: veri.ceviri.trim(), zorlar: Array.isArray(veri.zorlar) ? veri.zorlar : [] };
 }
 
+/** Metinde Arap harfi var mı? Kart yönergesini bu seçiyor. */
+const ARAPCA = /[؀-ۿ]/;
+
+const dizi = d =>
+  (Array.isArray(d) ? d.filter(x => typeof x === "string" && x.trim()).map(x => x.trim()) : []);
+
 /**
- * Kelime kartı: karşılık, tanım, örnekler, kök, eş ve karşıt anlamlılar.
- * JSON isteniyor ki kartın alanlarına dağıtılabilsin.
+ * Arapça kelime maddesi. Android'deki yönergenin aynısı.
+ *
+ * İngilizcedekinin çevirisi değil: Arapçada öğrencinin ezberlediği şey
+ * başka. Harekesiz yazım okunuşu vermiyor, isimde çoğul ve fiilde mastar
+ * kuralsız, kök üç sessizden oluşuyor ve aynı kökten türeyenler gerçek
+ * bir aile kuruyor — İngilizcedeki köken bölümünün Arapçada karşılığı
+ * çok daha güçlü. Şekil benzerliği de burada kritik: noktası değişen iki
+ * harf ayrı kelime yapıyor.
+ *
+ * Android'den tek farkı örneklerde: orada yalnız Arapça cümle var,
+ * burada altına Türkçesi de isteniyor. Okuyan öyle istedi.
  */
-export async function kart(ayarlar, secim, baglam, eser) {
-  // Kartın tamamı Türkçe anlatıyor.
-  //
-  // Önce tanım ve örnekler İngilizce bırakılmıştı: "öğrenilen kısım
-  // İngilizce kalsın" diye. Kart o hâlde okunmuyordu — kelimeyi bilmeyen
-  // biri için İngilizce tanım da bilinmeyen bir cümle.
-  //
-  // Örnek cümleler, eş ve karşıt anlamlılar kelimenin kendi dilinde
-  // kalıyor — öğrenilen şey onlar — ama her birinin yanında Türkçesi var.
-  // Alan adı "asil": "en" yazıyordu ve model Arapça bir kelimeye bile
-  // İngilizce örnek uyduruyordu, çünkü alanın adı öyle diyordu.
-  const yonerge = [
+function arapcaYonergesi() {
+  return [
+    "You are a bilingual Arabic-Turkish lexicographer writing a study",
+    "card for a Turkish learner of Arabic. The input may be a single",
+    "word or a phrase; treat it as one unit. Modern Standard Arabic is",
+    "the default, but if the input is dialect, say so and give the MSA",
+    "equivalent.",
+    "Return STRICT JSON with keys:",
+
+    "t (Turkish meanings, 1-3, comma separated. Write the Turkish a",
+    "Turkish speaker would actually say, not a word-by-word gloss),",
+
+    'y (the memorisation line, in exactly this order separated by " — ":',
+    "the input FULLY VOWELLED with harakat; its Latin transcription;",
+    "then for a noun its plural, for a verb its maṣdar and present",
+    'tense. Example for كتاب: "كِتَاب — kitāb — ج. كُتُب". Example for',
+    'كتب: "كَتَبَ — kataba — يَكْتُب، الكِتَابَة". This line is the single',
+    "most useful thing on the card: unvowelled Arabic does not show",
+    "its own pronunciation and Arabic plurals are irregular),",
+
+    "d (a short definition in SIMPLE Arabic, max 12 words, fully",
+    "understandable to an intermediate learner),",
+
+    'e (array of exactly 3 objects {"asil": a natural Arabic example',
+    "sentence using it, 6-14 words, with harakat on the input word only,",
+    '"tr": that sentence in natural Turkish}),',
+
+    "s (SYNONYMS: 2-4 Arabic words that could replace the input with",
+    "roughly the same meaning, Arabic only, no translation),",
+
+    "a (ANTONYMS: 1-3 Arabic opposites, Arabic only; empty only if there",
+    "is none),",
+
+    "r (RELATED: 3-5 Arabic words from the same topic that are NOT",
+    "interchangeable with the input, Arabic only),",
+
+    "k (ROOT: the triliteral (or quadriliteral) root, written with",
+    "spaces between the radicals and then its core sense in Turkish, in",
+    'exactly this shape: "ك ت ب (yazmak)". Empty string only for',
+    "borrowed words with no Arabic root, and then say so),",
+
+    "f (WORD FAMILY: 4-8 OTHER words built on that SAME root, the place",
+    "where Arabic rewards a learner most. Give the derived forms a",
+    "learner actually meets — the maṣdar, the active and passive",
+    "participle, the noun of place, the instrument noun — not a",
+    'mechanical list. Write each as "kelime — Türkçe":',
+    '"مَكْتَب — yazıhane, ofis". Never repeat the input),',
+
+    "x (LOOK-ALIKES: 2-3 Arabic words that LOOK like the input on the",
+    "page even though their meaning and root are unrelated. In Arabic",
+    "this matters more than in Latin script: words differ by a single",
+    "dot or by letters that share a shape (ب ت ث، ج ح خ، د ذ، ر ز،",
+    "س ش، ص ض، ط ظ، ع غ). Look for exactly that kind of pair —",
+    'بَحَث/بَحَت، ضَلَّ/ظَلَّ. Write each as "kelime — Türkçe" and nothing',
+    "else; do not spell out which letter differs, the reader sees it.",
+    "Never list the input itself or a form of it),",
+
+    "c (COLLOCATIONS grouped by grammatical pattern: array of objects",
+    "with g and w. Decide the input's part of speech first, then use",
+    'only these groups: for a NOUN "fiil +" (verbs that take it as',
+    'object), "sıfat +" (adjectives that describe it), "tamlama" (the',
+    "nouns it is commonly annexed to, iḍāfa); for a VERB \"+ isim\" (its",
+    'typical objects), "+ harf-i cer" (the preposition it governs — in',
+    "Arabic this changes the meaning and must be learned with the verb),",
+    '"zarf +"; for an ADJECTIVE "+ isim", "zarf +".',
+    "w is an array of 3-6 collocates, Arabic only, no translation.",
+    "Give 2-4 groups).",
+
+    "Never pad a section to reach a count: fewer good items beat filler.",
+    "This does not apply to x — give the 2-3 closest look-alikes you",
+    "found. No markdown, no extra keys, no commentary.",
+  ].join(" ");
+}
+
+/**
+ * Arapça olmayan kelimeler için kart.
+ *
+ * Kartın tamamı Türkçe anlatıyor. Önce tanım ve örnekler kendi dilinde
+ * bırakılmıştı; kelimeyi bilmeyen biri için o tanım da bilinmeyen bir
+ * cümle oluyordu.
+ */
+function genelYonerge() {
+  return [
     "You are a bilingual dictionary for an adult Turkish reader who is",
     "learning the language of the Input.",
     DIL_KURALI,
@@ -186,8 +272,7 @@ export async function kart(ayarlar, secim, baglam, eser) {
     '"tanim": what the word means, IN TURKISH, one or two plain sentences.',
     '"ornekler": 3 objects, each {"asil": an example sentence in the',
     'language of the Input, "tr": its Turkish translation}.',
-    '"kok": the origin IN TURKISH, one line — for an Arabic word its',
-    'root letters, for a European word its etymology, e.g.',
+    '"kok": the origin IN TURKISH, one line, e.g.',
     '"morph- (Yun. morphē = şekil)". Empty string if there is nothing to say.',
     '"aile": other words from the same root, in the language of the Input,',
     'each written as "kelime — Türkçe karşılığı".',
@@ -197,11 +282,71 @@ export async function kart(ayarlar, secim, baglam, eser) {
     "Choose the sense that fits the passage. Keep every list at most six",
     "items. Plain text inside the values; no markdown.",
   ].join(" ");
+}
 
-  const sonuc = await iste(ayarlar, yonerge, istekMetni(secim, baglam, eser), 900);
+/**
+ * Kelime kartı.
+ *
+ * İki yönerge var, kelimenin harfine bakılıyor: Arap harfi görülünce
+ * Android'deki Arapça maddesi, yoksa genel madde. Dönen JSON iki
+ * durumda da aynı biçime çevriliyor; kartı çizen taraf hangi yoldan
+ * geldiğini bilmek zorunda kalmasın.
+ */
+export async function kart(ayarlar, secim, baglam, eser) {
+  const arapca = ARAPCA.test(secim);
+  // Arapça kartta alan sayısı iki katı; dar sınırda son bölümler
+  // yarıda kesiliyor ve JSON hiç ayrıştırılamıyor.
+  const sonuc = await iste(
+    ayarlar,
+    arapca ? arapcaYonergesi() : genelYonerge(),
+    istekMetni(secim, baglam, eser),
+    arapca ? 1600 : 900,
+  );
   if (sonuc.hata) return sonuc;
   const veri = jsonCoz(sonuc.metin);
-  return veri ? { kart: veri } : { hata: "Kart okunamadı." };
+  if (!veri) return { hata: "Kart okunamadı." };
+  return { kart: arapca ? arapcaKarti(veri) : genelKart(veri) };
+}
+
+/** Arapça yönergenin kısa anahtarlarını kartın alanlarına dağıtır. */
+function arapcaKarti(v) {
+  return {
+    arapca: true,
+    karsilik: (v.t || "").trim(),
+    okunus: (v.y || "").trim(),
+    tanim: (v.d || "").trim(),
+    ornekler: Array.isArray(v.e) ? v.e : [],
+    esanlam: dizi(v.s),
+    karsit: dizi(v.a),
+    ilgili: dizi(v.r),
+    kok: (v.k || "").trim(),
+    aile: dizi(v.f),
+    karistirma: dizi(v.x),
+    birliktelik: Array.isArray(v.c)
+      ? v.c
+        .map(g => ({ grup: (g?.g || "").trim(), kelimeler: dizi(g?.w) }))
+        .filter(g => g.grup && g.kelimeler.length)
+      : [],
+  };
+}
+
+/** Genel yönergenin çıktısını aynı biçime getirir. */
+function genelKart(v) {
+  const birlikte = dizi(v.birliktelik);
+  return {
+    arapca: false,
+    karsilik: (v.karsilik || "").trim(),
+    okunus: "",
+    tanim: (v.tanim || "").trim(),
+    ornekler: Array.isArray(v.ornekler) ? v.ornekler : [],
+    esanlam: dizi(v.esanlam),
+    karsit: dizi(v.karsit),
+    ilgili: [],
+    kok: (v.kok || "").trim(),
+    aile: dizi(v.aile),
+    karistirma: [],
+    birliktelik: birlikte.length ? [{ grup: "Birlikte", kelimeler: birlikte }] : [],
+  };
 }
 
 /** Model bazen JSON'u kod çitiyle sarıyor; çiti soyup ayrıştırır. */

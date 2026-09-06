@@ -1090,6 +1090,11 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
 
   kutuSecim.textContent = kelime;
   kutuSecim.dir = "auto";
+  kutuSecim.hidden = false;
+  kutuCeviri.hidden = false;
+  // Listeden açılan kutuda renk seçici yok: kelime zaten listede ve dört
+  // büyük yuvarlak kartın önünü kapatıyordu.
+  kutuKalemler.hidden = Boolean(kayit);
   kutuNotlar.innerHTML = "";
   kutuNot.innerHTML = "";
   kutuNot.className = "sonuc";
@@ -1103,13 +1108,13 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   const [sozluk, kelimeler] = await Promise.all([depo.sozluk(anahtar), depo.kelimeler()]);
   if (secili !== istek) return;
   const varOlan = kayit || kelimeler.find(k => k.anahtar === anahtar);
-  kalemleriCiz(varOlan?.kalem);
+  if (!kutuKalemler.hidden) kalemleriCiz(varOlan?.kalem);
 
   istek.ceviri = sozluk?.ceviri || gecerliCeviri(varOlan);
   istek.notlar = sozluk?.notlar || varOlan?.notlar || [];
   istek.kart = sozluk?.kart || varOlan?.kart || null;
 
-  if (istek.kart) kutuNot.append(kartiCiz(istek.kart));
+  if (istek.kart) kartiGoster(istek.kart, istek.kelime);
 
   if (istek.ceviri) {
     ceviriyiGoster(istek);
@@ -1229,11 +1234,10 @@ kutuAyrinti.onclick = async () => {
   if (secili !== istek) return;
   kutuAyrinti.disabled = false;
   kutuAyrinti.textContent = "Ayrıntı";
-  kutuNot.innerHTML = "";
-  kutuNot.className = "sonuc";
   if (sonuc.kart) {
-    kutuNot.append(kartiCiz(sonuc.kart));
+    kartiGoster(sonuc.kart, istek.kelime);
   } else {
+    kutuNot.innerHTML = "";
     kutuNot.className = "sonuc uyari";
     kutuNot.textContent = sonuc.hata;
   }
@@ -1263,59 +1267,170 @@ kutuSoruGonder.onclick = async () => {
   kutuCevap.className = sonuc.metin ? "sonuc" : "sonuc uyari";
 };
 
-/**
- * Kelime kartı.
- *
- * Düz metin olarak tek blokta yazılıyordu ve okunmuyordu: karşılık,
- * örnekler ve kök aynı gri yığının içinde kayboluyordu. Android'deki
- * kartın bölümleri burada da ayrı ayrı duruyor.
- */
-function kartiCiz(k) {
-  const kart = yap("div", "", "kelime-kart");
+/** Kart puntosu; A+ / A− bunu değiştiriyor, ayarda saklanıyor. */
+let kartPunto = 16;
 
+async function puntoDegistir(yon) {
+  kartPunto = Math.min(28, Math.max(12, kartPunto + yon * 2));
+  // Açık duran kart yeniden çizilmeden büyüyor: her satır bu değişkenden
+  // türüyor, tek yerde değiştirmek yetiyor.
+  document.querySelectorAll(".kelime-kart").forEach(
+    k => k.style.setProperty("--punto", `${kartPunto}px`));
+  await depo.ayarYaz("kartPunto", String(kartPunto));
+}
+
+/**
+ * Depodaki eski kartları yeni biçime uydurur.
+ *
+ * Bir dönem birliktelik düz dizi olarak tutuluyordu; okunuş, ilgili ve
+ * karıştırma alanları hiç yoktu. O kartlar silinmiyor, eksik alanları
+ * boş kalıyor.
+ */
+function kartiDuzle(k) {
+  const b = k.birliktelik;
+  if (Array.isArray(b) && b.length && typeof b[0] === "string") {
+    return { ...k, birliktelik: [{ grup: "Birlikte", kelimeler: b }] };
+  }
+  return k;
+}
+
+/**
+ * Kelime kartı — Android'deki kartın düzeni.
+ *
+ * Sıra oradaki gibi: büyük kelime, okunuş satırı, Türkçe karşılık, kendi
+ * dilinde tanım, örnekler, kök ve aile, eş/karşıt baloncukları, ilgili
+ * kelimeler, birliktelik grupları, karıştırılanlar.
+ *
+ * Arapça her yerde Türkçeden büyük yazılıyor: harekeli yazı küçükken
+ * okunmuyor, harekeler birbirine giriyor. Türkçe olan her şey — karşılık,
+ * örneklerin altı, "kelime — Türkçe" maddelerinin sağ yarısı — bir
+ * kademe küçük.
+ */
+function kartiCiz(k, kelime = "") {
+  k = kartiDuzle(k);
+  const arapca = k.arapca ?? (kelime ? arapcaMi(kelime) : false);
+  const kaynak = arapca ? "ar" : "tr";
+  const kart = yap("div", "", "kelime-kart");
+  kart.style.setProperty("--punto", `${kartPunto}px`);
+
+  const yonlu = oge => { oge.dir = "auto"; return oge; };
+
+  // "kelime — Türkçe" maddesi: sol yarı kaynak dilinde ve büyük, sağ
+  // yarı Türkçe ve küçük.
+  const ikili = metin => {
+    const kap = document.createElement("span");
+    const yer = metin.indexOf("—");
+    if (yer < 0) {
+      kap.append(yonlu(yap("span", metin, kaynak)));
+      return kap;
+    }
+    kap.append(yonlu(yap("span", metin.slice(0, yer).trim(), kaynak)));
+    kap.append(yap("span", ` — ${metin.slice(yer + 1).trim()}`, "tr"));
+    return kap;
+  };
+
+  // Punto düğmeleri en üstte; okurken göz yorulunca elin oraya gidiyor.
+  const puntoSira = yap("div", "", "kart-punto");
+  const kucult = yap("button", "A−", "punto-dugme");
+  const buyut = yap("button", "A+", "punto-dugme");
+  kucult.onclick = () => puntoDegistir(-1);
+  buyut.onclick = () => puntoDegistir(1);
+  puntoSira.append(kucult, buyut);
+  kart.append(puntoSira);
+
+  if (kelime) kart.append(yonlu(yap("div", kelime, `kart-baslik ${kaynak}`)));
+  // Okunuş satırı: harekeli yazım — Latin okunuş — çoğul ya da mastar.
+  // Arapçada kartın en işe yarar satırı; harekesiz yazı kendi okunuşunu
+  // göstermiyor ve çoğul kuralsız.
+  if (k.okunus) kart.append(yonlu(yap("div", k.okunus, `kart-okunus ${kaynak}`)));
   if (k.karsilik) kart.append(yap("p", k.karsilik, "karsilik"));
-  if (k.tanim) kart.append(yap("p", k.tanim, "tanim"));
+  if (k.tanim) kart.append(yonlu(yap("p", k.tanim, `tanim ${kaynak}`)));
 
   if (k.ornekler?.length) {
     const liste = yap("ol", "", "ornekler");
     k.ornekler.forEach(o => {
       const madde = document.createElement("li");
-      // Örnek iki satır: İngilizce cümle ve altında Türkçesi. Model
-      // bazen düz metin döndürüyor, o zaman tek satır kalıyor.
       if (typeof o === "string") {
-        madde.textContent = o;
-        madde.dir = "auto";
+        madde.append(yonlu(yap("div", o, kaynak)));
       } else {
-        // Alan "asil": örnek cümle kelimenin kendi dilinde. Eski kartlarda
-        // adı "en" idi, onlar da okunsun.
-        const asil = yap("div", o.asil || o.en || "");
-        asil.dir = "auto";
-        madde.append(asil);
-        if (o.tr) madde.append(yap("div", o.tr, "kucuk sonuk"));
+        // Alan "asil": örnek cümle kelimenin kendi dilinde. Eski
+        // kartlarda adı "en" idi, onlar da okunsun.
+        madde.append(yonlu(yap("div", o.asil || o.en || "", kaynak)));
+        if (o.tr) madde.append(yap("div", o.tr, "tr"));
       }
       liste.append(madde);
     });
     kart.append(liste);
   }
 
-  const bolum = (etiket, deger) => {
-    if (!deger || (Array.isArray(deger) && !deger.length)) return;
+  const bolum = (etiket, parcalar) => {
+    if (!parcalar?.length) return;
     const satir = yap("div", "", "kart-bolum");
     satir.append(yap("span", etiket, "etiket"));
-    // Arapça bir kelimenin eş anlamlıları sağdan sola yazılmalı; yönü
-    // metnin ilk harfinden tarayıcı buluyor.
-    const deger_ = yap("span", Array.isArray(deger) ? deger.join(" · ") : deger);
-    deger_.dir = "auto";
-    satir.append(deger_);
+    const deger = yap("span", "", "kart-deger");
+    parcalar.forEach((p, i) => {
+      if (i) deger.append(document.createTextNode(" · "));
+      deger.append(p);
+    });
+    satir.append(deger);
     kart.append(satir);
   };
 
-  bolum("Kök", k.kok);
-  bolum("Aile", k.aile);
-  bolum("Eş", k.esanlam);
-  bolum("Karşıt", k.karsit);
-  bolum("Birlikte", k.birliktelik);
+  if (k.kok) bolum("Kök", [yonlu(yap("span", k.kok, kaynak))]);
+  bolum("Aile", k.aile?.map(ikili));
+
+  // Eş anlamlılar mavi, karşıtlar kırmızı, ilgili kelimeler gri —
+  // Android'deki kartla aynı renkler.
+  const baloncuklar = gruplar => {
+    const dolu = gruplar.filter(g => g.liste?.length);
+    if (!dolu.length) return;
+    const sar = yap("div", "", "baloncuklar");
+    dolu.forEach(g => g.liste.forEach(madde => {
+      const balon = yap("span", "", `baloncuk ${g.sinif}`);
+      balon.append(ikili(madde));
+      sar.append(balon);
+    }));
+    kart.append(sar);
+  };
+  baloncuklar([
+    { liste: k.esanlam, sinif: "es" },
+    { liste: k.karsit, sinif: "karsit" },
+  ]);
+  baloncuklar([{ liste: k.ilgili, sinif: "ilgili" }]);
+
+  // Birliktelik dilbilgisi kalıbına göre gruplu: "fiil +", "+ isim"…
+  k.birliktelik?.forEach(g => {
+    if (g?.grup && g.kelimeler?.length) {
+      bolum(g.grup, [yonlu(yap("span", g.kelimeler.join(" · "), kaynak))]);
+    }
+  });
+
+  if (k.karistirma?.length) {
+    const baslik = yap("div", "Karıştırma", "kart-ayrac");
+    kart.append(baslik);
+    k.karistirma.forEach(madde => {
+      const satir = yap("div", "", "karistirma");
+      satir.append(ikili(madde));
+      kart.append(satir);
+    });
+  }
+
   return kart;
+}
+
+/**
+ * Kartı kutuya yerleştirir.
+ *
+ * Kart kendi başına tam bir madde: en üstünde kelimenin kendisi ve
+ * karşılığı var. Bu yüzden kutunun kendi başlık ve çeviri satırı
+ * gizleniyor — aynı şey iki kez yazılmasın.
+ */
+function kartiGoster(k, kelime) {
+  kutuSecim.hidden = true;
+  kutuCeviri.hidden = true;
+  kutuNot.innerHTML = "";
+  kutuNot.className = "sonuc";
+  kutuNot.append(kartiCiz(k, kelime));
 }
 
 // --- Deste -----------------------------------------------------------
@@ -1620,6 +1735,9 @@ window.addEventListener("unhandledrejection", e => hataGoster(e.reason));
     };
     try {
       okumaTercihi = { ...okumaTercihi, ...JSON.parse(await depo.ayar("okuma", "{}")) };
+      // Kart puntosu seçildiği gibi kalsın; her kart açılışında yeniden
+      // büyütmek gerekmesin.
+      kartPunto = Number(await depo.ayar("kartPunto", "16")) || 16;
     } catch { /* bozuk kayıt varsayılanı bozmasın */ }
     // Eski kayıtlarda dört zemin vardı; kalkanlar açığa düşsün.
     if (!ZEMINLER[okumaTercihi.zemin]) okumaTercihi.zemin = "kagit";
