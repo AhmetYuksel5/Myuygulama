@@ -809,8 +809,8 @@ fun BookReaderRoute(
             current = state.highlightColors[request.word.lowercase()],
             gloss = gloss,
             onDetail = { viewModel.openDetail(request.word, request.sentence) },
-            onExplain = { viewModel.explain(request.word, request.sentence) },
-            note = note,
+            onAsk = { soru -> viewModel.ask(request.word, request.sentence, soru) },
+            answer = note,
             onDismiss = {
                 pending = null
                 viewModel.clearGloss()

@@ -58,23 +58,24 @@ class GlossLookup(
     }
 
     /**
-     * Kısa bilgi notu.
+     * Seçim hakkında okuyucunun kendi sorusu.
      *
-     * Karşılıkla aynı kutuda ama ayrı bir istek: her seçimde peşinen
-     * getirmek hem bekletir hem para yakar, oysa çoğu seçimde yalnız
-     * karşılık isteniyor. Bu yüzden düğmeye basılınca çalışıyor.
+     * "Bilgi al"ın yerine geldi: hazır not çoğu zaman sorulmayan bir
+     * soruya cevap veriyordu. Karttaki soru kutusuyla aynı yoldan
+     * gidiyor; kelime, geçtiği cümle ve eser soruyla birlikte.
      */
-    suspend fun explain(
+    suspend fun ask(
         state: MutableStateFlow<WordGloss>,
         word: String,
         context: String,
+        question: String,
         sourceName: String = "",
     ) {
         val trimmed = word.trim()
-        if (trimmed.isEmpty()) return
+        if (trimmed.isEmpty() || question.isBlank()) return
         state.value = WordGloss(busy = true)
         val brief = briefs.get(sourceName).orEmpty()
-        when (val result = openAi.explain(trimmed, context, sourceName, brief)) {
+        when (val result = openAi.askAbout(trimmed, question, context, sourceName, brief)) {
             is AiResult.Ok -> state.value = WordGloss(text = result.value)
             is AiResult.Failed -> state.value = WordGloss(error = result.reason)
         }

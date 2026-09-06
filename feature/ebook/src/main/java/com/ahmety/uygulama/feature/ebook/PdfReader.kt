@@ -145,13 +145,13 @@ class PdfReaderViewModel @Inject constructor(
         _gloss.value = WordGloss()
     }
 
-    /** "Bilgi al" ile gelen kısa not. */
+    /** "Soru sor" ile gelen cevap. */
     private val _note = MutableStateFlow(WordGloss())
     val note: StateFlow<WordGloss> = _note.asStateFlow()
 
-    fun explain(word: String, context: String) {
+    fun ask(word: String, context: String, question: String) {
         if (_note.value.busy) return
-        viewModelScope.launch { lookup.explain(_note, word, context, _state.value.title) }
+        viewModelScope.launch { lookup.ask(_note, word, context, question, _state.value.title) }
     }
 
     fun clearNote() {
@@ -701,8 +701,8 @@ fun PdfReaderRoute(
             current = pick.current,
             gloss = gloss,
             onDetail = { viewModel.openDetail(pick.word.text, pick.word.context) },
-            onExplain = { viewModel.explain(pick.word.text, pick.word.context) },
-            note = note,
+            onAsk = { soru -> viewModel.ask(pick.word.text, pick.word.context, soru) },
+            answer = note,
             onDismiss = {
                 picking = null
                 viewModel.clearGloss()

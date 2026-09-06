@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -394,11 +395,15 @@ fun ColorPickerDialog(
     gloss: WordGloss? = null,
     /** Kelime kartının tamamını açar; verilmezse düğme çıkmıyor. */
     onDetail: (() -> Unit)? = null,
-    /** Kısa bilgi notunu getirir; verilmezse düğme çıkmıyor. */
-    onExplain: (() -> Unit)? = null,
-    /** Gelen bilgi notu. */
-    note: WordGloss? = null,
+    /** Seçim hakkında serbest soru; verilmezse "Soru sor" çıkmıyor. */
+    onAsk: ((String) -> Unit)? = null,
+    /** Sorunun cevabı. */
+    answer: WordGloss? = null,
 ) {
+    // Soru alanı kapalı başlıyor: her seçimde soru sorulmuyor, kutu
+    // kalabalıklaşmasın.
+    var asking by remember(request.word) { mutableStateOf(false) }
+    var question by remember(request.word) { mutableStateOf("") }
     // Bağlam cümlesi kutuda gösterilmiyor ama karta yine de yazılıyor:
     // gösterilmesi ekranı dolduruyordu, saklanması ise kelimenin hangi
     // cümlede görüldüğünü hatırlatan tek şey.
@@ -471,42 +476,62 @@ fun ColorPickerDialog(
                     }
                 }
 
-                // Karşılık "bu ne diyor" sorusuna cevap veriyor; okurken
-                // sorulan öteki soru "bu nedir". İkisi ayrı düğme: bilgi
-                // notu her seçimde istenmiyor ve her seferinde peşinen
-                // getirmek hem bekletir hem para yakar.
-                if (onDetail != null || onExplain != null) {
-                    // Dolu düğme: renkli birer yazıyken basılabilir oldukları
-                    // belli olmuyordu.
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (onExplain != null) {
-                            FilledTonalButton(
-                                onClick = onExplain,
-                                enabled = note?.busy != true,
+                // Dolu düğme: renkli bir yazıyken basılabilir olduğu belli
+                // olmuyordu.
+                if (onDetail != null) {
+                    FilledTonalButton(
+                        onClick = onDetail,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "Ayrıntı",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+
+                // "Soru sor" en altta ve hafif. Hazır "Bilgi al" notu çoğu
+                // zaman sorulmayan bir soruya cevap veriyordu; şimdi soruyu
+                // okuyan soruyor. Alan dokununca açılıyor.
+                if (onAsk != null) {
+                    TextButton(
+                        onClick = { asking = !asking },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "Soru sor",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (asking) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = question,
+                                onValueChange = { question = it },
+                                placeholder = { Text("Sorun…") },
+                                singleLine = true,
                                 modifier = Modifier.weight(1f),
-                            ) {
-                                Text(
-                                    text = if (note?.busy == true) "Bakılıyor…" else "Bilgi al",
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                            }
-                        }
-                        if (onDetail != null) {
+                            )
                             FilledTonalButton(
-                                onClick = onDetail,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Text(
-                                    text = "Ayrıntı",
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                            }
+                                onClick = { if (question.isNotBlank()) onAsk(question.trim()) },
+                                enabled = answer?.busy != true && question.isNotBlank(),
+                            ) { Text("Sor") }
                         }
                     }
                 }
 
-                note?.let { info ->
+                answer?.let { info ->
                     when {
+                        info.busy -> Text(
+                            text = "Bakılıyor…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
                         info.text.isNotBlank() -> Text(
                             text = info.text,
                             style = MaterialTheme.typography.bodyMedium,
