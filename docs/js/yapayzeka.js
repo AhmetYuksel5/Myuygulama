@@ -169,7 +169,12 @@ function cumleYonergesi(arapca) {
 
     '"zorlar": an array of AT MOST 3 notes, each',
     '{"ifade": the expression exactly as it appears in the Input,',
-    '"anlam": what it means here, IN TURKISH, a few words}.',
+    '"anlam": ONLY what that expression means, IN TURKISH, a few words}.',
+    "Nothing beyond the meaning itself: no commentary, no grammatical",
+    "label, no remark about what kind of situation it describes. Never",
+    'append things like "alışılmış bir durum", "vurgu için", "yaygın',
+    'kullanım". If you cannot put it as a plain Turkish equivalent,',
+    "leave the note out altogether.",
 
     "Write a note ONLY when a reader who knows every word separately",
     "would STILL read the sentence wrongly. If the sentence means what",
@@ -205,15 +210,21 @@ function cumleYonergesi(arapca) {
     "(4) the passive (mabnī li-l-majhūl) — unvowelled writing hides it",
     "and the reader takes the object for the subject;",
 
-    "(5) a structure that reverses or hides the plain reading: كان and",
-    "its sisters, إنّ and its sisters, the ḥāl (the indefinite",
-    "accusative that means \"-arak/-erek\" and looks like an object),",
-    "كاد / ما زال / ما لبث, لو (counterfactual) against إذا (real),",
-    "ما used as a relative rather than as negation;",
+    "(5) a structure that reverses or hides the plain reading: the ḥāl",
+    "(the indefinite accusative that means \"-arak/-erek\" and looks like",
+    "an object), كاد / ما زال / ما لبث, لو (counterfactual) against إذا",
+    "(real), ما used as a relative rather than as negation;",
 
     "(6) a verb form (bāb) that carries the meaning of the sentence —",
     "استفعل asking or seeking, تفاعل reciprocity, انفعل the action",
     "turning back on itself. Name the bāb in parentheses.",
+
+    "NEVER write a note about what this reader met in the first months",
+    "of Arabic. Among others: كان and its sisters, إنّ and its sisters,",
+    "the definite article, ordinary negation with لا or ما, the iḍāfa",
+    "construction itself, how plurals are formed, the difference between",
+    "the perfect and the imperfect, the relative pronoun الذي. Writing",
+    "these teaches this reader nothing and only crowds the box.",
 
     "You may use the traditional Turkish terms (harf-i cer, meçhul,",
     "hâl, bâb) — the reader is studying Arabic and knows them. One short",

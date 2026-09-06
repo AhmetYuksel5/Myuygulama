@@ -1114,7 +1114,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    * istenen zaten kutuda duruyor — anlamı, altında gerekiyorsa birkaç
    * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
    */
-  kutuAyrinti.parentElement.hidden = cokKelime(kelime);
+  kutuAyrinti.hidden = cokKelime(kelime);
   perde.hidden = false;
 
   const [sozluk, kelimeler] = await Promise.all([depo.sozluk(anahtar), depo.kelimeler()]);
@@ -1255,7 +1255,7 @@ kutuAyrinti.onclick = async () => {
   }
 };
 
-// "Soru sor" en altta, hafif: her seçimde gerekmiyor, göze batmasın.
+// Soru alanı düğmeye basınca açılıyor; her seçimde gerekmiyor.
 kutuSor.onclick = () => {
   kutuSoruAlani.hidden = !kutuSoruAlani.hidden;
   if (!kutuSoruAlani.hidden) kutuSoruMetin.focus();
@@ -1375,12 +1375,23 @@ function kartiCiz(k, kelime = "") {
     kart.append(liste);
   }
 
-  const bolum = (etiket, parcalar) => {
+  /*
+   * Bir bölüm satırı. "satirli" verilince maddeler yan yana değil alt
+   * alta diziliyor: aile maddeleri "kelime — Türkçe" biçiminde uzun,
+   * yan yana dizilince nerede bitip nerede başladıkları seçilmiyordu.
+   */
+  const bolum = (etiket, parcalar, satirli) => {
     if (!parcalar?.length) return;
     const satir = yap("div", "", "kart-bolum");
     satir.append(yap("span", etiket, "etiket"));
-    const deger = yap("span", "", "kart-deger");
+    const deger = yap("span", "", satirli ? "kart-deger satirli" : "kart-deger");
     parcalar.forEach((p, i) => {
+      if (satirli) {
+        const madde = document.createElement("div");
+        madde.append(p);
+        deger.append(madde);
+        return;
+      }
       if (i) deger.append(document.createTextNode(" · "));
       deger.append(p);
     });
@@ -1388,8 +1399,8 @@ function kartiCiz(k, kelime = "") {
     kart.append(satir);
   };
 
-  if (k.kok) bolum("Kök", [yonlu(yap("span", k.kok, kaynak))]);
-  bolum("Aile", k.aile?.map(ikili));
+  if (k.kok) bolum("Kök", [kokYaz(k.kok)]);
+  bolum("Aile", k.aile?.map(ikili), true);
 
   // Eş anlamlılar mavi, karşıtlar kırmızı, ilgili kelimeler gri —
   // Android'deki kartla aynı renkler.
@@ -1416,6 +1427,19 @@ function kartiCiz(k, kelime = "") {
       bolum(g.grup, [yonlu(yap("span", g.kelimeler.join(" · "), kaynak))]);
     }
   });
+
+  /** "ب ش ش (gülümsemek)" — harfler kaynak dilinde, parantez Türkçe. */
+  function kokYaz(metin) {
+    const kap = document.createElement("span");
+    const yer = metin.indexOf("(");
+    if (yer < 0) {
+      kap.append(yonlu(yap("span", metin, kaynak)));
+      return kap;
+    }
+    kap.append(yonlu(yap("span", metin.slice(0, yer).trim(), kaynak)));
+    kap.append(yap("span", ` ${metin.slice(yer).trim()}`, "tr"));
+    return kap;
+  }
 
   if (k.karistirma?.length) {
     const baslik = yap("div", "Karıştırma", "kart-ayrac");
@@ -1561,7 +1585,7 @@ async function kelimeKutusu(k) {
   await kutuyuAc(k.kelime, k.baglam || "", { id: k.kitap, ad: k.eser }, k);
   // Kart daha önce alınmadıysa bir kez alınıp kelimeye yazılıyor.
   // Cümlede kart yok; düğme de gizli.
-  if (secili && !secili.kart && !kutuAyrinti.parentElement.hidden) {
+  if (secili && !secili.kart && !kutuAyrinti.hidden) {
     kutuAyrinti.onclick();
   }
 }

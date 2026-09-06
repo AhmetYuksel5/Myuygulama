@@ -39,19 +39,23 @@
     <p id="kutu-ceviri" class="sonuc"></p>
     <div id="kutu-notlar"></div>
     <div id="kutu-kalemler"></div>
+    <!--
+      Ayrıntı ile Soru sor yan yana, ikisi de aynı düğme biçiminde. Soru
+      en altta düğmesiz bir yazıydı, kartın altında kaybolup gidiyordu.
+      Cümlede Ayrıntı gizleniyor, Soru sor tek başına kalıyor.
+    -->
     <div id="kutu-dugmeler">
       <button id="kutu-ayrinti" class="tonlu">Ayrıntı</button>
+      <button id="kutu-sor" class="tonlu">Soru sor</button>
     </div>
-    <div id="kutu-not" class="sonuc"></div>
-    <!-- Soru en altta ve hafif: her seçimde gerekmiyor. -->
     <div id="kutu-soru">
-      <button id="kutu-sor" class="hafif">Soru sor</button>
       <div id="kutu-soru-alani" hidden>
         <input id="kutu-soru-metin" placeholder="Sorun…" autocomplete="off">
         <button id="kutu-soru-gonder" class="tonlu">Sor</button>
       </div>
       <div id="kutu-cevap" class="sonuc"></div>
     </div>
+    <div id="kutu-not" class="sonuc"></div>
   </div>
 </div>
 

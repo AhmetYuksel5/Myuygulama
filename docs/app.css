@@ -32,6 +32,15 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/*
+  Gizleme her yerde çalışsın.
+
+  [hidden] tarayıcının kendi kuralı; "display: flex" yazan bir kural onu
+  eziyor ve öge gizlenmiş görünmüyor. Renk yuvarlakları ile düğme sırası
+  tam bu yüzden ekranda kalmaya devam ediyordu.
+*/
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--kagit);
@@ -146,7 +155,6 @@ mark.RED    { background: rgba(242,112,138,.45); }
   padding: 6px 8px calc(6px + var(--alt));
   z-index: 25;
 }
-#okuma-alt[hidden] { display: none; }
 #okuma-alt button { padding: 10px 12px; font-size: 14px; color: inherit; }
 #okuma-alt .bilgi { flex: 1; text-align: center; font-size: 12px; opacity: .6; }
 
@@ -157,7 +165,6 @@ mark.RED    { background: rgba(242,112,138,.45); }
   display:grid ondan daha güçlü olduğu için kutu hiç kapanmıyor ve
   ekrandaki bütün dokunuşları yiyordu.
 */
-#perde[hidden] { display: none; }
 
 #perde {
   position: fixed; inset: 0;
@@ -189,10 +196,8 @@ mark.RED    { background: rgba(242,112,138,.45); }
 #kutu-notlar .not { margin-top: 3px; }
 #kutu-notlar b { color: var(--murekkep); font-weight: 600; }
 /* Soru: en altta, yazı kadar hafif bir düğme. */
-.hafif { color: var(--sonuk); font-size: 13px; padding: 10px 0 4px; width: 100%; }
 #kutu-soru { margin-top: 10px; }
 #kutu-soru-alani { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
-#kutu-soru-alani[hidden] { display: none; }
 #kutu-soru-alani input { flex: 1; min-width: 0; }
 #kutu-soru-alani button { flex: none; }
 #kutu-cevap { margin-top: 10px; font-size: 14px; }
@@ -232,7 +237,6 @@ mark.RED    { background: rgba(242,112,138,.45); }
   font-weight: 800; font-size: 40px; color: #fff;
 }
 .kutu .satir button { flex: 1; }
-.kutu .satir button[hidden] { display: none; }
 
 /* --- Deste --- */
 .kelime {
@@ -404,10 +408,12 @@ input, select, textarea {
 }
 .kart-bolum .etiket { color: var(--vurgu); min-width: 62px; flex: none; }
 .kart-deger { min-width: 0; }
+.kart-deger.satirli { display: flex; flex-direction: column; gap: 2px; }
 
 /* Eş anlamlı mavi, karşıt kırmızı, ilgili gri — Android'deki kartla aynı. */
 .baloncuklar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-.baloncuk { border-radius: 999px; padding: 5px 14px; line-height: 1.4; }
+.baloncuk { border-radius: 999px; padding: 4px 14px; }
+.baloncuk .ar { line-height: 1.65; }
 .baloncuk.es { background: var(--mavi); color: #10233a; }
 .baloncuk.karsit { background: var(--kirmizi); color: #3a1018; }
 .baloncuk.ilgili { background: var(--cizgi); color: var(--murekkep); }
@@ -470,4 +476,3 @@ input, select, textarea {
   text-overflow: ellipsis;
   pointer-events: none;
 }
-#cam[hidden] { display: none; }
