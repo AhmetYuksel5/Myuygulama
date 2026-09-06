@@ -13,6 +13,7 @@
 
 import { depo, kaliciIste, disaAktar, iceAktar } from "./depo.js";
 import { epubOku } from "./epub.js";
+import { pdfAc, sayfaCiz } from "./pdf.js";
 import { cevir, bilgi, kart } from "./yapayzeka.js";
 import { yeniKelime, bekleyenler, karar, bugun } from "./tekrar.js";
 
@@ -31,6 +32,7 @@ let acikKitap = null;
 
 async function git(ad) {
   acikKitap = null;
+  if (pdfTemizle) pdfTemizle();
   cubuk.querySelectorAll("button").forEach(d =>
     d.classList.toggle("secili", d.dataset.git === ad));
   cubuk.hidden = false;
@@ -52,7 +54,7 @@ async function kitaplik() {
   const yukle = yap("button", "Kitap yükle", "dolu");
   const secici = Object.assign(document.createElement("input"), {
     type: "file",
-    accept: ".epub,application/epub+zip",
+    accept: ".epub,.pdf,application/epub+zip,application/pdf",
   });
   secici.hidden = true;
   yukle.onclick = () => secici.click();
@@ -110,27 +112,53 @@ async function kitapEkle(dosya) {
   ekran.append(bekle);
   try {
     const tampon = await dosya.arrayBuffer();
-    const kitap = await epubOku(tampon);
     const id = `k${Date.now()}`;
-    await depo.dosyaYaz(id, tampon);
-    await depo.kitapYaz({
-      id,
-      ad: kitap.ad,
-      yazar: kitap.yazar,
-      bolumler: kitap.bolumler,
-      bolum: 0,
-      paragraf: 0,
-      acildi: Date.now(),
-    });
+
+    // Uzantıya değil dosyanın kendisine bakılıyor: PDF'ler "%PDF-" ile
+    // başlıyor ve uzantı yanlış olsa da doğru okuyucu seçiliyor.
+    if (pdfMi(tampon)) {
+      const belge = await pdfAc(tampon);
+      await depo.dosyaYaz(id, tampon);
+      await depo.kitapYaz({
+        id,
+        tur: "pdf",
+        ad: dosya.name.replace(/\.pdf$/i, ""),
+        yazar: "",
+        sayfaSayisi: belge.numPages,
+        sayfa: 1,
+        acildi: Date.now(),
+      });
+    } else {
+      const kitap = await epubOku(tampon);
+      await depo.dosyaYaz(id, tampon);
+      await depo.kitapYaz({
+        id,
+        tur: "epub",
+        ad: kitap.ad,
+        yazar: kitap.yazar,
+        bolumler: kitap.bolumler,
+        bolum: 0,
+        acildi: Date.now(),
+      });
+    }
     await kaliciIste();
     git("kitaplik");
   } catch (e) {
-    bekle.textContent = "Bu dosya okunamadı. EPUB olduğundan emin misin?";
+    bekle.textContent = "Bu dosya okunamadı. EPUB ya da PDF olduğundan emin misin?";
     bekle.className = "uyari";
   }
 }
 
+function pdfMi(tampon) {
+  const bas = new Uint8Array(tampon.slice(0, 5));
+  return String.fromCharCode(...bas) === "%PDF-";
+}
+
 const ilerleme = k => {
+  if (k.tur === "pdf") {
+    const toplam = k.sayfaSayisi || 0;
+    return toplam ? Math.round((k.sayfa || 1) * 100 / toplam) : 0;
+  }
   const toplam = k.bolumler?.length || 0;
   if (!toplam) return 0;
   return Math.round(((k.bolum || 0) + 1) * 100 / toplam);
@@ -147,6 +175,8 @@ async function oku(id) {
 
   cubuk.hidden = true;
   ekran.innerHTML = "";
+
+  if (kitap.tur === "pdf") return pdfOku(kitap);
 
   const bolum = kitap.bolumler[kitap.bolum] || kitap.bolumler[0];
 
@@ -187,6 +217,98 @@ async function bolumeGit(kitap, yon) {
   await depo.kitapYaz(kitap);
   oku(kitap.id);
 }
+
+/**
+ * PDF okuyucu.
+ *
+ * Sayfa sayfa gidiyoruz; kaydırmalı bir liste kurmak çok daha fazla kod
+ * ve PDF zaten sayfalara bölünmüş bir şey.
+ *
+ * Metin seçmeyi tarayıcının kendisi yapıyor: sayfanın üstünde görünmez
+ * ama gerçek bir metin katmanı duruyor. iPhone'da bu, sistemin kendi
+ * seçim tutamaklarını ve büyütecini bedavaya getiriyor.
+ */
+async function pdfOku(kitap) {
+  const dosya = await depo.dosya(kitap.id);
+  if (!dosya) {
+    ekran.append(yap("p", "Dosya bulunamadı.", "uyari"));
+    return;
+  }
+
+  const ust = yap("div", "", "okuma-cubuk");
+  const geri = yap("button", "‹ Kitaplık", "cizgili");
+  geri.onclick = () => git("kitaplik");
+  const baslik = yap("div", kitap.ad, "baslik");
+  ust.append(geri, baslik);
+  ekran.append(ust);
+
+  const kap = yap("div", "");
+  kap.id = "pdf-kap";
+  ekran.append(kap);
+
+  const alt = yap("div", "", "satir");
+  alt.style.marginTop = "16px";
+  const onceki = yap("button", "‹ Önceki", "tonlu");
+  const sonraki = yap("button", "Sonraki ›", "tonlu");
+  alt.append(onceki, sonraki);
+  ekran.append(alt);
+
+  const belge = await pdfAc(dosya.veri);
+  let sayfa = Math.min(kitap.sayfa || 1, belge.numPages);
+  let sayfaMetni = "";
+
+  const ciz = async () => {
+    kap.innerHTML = "";
+    baslik.textContent = `${kitap.ad} · ${sayfa}/${belge.numPages}`;
+    onceki.disabled = sayfa <= 1;
+    sonraki.disabled = sayfa >= belge.numPages;
+    // Genişlik ekrana göre; kenar boşluğu okuma alanının dışında kalıyor.
+    const genislik = Math.min(ekran.clientWidth, 720) - 4;
+    const sonuc = await sayfaCiz(belge, sayfa, kap, genislik);
+    sayfaMetni = sonuc.metin;
+    kitap.sayfa = sayfa;
+    await depo.kitapYaz(kitap);
+    window.scrollTo(0, 0);
+  };
+
+  onceki.onclick = async () => { sayfa--; await ciz(); };
+  sonraki.onclick = async () => { sayfa++; await ciz(); };
+  await ciz();
+
+  /*
+   * Seçim yapılınca çıkan düğme.
+   *
+   * iPhone kendi menüsünü de gösteriyor ama oraya kendi maddemizi
+   * ekleyemiyoruz; ekranın altında duran bir düğme hem görünür hem de
+   * parmağın seçtiği yeri kapatmıyor.
+   */
+  const dugme = yap("button", "Seçileni çevir", "dolu");
+  dugme.id = "secim-dugme";
+  dugme.hidden = true;
+  document.body.append(dugme);
+  pdfDugmesi = dugme;
+
+  const bak = () => {
+    const secim = (window.getSelection()?.toString() || "").trim();
+    dugme.hidden = secim.length < 1;
+  };
+  document.addEventListener("selectionchange", bak);
+  pdfTemizle = () => {
+    document.removeEventListener("selectionchange", bak);
+    dugme.remove();
+    pdfDugmesi = null;
+    pdfTemizle = null;
+  };
+
+  dugme.onclick = () => {
+    const secim = (window.getSelection()?.toString() || "").replace(/\s+/g, " ").trim();
+    if (!secim) return;
+    kutuyuAc(secim, pencere(sayfaMetni, secim));
+  };
+}
+
+let pdfDugmesi = null;
+let pdfTemizle = null;
 
 /**
  * Paragrafı kelimelere böler.
@@ -242,10 +364,13 @@ function kutuyuKapat() {
 async function kelimeyeDokun(e) {
   const oge = e.target.closest("span.k");
   if (!oge || !acikKitap) return;
-
-  const kelime = oge.textContent;
   const paragraf = oge.closest("p, h3")?.textContent || "";
-  secili = { kelime, baglam: pencere(paragraf, kelime) };
+  kutuyuAc(oge.textContent, pencere(paragraf, oge.textContent));
+}
+
+/** Seçim kutusunu açar ve çeviriyi ister. İki okuyucu da buradan geçiyor. */
+async function kutuyuAc(kelime, baglam) {
+  secili = { kelime, baglam };
 
   kutuSecim.textContent = kelime;
   kutuNot.textContent = "";

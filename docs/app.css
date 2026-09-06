@@ -206,3 +206,48 @@ input, select, textarea {
 }
 .uyari { color: #b3261e; }
 .bos { text-align: center; color: var(--sonuk); padding: 40px 10px; }
+
+/* --- PDF --- */
+#pdf-kap {
+  position: relative;
+  margin: 0 auto;
+  /* Katmanın hizası bozulmasın diye ölçüler betikten veriliyor. */
+}
+#pdf-kap canvas { display: block; border-radius: 6px; }
+
+/*
+  Görünmez metin katmanı.
+  Seçmeyi tarayıcı yapıyor; harflerin yeri sayfayla birebir örtüşsün
+  diye pdf.js'in verdiği dönüşümler olduğu gibi uygulanıyor.
+*/
+.metin-katmani {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: transparent;
+}
+.metin-katmani span, .metin-katmani br {
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  color: transparent;
+  transform-origin: 0 0;
+}
+.metin-katmani ::selection { background: rgba(79,163,247,.4); }
+.metin-katmani .endOfContent {
+  position: absolute; inset: 100% 0 0;
+  display: block;
+  user-select: none;
+}
+
+#secim-dugme {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(72px + var(--alt));
+  z-index: 30;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+}

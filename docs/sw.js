@@ -5,10 +5,13 @@
  * zaten cihazda olduğu için internetsiz okumak mümkün. OpenAI istekleri
  * doğal olarak internet istiyor, onlar buradan geçmiyor.
  */
-const SURUM = "merkez-3";
+const SURUM = "merkez-4";
 const DOSYALAR = [
   ".", "index.html", "app.css", "manifest.webmanifest",
-  "js/app.js", "js/depo.js", "js/epub.js", "js/tekrar.js", "js/yapayzeka.js",
+  "js/app.js", "js/depo.js", "js/epub.js", "js/pdf.js", "js/tekrar.js",
+  "js/yapayzeka.js",
+  // PDF motoru bir buçuk megabayt; kuruluşta değil, ilk PDF açılınca
+  // iniyor ve o zaman saklanıyor.
 ];
 
 self.addEventListener("install", olay => {
