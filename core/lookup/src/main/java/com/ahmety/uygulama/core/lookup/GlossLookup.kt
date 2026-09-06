@@ -1,4 +1,4 @@
-package com.ahmety.uygulama.feature.ebook
+package com.ahmety.uygulama.core.lookup
 
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.OpenAiClient

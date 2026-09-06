@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.OpenAiClient
-import com.ahmety.uygulama.core.designsystem.WordGloss
+import com.ahmety.uygulama.core.lookup.SelectionLookup
 import com.ahmety.uygulama.core.ai.WorkBriefStore
 import android.graphics.Bitmap
 import com.ahmety.uygulama.core.model.Entry
@@ -245,65 +245,9 @@ class BookReaderViewModel @Inject constructor(
     private val _state = MutableStateFlow(ReaderUiState())
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
 
-    private val lookup = GlossLookup(openAi, briefs)
-
-    /** Renk kutusunda gösterilen bir satırlık karşılık. */
-    private val _gloss = MutableStateFlow(WordGloss())
-    val gloss: StateFlow<WordGloss> = _gloss.asStateFlow()
-
-    fun lookUp(word: String, context: String) {
-        viewModelScope.launch {
-            lookup.into(_gloss, word, context, _state.value.book?.title.orEmpty())
-        }
-    }
-
-    fun clearGloss() {
-        _gloss.value = WordGloss()
-    }
-
-    /** "Soru sor" ile gelen cevap. */
-    private val _note = MutableStateFlow(WordGloss())
-    val note: StateFlow<WordGloss> = _note.asStateFlow()
-
-    fun ask(word: String, context: String, question: String) {
-        if (_note.value.busy) return
-        viewModelScope.launch {
-            lookup.ask(_note, word, context, question, _state.value.book?.title.orEmpty())
-        }
-    }
-
-    fun clearNote() {
-        _note.value = WordGloss()
-    }
-
-
-    /** Okurken açılan kelime kartı. */
-    private val _detail = MutableStateFlow<WordDetail?>(null)
-    val detail: StateFlow<WordDetail?> = _detail.asStateFlow()
-
-    fun openDetail(word: String, context: String) {
-        viewModelScope.launch {
-            lookup.detail(_detail, word, context, _state.value.book?.title.orEmpty())
-        }
-    }
-
-    /** Karta üç örnek daha ekler. */
-    fun moreExamples() {
-        val current = _detail.value ?: return
-        if (current.busy) return
-        viewModelScope.launch {
-            lookup.detail(
-                state = _detail,
-                word = current.word,
-                context = current.context,
-                sourceName = _state.value.book?.title.orEmpty(),
-                more = current.info,
-            )
-        }
-    }
-
-    fun closeDetail() {
-        _detail.value = null
+    /** Seçim kutusunun arkası: karşılık, soru, kart. Üç okuyucuda aynı. */
+    val words = SelectionLookup(openAi, briefs, viewModelScope) {
+        _state.value.book?.title.orEmpty()
     }
 
     private var bookId: Long = 0L

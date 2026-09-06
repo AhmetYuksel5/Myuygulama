@@ -2,12 +2,10 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
 }
 
 android {
-    namespace = "com.ahmety.uygulama.feature.reader"
+    namespace = "com.ahmety.uygulama.core.lookup"
     compileSdk = 35
 
     defaultConfig {
@@ -28,29 +26,21 @@ android {
     }
 }
 
+// Seçim kutusu ve arkasındaki yapay zekâ işleri: karşılık, kart, soru.
+// E-kitap, PDF ve Pocket üçü de buradan besleniyor; biri değişince
+// ötekiler geride kalmasın diye tek modül.
 dependencies {
-    implementation(project(":core:database"))
-    implementation(project(":core:designsystem"))
-    implementation(project(":core:lookup"))
+    // Kullanan modüller OpenAiClient ve WorkBriefStore'u kurucuya veriyor,
+    // kutuyu da designsystem'den alıyor; ikisi de api.
+    api(project(":core:ai"))
+    api(project(":core:designsystem"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
-
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-    implementation(libs.androidx.hilt.navigation.compose)
-
-    implementation(libs.okhttp)
-    implementation(libs.jsoup)
-    implementation(libs.readability4j)
-
     implementation(libs.kotlinx.coroutines.core)
-
-    testImplementation(libs.junit)
+    // OpenAiClient ve WorkBriefStore'un üstündeki @Inject işaretleri
+    // çözülsün diye; burada Hilt kurulmuyor.
+    implementation(libs.hilt.android)
 }

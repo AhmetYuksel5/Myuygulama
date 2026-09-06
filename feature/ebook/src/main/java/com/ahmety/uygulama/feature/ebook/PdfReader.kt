@@ -3,7 +3,7 @@ package com.ahmety.uygulama.feature.ebook
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import com.ahmety.uygulama.core.designsystem.PendingHighlight
-import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
+import com.ahmety.uygulama.core.lookup.SelectionDialogs
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
@@ -93,7 +93,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.ahmety.uygulama.core.ai.OpenAiClient
 import com.ahmety.uygulama.core.ai.WorkBriefStore
-import com.ahmety.uygulama.core.designsystem.WordGloss
+import com.ahmety.uygulama.core.lookup.SelectionLookup
 import javax.inject.Inject
 
 data class PdfUiState(
@@ -128,63 +128,8 @@ class PdfReaderViewModel @Inject constructor(
     private val _state = MutableStateFlow(PdfUiState())
     val state: StateFlow<PdfUiState> = _state.asStateFlow()
 
-    private val lookup = GlossLookup(openAi, briefs)
-
-    /** Renk kutusunda gösterilen bir satırlık karşılık. */
-    private val _gloss = MutableStateFlow(WordGloss())
-    val gloss: StateFlow<WordGloss> = _gloss.asStateFlow()
-
-    /** Kutu açılınca kelimenin karşılığını sorar. */
-    fun lookUp(word: String, context: String) {
-        viewModelScope.launch {
-            lookup.into(_gloss, word, context, _state.value.title)
-        }
-    }
-
-    fun clearGloss() {
-        _gloss.value = WordGloss()
-    }
-
-    /** "Soru sor" ile gelen cevap. */
-    private val _note = MutableStateFlow(WordGloss())
-    val note: StateFlow<WordGloss> = _note.asStateFlow()
-
-    fun ask(word: String, context: String, question: String) {
-        if (_note.value.busy) return
-        viewModelScope.launch { lookup.ask(_note, word, context, question, _state.value.title) }
-    }
-
-    fun clearNote() {
-        _note.value = WordGloss()
-    }
-
-
-    /** Okurken açılan kelime kartı. */
-    private val _detail = MutableStateFlow<WordDetail?>(null)
-    val detail: StateFlow<WordDetail?> = _detail.asStateFlow()
-
-    fun openDetail(word: String, context: String) {
-        viewModelScope.launch { lookup.detail(_detail, word, context, _state.value.title) }
-    }
-
-    /** Karta üç örnek daha ekler. */
-    fun moreExamples() {
-        val current = _detail.value ?: return
-        if (current.busy) return
-        viewModelScope.launch {
-            lookup.detail(
-                state = _detail,
-                word = current.word,
-                context = current.context,
-                sourceName = _state.value.title,
-                more = current.info,
-            )
-        }
-    }
-
-    fun closeDetail() {
-        _detail.value = null
-    }
+    /** Seçim kutusunun arkası: karşılık, soru, kart. Üç okuyucuda aynı. */
+    val words = SelectionLookup(openAi, briefs, viewModelScope) { _state.value.title }
 
     private var pages: PdfPages? = null
     private var bookId: Long = 0L
@@ -341,9 +286,6 @@ fun PdfReaderRoute(
     viewModel: PdfReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val gloss by viewModel.gloss.collectAsStateWithLifecycle()
-    val detail by viewModel.detail.collectAsStateWithLifecycle()
-    val note by viewModel.note.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val prefs = remember { ReaderPrefs(context) }
@@ -690,50 +632,27 @@ fun PdfReaderRoute(
         }
     }
 
-    picking?.let { pick ->
-        // Kutu açılır açılmaz karşılık soruluyor: karar buna bakılarak
-        // veriliyor, sonradan açılan bir ekrana bakmaya kimse dönmüyor.
-        LaunchedEffect(pick) { viewModel.lookUp(pick.word.text, pick.word.context) }
-
-        // Kitaptaki renk kutusunun aynısı: aynı kalemler, aynı anlamlar.
-        ColorPickerDialog(
-            request = PendingHighlight(pick.word.text, pick.word.context),
-            current = pick.current,
-            gloss = gloss,
-            onDetail = { viewModel.openDetail(pick.word.text, pick.word.context) },
-            onAsk = { soru -> viewModel.ask(pick.word.text, pick.word.context, soru) },
-            answer = note,
-            onDismiss = {
-                picking = null
-                viewModel.clearGloss()
-                viewModel.clearNote()
-            },
-            onPick = { color, keepContext ->
+    // Kitaptaki kutunun aynısı, aynı modülden: kalemler, karşılık, soru, kart.
+    SelectionDialogs(
+        request = picking?.let { PendingHighlight(it.word.text, it.word.context) },
+        current = picking?.current,
+        lookup = viewModel.words,
+        onPick = { color, keepContext ->
+            picking?.let { pick ->
                 viewModel.mark(
                     word = if (keepContext) pick.word else pick.word.copy(context = ""),
                     page = pick.page,
                     color = color,
                 )
-                picking = null
-                viewModel.clearGloss()
-                viewModel.clearNote()
-            },
-            onRemove = {
-                viewModel.removeMark(pick.word.text)
-                picking = null
-                viewModel.clearGloss()
-                viewModel.clearNote()
-            },
-        )
-    }
-
-    detail?.let { card ->
-        WordDetailDialog(
-            detail = card,
-            onMoreExamples = viewModel::moreExamples,
-            onDismiss = viewModel::closeDetail,
-        )
-    }
+            }
+            picking = null
+        },
+        onRemove = {
+            picking?.let { viewModel.removeMark(it.word.text) }
+            picking = null
+        },
+        onDismiss = { picking = null },
+    )
 
     notice?.let { message ->
         AlertDialog(

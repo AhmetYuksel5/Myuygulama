@@ -79,7 +79,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
+import com.ahmety.uygulama.core.lookup.SelectionDialogs
 import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
 import com.ahmety.uygulama.core.designsystem.MerkezEmptyState
 import com.ahmety.uygulama.core.designsystem.ReaderDisplayDialog
@@ -597,9 +597,6 @@ fun BookReaderRoute(
     viewModel: BookReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val gloss by viewModel.gloss.collectAsStateWithLifecycle()
-    val detail by viewModel.detail.collectAsStateWithLifecycle()
-    val note by viewModel.note.collectAsStateWithLifecycle()
     LaunchedEffect(bookId) { viewModel.load(bookId) }
 
     val context = LocalContext.current
@@ -799,49 +796,27 @@ fun BookReaderRoute(
         }
     }
 
-    pending?.let { request ->
-        // Kutu açılır açılmaz karşılık soruluyor: kelimeyi işaretleyip
-        // işaretlememe kararı buna bakılarak veriliyor.
-        LaunchedEffect(request) { viewModel.lookUp(request.word, request.sentence) }
-
-        ColorPickerDialog(
-            request = request,
-            current = state.highlightColors[request.word.lowercase()],
-            gloss = gloss,
-            onDetail = { viewModel.openDetail(request.word, request.sentence) },
-            onAsk = { soru -> viewModel.ask(request.word, request.sentence, soru) },
-            answer = note,
-            onDismiss = {
-                pending = null
-                viewModel.clearGloss()
-                viewModel.clearNote()
-            },
-            onPick = { color, keepContext ->
+    // Kutu, karşılık, soru ve kart ortak modülden; PDF ve Pocket'ta da aynısı.
+    SelectionDialogs(
+        request = pending,
+        current = pending?.let { state.highlightColors[it.word.lowercase()] },
+        lookup = viewModel.words,
+        onPick = { color, keepContext ->
+            pending?.let { request ->
                 viewModel.highlight(
                     word = request.word,
                     contextSentence = if (keepContext) request.sentence else "",
                     color = color,
                 )
-                pending = null
-                viewModel.clearGloss()
-                viewModel.clearNote()
-            },
-            onRemove = {
-                viewModel.removeHighlight(request.word)
-                pending = null
-                viewModel.clearGloss()
-                viewModel.clearNote()
-            },
-        )
-    }
-
-    detail?.let { card ->
-        WordDetailDialog(
-            detail = card,
-            onMoreExamples = viewModel::moreExamples,
-            onDismiss = viewModel::closeDetail,
-        )
-    }
+            }
+            pending = null
+        },
+        onRemove = {
+            pending?.let { viewModel.removeHighlight(it.word) }
+            pending = null
+        },
+        onDismiss = { pending = null },
+    )
 }
 
 /**

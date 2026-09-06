@@ -1,4 +1,4 @@
-package com.ahmety.uygulama.feature.ebook
+package com.ahmety.uygulama.core.lookup
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement

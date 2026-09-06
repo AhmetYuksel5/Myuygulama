@@ -41,7 +41,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import android.graphics.BitmapFactory
 import com.ahmety.uygulama.core.database.repository.EntryRepository
-import com.ahmety.uygulama.core.designsystem.ColorPickerDialog
+import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.ai.WorkBriefStore
+import com.ahmety.uygulama.core.lookup.SelectionDialogs
+import com.ahmety.uygulama.core.lookup.SelectionLookup
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
 import com.ahmety.uygulama.core.designsystem.HighlightableParagraph
 import com.ahmety.uygulama.core.designsystem.PendingHighlight
@@ -169,10 +172,19 @@ fun SaveArticleDialog(
 class ArticleViewModel @Inject constructor(
     private val entryRepository: EntryRepository,
     private val readerRepository: ReaderRepository,
+    openAi: OpenAiClient,
+    briefs: WorkBriefStore,
 ) : ViewModel() {
 
     private val _entry = MutableStateFlow<Entry?>(null)
     val entry: StateFlow<Entry?> = _entry.asStateFlow()
+
+    /**
+     * Seçim kutusunun arkası: karşılık, soru, kart. E-kitapla aynı
+     * modülden — Pocket bir süre kalemlerden ibaret bir kutuyla kaldı,
+     * çünkü kutu her okuyucuda ayrı kurulmuştu.
+     */
+    val words = SelectionLookup(openAi, briefs, viewModelScope) { _entry.value?.title.orEmpty() }
 
     /** Bu sayfada işaretli kelime/öbek (küçük harf) -> renk. */
     private val _colors = MutableStateFlow<Map<String, HighlightColor>>(emptyMap())
@@ -393,23 +405,24 @@ fun ArticleRoute(
         )
     }
 
-    pending?.let { request ->
-        ColorPickerDialog(
-            request = request,
-            current = colors[request.word.lowercase()],
-            onDismiss = { pending = null },
-            onPick = { color, keepContext ->
+    SelectionDialogs(
+        request = pending,
+        current = pending?.let { colors[it.word.lowercase()] },
+        lookup = viewModel.words,
+        onPick = { color, keepContext ->
+            pending?.let { request ->
                 viewModel.highlight(
                     word = request.word,
                     contextSentence = if (keepContext) request.sentence else "",
                     color = color,
                 )
-                pending = null
-            },
-            onRemove = {
-                viewModel.removeHighlight(request.word)
-                pending = null
-            },
-        )
-    }
+            }
+            pending = null
+        },
+        onRemove = {
+            pending?.let { viewModel.removeHighlight(it.word) }
+            pending = null
+        },
+        onDismiss = { pending = null },
+    )
 }
