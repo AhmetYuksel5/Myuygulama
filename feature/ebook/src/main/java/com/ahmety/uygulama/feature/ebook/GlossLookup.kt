@@ -58,6 +58,29 @@ class GlossLookup(
     }
 
     /**
+     * Kısa bilgi notu.
+     *
+     * Karşılıkla aynı kutuda ama ayrı bir istek: her seçimde peşinen
+     * getirmek hem bekletir hem para yakar, oysa çoğu seçimde yalnız
+     * karşılık isteniyor. Bu yüzden düğmeye basılınca çalışıyor.
+     */
+    suspend fun explain(
+        state: MutableStateFlow<WordGloss>,
+        word: String,
+        context: String,
+        sourceName: String = "",
+    ) {
+        val trimmed = word.trim()
+        if (trimmed.isEmpty()) return
+        state.value = WordGloss(busy = true)
+        val brief = briefs.get(sourceName).orEmpty()
+        when (val result = openAi.explain(trimmed, context, sourceName, brief)) {
+            is AiResult.Ok -> state.value = WordGloss(text = result.value)
+            is AiResult.Failed -> state.value = WordGloss(error = result.reason)
+        }
+    }
+
+    /**
      * Kelimenin kartı: karşılık, tanım, örnekler, kök, aile.
      *
      * [more] verilirse eldeki karta yeni örnekler ekleniyor — aynı sorgu

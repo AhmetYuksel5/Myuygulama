@@ -599,6 +599,7 @@ fun BookReaderRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val gloss by viewModel.gloss.collectAsStateWithLifecycle()
     val detail by viewModel.detail.collectAsStateWithLifecycle()
+    val note by viewModel.note.collectAsStateWithLifecycle()
     LaunchedEffect(bookId) { viewModel.load(bookId) }
 
     val context = LocalContext.current
@@ -799,9 +800,12 @@ fun BookReaderRoute(
             current = state.highlightColors[request.word.lowercase()],
             gloss = gloss,
             onDetail = { viewModel.openDetail(request.word, request.sentence) },
+            onExplain = { viewModel.explain(request.word, request.sentence) },
+            note = note,
             onDismiss = {
                 pending = null
                 viewModel.clearGloss()
+                viewModel.clearNote()
             },
             onPick = { color, keepContext ->
                 viewModel.highlight(
@@ -811,11 +815,13 @@ fun BookReaderRoute(
                 )
                 pending = null
                 viewModel.clearGloss()
+                viewModel.clearNote()
             },
             onRemove = {
                 viewModel.removeHighlight(request.word)
                 pending = null
                 viewModel.clearGloss()
+                viewModel.clearNote()
             },
         )
     }

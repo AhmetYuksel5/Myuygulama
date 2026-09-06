@@ -257,6 +257,100 @@ class OpenAiClient @Inject constructor(
     }
 
     /**
+     * Seçilen şey hakkında kısa bir bilgi notu.
+     *
+     * Çeviriden ayrı bir iş: çeviri "bu ne diyor" sorusuna cevap veriyor,
+     * bu "bu nedir" sorusuna. Bir terim, bir kavram, bir kişi, bir yer ya
+     * da bir gönderme olabilir; okurken merak edilen şey çoğu zaman
+     * karşılığı değil ne olduğu.
+     *
+     * [describeWord] ile de aynı değil: o bir kelime kartı üretiyor
+     * (örnekler, kök, eş anlamlılar). Buradaki tek parça düz yazı.
+     */
+    suspend fun explain(
+        word: String,
+        context: String = "",
+        sourceName: String = "",
+        brief: String = "",
+    ): AiResult<String> {
+        val key = settings.apiKey
+        if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
+        if (word.isBlank()) return AiResult.Failed("Seçim boş.")
+
+        val instruction = buildString {
+            append("Explain the given English word, phrase or sentence to a ")
+            append("Turkish reader who met it in a book. Answer IN TURKISH, in ")
+            append("50 to 100 words, as one or two plain paragraphs. ")
+            append("Say what it means and then the thing worth knowing about ")
+            append("it: where a term comes from, what a concept is for, who a ")
+            append("person was, what a reference points to, why a phrase is ")
+            append("said that way. ")
+            append("Use the passage only to pick the right reading; do not ")
+            append("retell the passage and do not comment on the book. ")
+            append("Do not merely give the Turkish translation — the reader ")
+            append("already has it. ")
+            append("Write for an adult who reads English at an intermediate ")
+            append("level: no padding and no opening formula — start with the ")
+            append("substance, not with a phrase like \"this word means\". ")
+            append("If the text is ordinary and there is nothing behind it, say ")
+            append("so in one sentence instead of inventing something. ")
+            append("No markdown, no lists, no headings.")
+        }
+
+        val userText = buildString {
+            append("Input: ").append(word)
+            if (context.isNotBlank()) append("\nIt appeared here: ").append(context)
+            if (sourceName.isNotBlank()) append("\nFrom: ").append(sourceName)
+            if (brief.isNotBlank()) {
+                append("\nBackground on that work, for YOUR disambiguation only — ")
+                append("never write about it: ").append(brief)
+            }
+        }
+
+        val payload = JSONObject().apply {
+            put("model", settings.model)
+            put("temperature", 0.3)
+            put("max_tokens", 500)
+            put(
+                "messages",
+                JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", instruction))
+                    .put(JSONObject().put("role", "user").put("content", userText)),
+            )
+        }
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder()
+                    .url(ENDPOINT)
+                    .addHeader("Authorization", "Bearer $key")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA))
+                    .build()
+
+                http.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        return@use AiResult.Failed(readableError(response.code, body))
+                    }
+                    val content = JSONObject(body)
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content")
+                        .trim()
+                    if (content.isBlank()) {
+                        AiResult.Failed("Bilgi gelmedi.")
+                    } else {
+                        AiResult.Ok(content)
+                    }
+                }
+            }.getOrElse { error ->
+                AiResult.Failed("Bağlantı kurulamadı: ${error.message ?: "bilinmeyen hata"}")
+            }
+        }
+    }
+
+    /**
      * Kart hakkında serbest soru.
      *
      * Hazır açıklama her zaman yetmiyor: "peki neden böyle deniyor",

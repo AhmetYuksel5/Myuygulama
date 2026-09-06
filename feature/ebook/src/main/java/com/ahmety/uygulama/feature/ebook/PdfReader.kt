@@ -145,6 +145,20 @@ class PdfReaderViewModel @Inject constructor(
         _gloss.value = WordGloss()
     }
 
+    /** "Bilgi al" ile gelen kısa not. */
+    private val _note = MutableStateFlow(WordGloss())
+    val note: StateFlow<WordGloss> = _note.asStateFlow()
+
+    fun explain(word: String, context: String) {
+        if (_note.value.busy) return
+        viewModelScope.launch { lookup.explain(_note, word, context, _state.value.title) }
+    }
+
+    fun clearNote() {
+        _note.value = WordGloss()
+    }
+
+
     /** Okurken açılan kelime kartı. */
     private val _detail = MutableStateFlow<WordDetail?>(null)
     val detail: StateFlow<WordDetail?> = _detail.asStateFlow()
@@ -329,6 +343,7 @@ fun PdfReaderRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val gloss by viewModel.gloss.collectAsStateWithLifecycle()
     val detail by viewModel.detail.collectAsStateWithLifecycle()
+    val note by viewModel.note.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val prefs = remember { ReaderPrefs(context) }
@@ -686,9 +701,12 @@ fun PdfReaderRoute(
             current = pick.current,
             gloss = gloss,
             onDetail = { viewModel.openDetail(pick.word.text, pick.word.context) },
+            onExplain = { viewModel.explain(pick.word.text, pick.word.context) },
+            note = note,
             onDismiss = {
                 picking = null
                 viewModel.clearGloss()
+                viewModel.clearNote()
             },
             onPick = { color, keepContext ->
                 viewModel.mark(
@@ -698,11 +716,13 @@ fun PdfReaderRoute(
                 )
                 picking = null
                 viewModel.clearGloss()
+                viewModel.clearNote()
             },
             onRemove = {
                 viewModel.removeMark(pick.word.text)
                 picking = null
                 viewModel.clearGloss()
+                viewModel.clearNote()
             },
         )
     }

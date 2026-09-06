@@ -393,6 +393,10 @@ fun ColorPickerDialog(
     gloss: WordGloss? = null,
     /** Kelime kartının tamamını açar; verilmezse düğme çıkmıyor. */
     onDetail: (() -> Unit)? = null,
+    /** Kısa bilgi notunu getirir; verilmezse düğme çıkmıyor. */
+    onExplain: (() -> Unit)? = null,
+    /** Gelen bilgi notu. */
+    note: WordGloss? = null,
 ) {
     var keepContext by remember { mutableStateOf(true) }
 
@@ -462,14 +466,47 @@ fun ColorPickerDialog(
                     }
                 }
 
-                // Kısa karşılık her zaman yetmiyor: kök, örnekler, eş ve
-                // karşıt anlamlılar okurken de gerekebiliyor. Kartın
-                // tamamı bir dokunuş uzakta dursun.
-                if (onDetail != null) {
-                    TextButton(
-                        onClick = onDetail,
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                    ) { Text("Ayrıntı") }
+                // Karşılık "bu ne diyor" sorusuna cevap veriyor; okurken
+                // sorulan öteki soru "bu nedir". İkisi ayrı düğme: bilgi
+                // notu her seçimde istenmiyor ve her seferinde peşinen
+                // getirmek hem bekletir hem para yakar.
+                if (onDetail != null || onExplain != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (onExplain != null) {
+                            TextButton(
+                                onClick = onExplain,
+                                enabled = note?.busy != true,
+                                contentPadding = PaddingValues(
+                                    horizontal = 4.dp,
+                                    vertical = 0.dp,
+                                ),
+                            ) { Text(if (note?.busy == true) "Bakılıyor…" else "Bilgi al") }
+                        }
+                        if (onDetail != null) {
+                            TextButton(
+                                onClick = onDetail,
+                                contentPadding = PaddingValues(
+                                    horizontal = 4.dp,
+                                    vertical = 0.dp,
+                                ),
+                            ) { Text("Ayrıntı") }
+                        }
+                    }
+                }
+
+                note?.let { info ->
+                    when {
+                        info.text.isNotBlank() -> Text(
+                            text = info.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+
+                        info.error.isNotBlank() -> Text(
+                            text = info.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
 
                 if (request.sentence.isNotBlank()) {

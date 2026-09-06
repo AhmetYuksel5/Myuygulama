@@ -261,6 +261,20 @@ class BookReaderViewModel @Inject constructor(
         _gloss.value = WordGloss()
     }
 
+    /** "Bilgi al" ile gelen kısa not. */
+    private val _note = MutableStateFlow(WordGloss())
+    val note: StateFlow<WordGloss> = _note.asStateFlow()
+
+    fun explain(word: String, context: String) {
+        if (_note.value.busy) return
+        viewModelScope.launch { lookup.explain(_note, word, context, _state.value.book?.title.orEmpty()) }
+    }
+
+    fun clearNote() {
+        _note.value = WordGloss()
+    }
+
+
     /** Okurken açılan kelime kartı. */
     private val _detail = MutableStateFlow<WordDetail?>(null)
     val detail: StateFlow<WordDetail?> = _detail.asStateFlow()
