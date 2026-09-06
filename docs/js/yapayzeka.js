@@ -27,7 +27,7 @@ const DIL_KURALI = [
   "Arabic word is never explained with English words.",
 ].join(" ");
 
-async function sor(ayarlar, yonerge, istek, sinir) {
+async function iste(ayarlar, yonerge, istek, sinir) {
   if (!ayarlar.anahtar) return { hata: "OpenAI anahtarı girilmemiş." };
   const govde = {
     model: ayarlar.model,
@@ -89,29 +89,76 @@ export function cevir(ayarlar, secim, baglam, eser) {
     "the original text itself.",
   ].join(" ");
 
-  return sor(ayarlar, yonerge, istekMetni(secim, baglam, eser), 700);
+  return iste(ayarlar, yonerge, istekMetni(secim, baglam, eser), 700);
 }
 
-/** "Bu nedir" sorusunun cevabı; elli-yüz kelime. */
-export function bilgi(ayarlar, secim, baglam, eser) {
+/**
+ * Okuyucunun seçim hakkındaki kendi sorusu.
+ *
+ * "Bilgi al" düğmesinin yerine geldi: hazır bir "bu nedir" yazısı çoğu
+ * zaman sorulmayan bir soruya cevap veriyordu. Android'deki karttaki
+ * soru kutusunun aynısı.
+ */
+export function soru(ayarlar, secim, baglam, eser, soruMetni, kart) {
   const yonerge = [
-    "Explain the given word, phrase or sentence to a Turkish reader who met",
-    "it in a book. Answer IN TURKISH, in 50 to 100 words, as one or two",
-    "plain paragraphs.",
+    "You are a bilingual teacher. The reader is studying a word or sentence",
+    "from a book and has a follow-up question about it. Answer IN TURKISH,",
+    "directly, at most 120 words, for an adult learner.",
     DIL_KURALI,
-    "Say what it means and then the thing worth knowing about it: where a",
-    "term comes from, what a concept is for, who a person was, what a",
-    "reference points to, why a phrase is said that way.",
-    "Use the passage only to pick the right reading; do not retell the",
-    "passage and do not comment on the book.",
-    "Do not merely give the Turkish translation — the reader already has it.",
-    "Start with the substance, not with an opening formula.",
-    "If the text is ordinary and there is nothing behind it, say so in one",
-    "sentence instead of inventing something.",
-    "No markdown, no lists, no headings.",
+    "If the answer involves a figurative sense, give the literal meaning and",
+    "how the sense travelled from it, in ordinary Turkish, without jargon.",
+    "Never explain that a swear word is rude; the reader knows.",
+    "Use the passage and the book only to pick the right reading — do not",
+    "talk about the book.",
+    "If what the card already says agrees with your answer, do not repeat",
+    "it — add what it does not cover. If it CONTRADICTS the card, say so in",
+    "the first sentence and explain which reading is right.",
+    "Do not simply accept the way the question is framed: if its premise is",
+    "wrong, say that first.",
+    "No markdown, no lists, no preamble.",
   ].join(" ");
 
-  return sor(ayarlar, yonerge, istekMetni(secim, baglam, eser), 500);
+  let metin = istekMetni(secim, baglam, eser);
+  if (kart) metin += `\nWhat the card already says: ${JSON.stringify(kart)}`;
+  metin += `\nQuestion: ${soruMetni}`;
+  return iste(ayarlar, yonerge, metin, 500);
+}
+
+/**
+ * Cümle ya da öbek: tam çeviri ve altında zor olabilecek ifadeler.
+ *
+ * Tek kelimede karşılık yetiyor; cümlede çeviri okunduktan sonra "şu
+ * ifade neydi" sorusu kalıyordu. Notlar o soruya peşinen cevap: yaygın
+ * iki bin kelimenin dışındaki kelimeler, deyimler, Arapçada fiilin
+ * babı. Zor bir şey yoksa liste boş — zorlama not istenmiyor.
+ */
+export async function cumle(ayarlar, secim, baglam, eser) {
+  const yonerge = [
+    "You are a literary translator working into Turkish for a reader who is",
+    "in the middle of a book.",
+    DIL_KURALI,
+    "Return JSON with exactly two keys.",
+    '"ceviri": the COMPLETE Turkish translation of the Input — every clause,',
+    "nothing summarised, nothing left out; natural, idiomatic Turkish, the",
+    "register of the original kept; an idiom becomes the Turkish idiom.",
+    "Translate ONLY the Input; the passage is there for choosing senses.",
+    '"zorlar": an array of the expressions IN THE INPUT a Turkish learner',
+    "may not know, each {\"ifade\": the expression exactly as it appears,",
+    '"anlam": its meaning here IN TURKISH, a few words}.',
+    "Include: words outside the 2000 most common words of the language;",
+    "idioms and phrasal verbs whose meaning is not the sum of their parts;",
+    "for an Arabic verb, add its verb form (bāb) in parentheses after the",
+    'meaning, e.g. "(bâb-ı tef\'îl)". Do NOT include ordinary words the',
+    "reader surely knows. If nothing in the Input is hard, return an empty",
+    "array — that is the normal case, not a failure. At most six items.",
+    "Plain text inside the values; no markdown.",
+  ].join(" ");
+
+  const sonuc = await iste(ayarlar, yonerge, istekMetni(secim, baglam, eser), 900);
+  if (sonuc.hata) return sonuc;
+  const veri = jsonCoz(sonuc.metin);
+  if (!veri || typeof veri.ceviri !== "string") return { hata: "Çeviri okunamadı." };
+  return { ceviri: veri.ceviri.trim(), zorlar: Array.isArray(veri.zorlar) ? veri.zorlar : [] };
 }
 
 /**
@@ -151,14 +198,18 @@ export async function kart(ayarlar, secim, baglam, eser) {
     "items. Plain text inside the values; no markdown.",
   ].join(" ");
 
-  const sonuc = await sor(ayarlar, yonerge, istekMetni(secim, baglam, eser), 900);
+  const sonuc = await iste(ayarlar, yonerge, istekMetni(secim, baglam, eser), 900);
   if (sonuc.hata) return sonuc;
+  const veri = jsonCoz(sonuc.metin);
+  return veri ? { kart: veri } : { hata: "Kart okunamadı." };
+}
+
+/** Model bazen JSON'u kod çitiyle sarıyor; çiti soyup ayrıştırır. */
+function jsonCoz(metin) {
   try {
-    // Model bazen JSON'u kod çitiyle sarıyor.
-    const temiz = sonuc.metin.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-    return { kart: JSON.parse(temiz) };
+    return JSON.parse(metin.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
   } catch {
-    return { hata: "Kart okunamadı." };
+    return null;
   }
 }
 

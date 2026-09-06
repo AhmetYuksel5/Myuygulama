@@ -14,7 +14,7 @@
 import { depo, kaliciIste, disaAktar, iceAktar } from "./depo.js";
 import { epubOku, zipAc } from "./epub.js";
 import { pdfAc, sayfaCiz } from "./pdf.js";
-import { cevir, bilgi, kart } from "./yapayzeka.js";
+import { cevir, cumle, kart, soru } from "./yapayzeka.js";
 import { yeniKelime, bekleyenler, karar, bugun } from "./tekrar.js";
 
 const ekran = document.getElementById("ekran");
@@ -26,28 +26,35 @@ let ayarlar = { anahtar: "", model: "gpt-4o-mini" };
 /**
  * Okuma tercihleri.
  *
- * Zemin renkleri Android'dekilerin aynısı. Gece zemininin metni bilerek
- * arayüzünkinden sönük: siyah üstüne beyaz uzun okumada yoruyor.
+ * Üç zemin: açık, orta, koyu. Koyu zeminin metni bilerek arayüzünkinden
+ * sönük: siyah üstüne beyaz uzun okumada yoruyor. Orta, ikisinin
+ * arasında gri — gece odada açık zemin göz alıyor, koyu zemin bazı
+ * gözlere fazla sert geliyor.
  */
 const ZEMINLER = {
-  kagit: { ad: "Kâğıt", zemin: "#faf7f0", yazi: "#22201c" },
-  krem: { ad: "Krem", zemin: "#f3eada", yazi: "#2b2620" },
-  gece: { ad: "Gece", zemin: "#14161a", yazi: "#c6c2bb" },
-  murekkep: { ad: "Mürekkep", zemin: "#000000", yazi: "#b9b5ae" },
+  kagit: { ad: "Açık", zemin: "#faf7f0", yazi: "#22201c", cizgi: "#ddd5c7" },
+  orta: { ad: "Orta", zemin: "#3a3d43", yazi: "#d9d5cd", cizgi: "#565a62" },
+  gece: { ad: "Koyu", zemin: "#0f1013", yazi: "#bfbbb3", cizgi: "#2a2c31" },
 };
 
-let okumaTercihi = { punto: 19, zemin: "kagit", kenar: 16 };
+let okumaTercihi = { punto: 19, zemin: "kagit", kenar: 16, satir: 1.7 };
 
 function tercihleriUygula() {
   const z = ZEMINLER[okumaTercihi.zemin] || ZEMINLER.kagit;
   const govde = document.getElementById("okuma");
-  if (!govde) return;
-  govde.style.fontSize = `${okumaTercihi.punto}px`;
-  govde.style.padding = `0 ${okumaTercihi.kenar}px`;
+  if (govde) {
+    govde.style.fontSize = `${okumaTercihi.punto}px`;
+    govde.style.lineHeight = String(okumaTercihi.satir);
+    govde.style.padding = `0 ${okumaTercihi.kenar}px`;
+  }
   // Okuma zemini sayfanın tamamını kaplıyor: metnin çevresinde başka
-  // renkte bir şerit kalması okumayı bozuyor.
+  // renkte bir şerit kalması okumayı bozuyor. Alt çubuk ve görünüm
+  // kutusu da aynı zemini değişkenlerden alıyor.
   document.body.style.background = z.zemin;
   document.body.style.color = z.yazi;
+  document.body.style.setProperty("--okuma-zemin", z.zemin);
+  document.body.style.setProperty("--okuma-yazi", z.yazi);
+  document.body.style.setProperty("--okuma-cizgi", z.cizgi);
 }
 
 function tercihleriBirak() {
@@ -414,14 +421,7 @@ async function oku(id) {
 
   const bolum = kitap.bolumler[kitap.bolum] || kitap.bolumler[0];
 
-  const ust = yap("div", "", "okuma-cubuk");
-  const geri = yap("button", "‹", "cizgili");
-  geri.onclick = () => git("kitaplik");
-  const gorunum = yap("button", "Aa", "cizgili");
-  gorunum.onclick = gorunumKutusu;
-  ust.append(geri, yap("div",
-    `${kitap.ad} · ${(kitap.bolum || 0) + 1}/${kitap.bolumler.length}`, "baslik"), gorunum);
-  ekran.append(ust);
+  okumaKabugu(`${(kitap.bolum || 0) + 1}/${kitap.bolumler.length}`);
 
   const govde = yap("div", "");
   govde.id = "okuma";
@@ -493,11 +493,60 @@ async function oku(id) {
   okumaTemizle = () => {
     window.removeEventListener("scroll", konumuYaz);
     clearTimeout(bekleyen);
+    kabuguKaldir();
     okumaTemizle = null;
   };
 }
 
 let okumaTemizle = null;
+
+// --- Okuma kabuğu: alt çubuk ve görünüm kutusu -------------------------
+
+let okumaAlt = null;
+
+/**
+ * Okurken ekranda çubuk yok; boş bir yere dokununca alttan çıkıyor,
+ * bir daha dokununca gidiyor. Soldan sağa: kitaplığa dön, kelime
+ * listesi, görünüm ayarları. Kelimeye dokunmak yine kutuyu açıyor,
+ * çubuğu değil.
+ */
+function okumaKabugu(bilgi) {
+  kabuguKaldir();
+  okumaAlt = yap("div", "");
+  okumaAlt.id = "okuma-alt";
+  okumaAlt.hidden = true;
+
+  const geri = yap("button", "‹ Kitaplık");
+  geri.onclick = () => git("kitaplik");
+  const liste = yap("button", "Kelimeler");
+  liste.onclick = () => git("deste");
+  const ayar = yap("button", "⚙");
+  ayar.setAttribute("aria-label", "Görünüm");
+  ayar.onclick = gorunumKutusu;
+  const yazi = yap("span", bilgi || "", "bilgi");
+  okumaAlt.append(geri, liste, yazi, ayar);
+  document.body.append(okumaAlt);
+
+  ekran.addEventListener("click", kabugaDokunma);
+  return yazi;
+}
+
+function kabugaDokunma(e) {
+  // Kelime, düğme, görsel: hepsinin kendi işi var. Seçim bitince gelen
+  // tıklama da sayılmıyor.
+  if (e.target.closest("span.k, mark, button, a, input, select, img")) return;
+  if (Date.now() - secimBitti < 500) return;
+  if (!okumaAlt) return;
+  okumaAlt.hidden = !okumaAlt.hidden;
+  if (okumaAlt.hidden) document.getElementById("gorunum-kutusu")?.remove();
+}
+
+function kabuguKaldir() {
+  ekran.removeEventListener("click", kabugaDokunma);
+  document.getElementById("gorunum-kutusu")?.remove();
+  okumaAlt?.remove();
+  okumaAlt = null;
+}
 
 /** Rafta kitabın kendi kapağı. */
 async function kapagiKoy(kitap, sirt) {
@@ -688,6 +737,13 @@ const turBul = yol => {
 };
 
 /** Görünüm kutusu: punto, zemin, kenar boşluğu. */
+/**
+ * Görünüm kutusu: alt çubuğun üstünde açılıyor.
+ *
+ * Punto, satır aralığı, kenar, zemin — ve en altta AI anahtarı. Anahtar
+ * için Ayarlar sekmesine gitmek okumayı bölüyordu; burada bir satır,
+ * dokununca açılıyor.
+ */
 function gorunumKutusu() {
   const eski = document.getElementById("gorunum-kutusu");
   if (eski) return eski.remove();
@@ -695,21 +751,28 @@ function gorunumKutusu() {
   const kutu = yap("div", "");
   kutu.id = "gorunum-kutusu";
 
-  const kademe = (ad, deger, eksi, arti) => {
+  const yaz = async () => {
+    tercihleriUygula();
+    await depo.ayarYaz("okuma", JSON.stringify(okumaTercihi));
+  };
+
+  const kademe = (ad, alan, adim, enAz, enCok, goster = v => String(v)) => {
     const satir = yap("div", "", "olcu");
     satir.append(yap("span", ad));
     const az = yap("button", "−", "cizgili");
     const cok = yap("button", "+", "cizgili");
-    const sayi = yap("b", String(deger));
-    az.onclick = () => { eksi(); sayi.textContent = okumaTercihi[ad === "Punto" ? "punto" : "kenar"]; };
-    cok.onclick = () => { arti(); sayi.textContent = okumaTercihi[ad === "Punto" ? "punto" : "kenar"]; };
+    const sayi = yap("b", goster(okumaTercihi[alan]));
+    const kur = fark => {
+      // Ondalık adımda kayan nokta artığı birikmesin.
+      const yeni = Math.round((okumaTercihi[alan] + fark) * 100) / 100;
+      okumaTercihi[alan] = Math.max(enAz, Math.min(enCok, yeni));
+      sayi.textContent = goster(okumaTercihi[alan]);
+      yaz();
+    };
+    az.onclick = () => kur(-adim);
+    cok.onclick = () => kur(adim);
     satir.append(az, sayi, cok);
     return satir;
-  };
-
-  const yaz = async () => {
-    tercihleriUygula();
-    await depo.ayarYaz("okuma", JSON.stringify(okumaTercihi));
   };
 
   const zeminler = yap("div", "", "satir");
@@ -724,16 +787,37 @@ function gorunumKutusu() {
     zeminler.append(dugme);
   });
 
+  // AI anahtarı: kapalı bir satır, dokununca giriş alanı açılıyor.
+  const anahtarSatiri = yap("button", ayarlar.anahtar ? "AI anahtarı · girili" : "AI anahtarı · girilmemiş", "menu-madde");
+  const anahtarAlani = yap("div", "");
+  anahtarAlani.hidden = true;
+  const giris = document.createElement("input");
+  giris.type = "password";
+  giris.placeholder = "sk-…";
+  giris.value = ayarlar.anahtar;
+  const kaydet = yap("button", "Kaydet", "tonlu");
+  kaydet.onclick = async () => {
+    ayarlar.anahtar = giris.value.trim();
+    await depo.ayarYaz("anahtar", ayarlar.anahtar);
+    anahtarSatiri.textContent = ayarlar.anahtar ? "AI anahtarı · girili" : "AI anahtarı · girilmemiş";
+    anahtarAlani.hidden = true;
+  };
+  const anahtarSatir = yap("div", "", "satir");
+  anahtarSatir.append(giris, kaydet);
+  anahtarAlani.append(anahtarSatir);
+  anahtarSatiri.onclick = () => {
+    anahtarAlani.hidden = !anahtarAlani.hidden;
+    if (!anahtarAlani.hidden) giris.focus();
+  };
+
   kutu.append(
-    kademe("Punto", okumaTercihi.punto,
-      () => { okumaTercihi.punto = Math.max(14, okumaTercihi.punto - 1); yaz(); },
-      () => { okumaTercihi.punto = Math.min(30, okumaTercihi.punto + 1); yaz(); }),
-    kademe("Kenar", okumaTercihi.kenar,
-      () => { okumaTercihi.kenar = Math.max(0, okumaTercihi.kenar - 4); yaz(); },
-      () => { okumaTercihi.kenar = Math.min(48, okumaTercihi.kenar + 4); yaz(); }),
+    kademe("Punto", "punto", 1, 14, 30),
+    kademe("Satır", "satir", 0.1, 1.2, 2.4, v => v.toFixed(1)),
+    kademe("Kenar", "kenar", 4, 0, 48),
     zeminler,
+    anahtarSatiri, anahtarAlani,
   );
-  ekran.querySelector(".okuma-cubuk").after(kutu);
+  document.body.append(kutu);
 }
 
 async function bolumeGit(kitap, yon) {
@@ -760,12 +844,7 @@ async function pdfOku(kitap) {
     return;
   }
 
-  const ust = yap("div", "", "okuma-cubuk");
-  const geri = yap("button", "‹ Kitaplık", "cizgili");
-  geri.onclick = () => git("kitaplik");
-  const baslik = yap("div", kitap.ad, "baslik");
-  ust.append(geri, baslik);
-  ekran.append(ust);
+  const baslik = okumaKabugu("");
 
   const kap = yap("div", "");
   kap.id = "pdf-kap";
@@ -784,7 +863,7 @@ async function pdfOku(kitap) {
 
   const ciz = async () => {
     kap.innerHTML = "";
-    baslik.textContent = `${kitap.ad} · ${sayfa}/${belge.numPages}`;
+    baslik.textContent = `${sayfa}/${belge.numPages}`;
     onceki.disabled = sayfa <= 1;
     sonraki.disabled = sayfa >= belge.numPages;
     // Genişlik ekrana göre; kenar boşluğu okuma alanının dışında kalıyor.
@@ -821,6 +900,7 @@ async function pdfOku(kitap) {
   pdfTemizle = () => {
     document.removeEventListener("selectionchange", bak);
     dugme.remove();
+    kabuguKaldir();
     pdfDugmesi = null;
     pdfTemizle = null;
   };
@@ -849,7 +929,9 @@ let pdfTemizle = null;
  */
 function kelimele(yazi, isaretler) {
   const parcalar = yazi.split(/(\s+)/);
-  const enUzun = isaretler.enUzun || 1;
+  // İki fazlası: "went — home" gibi araya giren tire parçası kelime
+  // sayılmıyor ama parça sayılıyor; pay bırakılmazsa o ifade bulunmaz.
+  const enUzun = (isaretler.enUzun || 1) + 2;
   const cikti = [];
 
   let i = 0;
@@ -874,7 +956,7 @@ function kelimele(yazi, isaretler) {
 
     // İşaretin başındaki ve sonundaki noktalama boyanın dışında kalıyor;
     // içindeki kelimeler yine tek tek sarılıyor ki dokunma çalışsın.
-    const ic = bulundu.ham.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    const ic = bulundu.ham.replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, "");
     const on = bulundu.ham.slice(0, bulundu.ham.indexOf(ic));
     const arka = bulundu.ham.slice(bulundu.ham.indexOf(ic) + ic.length);
     const govde = ic.split(/(\s+)/)
@@ -890,7 +972,7 @@ function kelimele(yazi, isaretler) {
 
 /** İşaretsiz tek kelime: noktalaması dışarıda kalacak şekilde sarılıyor. */
 function kelimeyiSar(parca) {
-  const sade = parca.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+  const sade = parca.replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, "");
   if (!sade) return kacir(parca);
   const [on, arka] = parca.split(sade);
   return kacir(on || "") + `<span class="k">${kacir(sade)}</span>` + kacir(arka || "");
@@ -900,13 +982,20 @@ function kelimeyiSar(parca) {
  * İşaret anahtarı.
  *
  * Aynı metnin iki yazılışı aynı anahtara düşsün: küçük harf, tek boşluk,
- * baştaki ve sondaki noktalama atılmış. Ortadaki noktalama duruyor —
- * cümlenin içindeki virgül metinde de var.
+ * harf ve rakam dışındaki her şey atılmış.
+ *
+ * Noktalama bütünüyle atılıyor, yalnız uçlardaki değil. Seçim aracı
+ * kelimeleri boşlukla birleştiriyor ve kelime kutucukları noktalamayı
+ * dışarıda bırakıyor: "He went home, quickly." seçilince elde "He went
+ * home quickly" kalıyor. Paragrafın kendisinde virgül var; virgül
+ * anahtarda kalsaydı cümle listeye düşer ama kitapta boyanmazdı — düştü,
+ * boyanmadı.
  */
 function anahtarla(metin) {
-  return metin.replace(/\s+/g, " ").trim()
-    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
-    .toLocaleLowerCase("tr");
+  // \p{M}: Arapça harekeler harfe yapışık işaret; atılırsa kelime dağılır.
+  return metin.toLocaleLowerCase("tr")
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
+    .trim();
 }
 
 const kacir = m => m.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -932,10 +1021,17 @@ async function isaretHaritasi(kitapId) {
 const perde = document.getElementById("perde");
 const kutuSecim = document.getElementById("kutu-secim");
 const kutuCeviri = document.getElementById("kutu-ceviri");
+const kutuNotlar = document.getElementById("kutu-notlar");
 const kutuKalemler = document.getElementById("kutu-kalemler");
 const kutuNot = document.getElementById("kutu-not");
-const kutuBilgi = document.getElementById("kutu-bilgi");
 const kutuAyrinti = document.getElementById("kutu-ayrinti");
+const kutuSor = document.getElementById("kutu-sor");
+const kutuSoruAlani = document.getElementById("kutu-soru-alani");
+const kutuSoruMetin = document.getElementById("kutu-soru-metin");
+const kutuSoruGonder = document.getElementById("kutu-soru-gonder");
+const kutuCevap = document.getElementById("kutu-cevap");
+
+const BEKLEME = "Anlamına bakılıyor…";
 
 let secili = null;
 
@@ -964,38 +1060,108 @@ async function kelimeyeDokun(e) {
 }
 
 /**
- * Seçim kutusunu açar ve çeviriyi ister.
+ * Kayıttaki çeviri, geçerliyse.
  *
- * Üç yerden çağrılıyor: e-kitap, PDF ve deste. Kaynak kitap artık
- * parametre — deste ekranında açık kitap yok, kelimenin kendi kitabı var.
+ * Bir dönem kutudaki yazı olduğu gibi kaydediliyordu; çeviri gelmeden
+ * renge basılınca "bakılıyor" yazısı çeviri diye kalıyor ve listede
+ * öyle görünüyordu. O kayıtlar hâlâ depoda olabilir.
+ */
+const gecerliCeviri = k => (k?.ceviri && k.ceviri !== BEKLEME ? k.ceviri : "");
+
+/**
+ * Seçim kutusunu açar; çeviriyi sözlükten alır, yoksa ister.
+ *
+ * Üç yerden çağrılıyor: e-kitap, PDF ve liste. Kaynak kitap parametre —
+ * listede açık kitap yok, kelimenin kendi kitabı var.
+ *
+ * Bir kez alınan her şey sözlüğe yazılıyor: aynı seçime ikinci dokunuş
+ * hiç istek atmıyor. Kutu kapansa bile gelen cevap sözlüğe ve varsa
+ * kelime kaydına yazılıyor — çeviri gelmeden renge basanın kaydı boş
+ * kalmasın.
  */
 async function kutuyuAc(kelime, baglam, kaynak, kayit) {
-  secili = { kelime, baglam, kaynak: kaynak || null, kart: kayit?.kart || null };
+  const anahtar = anahtarla(kelime);
+  const istek = {
+    kelime, baglam, anahtar,
+    kaynak: kaynak || null,
+    ceviri: "", notlar: [], kart: null,
+  };
+  secili = istek;
 
   kutuSecim.textContent = kelime;
   kutuSecim.dir = "auto";
+  kutuNotlar.innerHTML = "";
   kutuNot.innerHTML = "";
+  kutuNot.className = "sonuc";
+  kutuSoruAlani.hidden = true;
+  kutuSoruMetin.value = "";
+  kutuCevap.textContent = "";
+  kutuAyrinti.disabled = false;
+  kutuAyrinti.textContent = "Ayrıntı";
   perde.hidden = false;
 
-  const varOlan = kayit || (await depo.kelimeler())
-    .find(k => anahtarla(k.kelime) === anahtarla(kelime));
+  const [sozluk, kelimeler] = await Promise.all([depo.sozluk(anahtar), depo.kelimeler()]);
+  if (secili !== istek) return;
+  const varOlan = kayit || kelimeler.find(k => k.anahtar === anahtar);
   kalemleriCiz(varOlan?.kalem);
 
-  // Destede çeviri zaten kayıtlı; aynı şeyi bir daha sormak hem para
-  // hem bekleme.
-  if (kayit?.ceviri) {
-    kutuCeviri.textContent = kayit.ceviri;
-    kutuCeviri.className = "sonuc";
-  } else {
-    kutuCeviri.textContent = "Anlamına bakılıyor…";
-    kutuCeviri.className = "sonuc sonuk";
-    const sonuc = await cevir(ayarlar, kelime, baglam, secili.kaynak?.ad || "");
-    if (!secili) return;
-    kutuCeviri.textContent = sonuc.metin || sonuc.hata;
-    kutuCeviri.className = sonuc.metin ? "sonuc" : "sonuc uyari";
+  istek.ceviri = sozluk?.ceviri || gecerliCeviri(varOlan);
+  istek.notlar = sozluk?.notlar || varOlan?.notlar || [];
+  istek.kart = sozluk?.kart || varOlan?.kart || null;
+
+  if (istek.kart) kutuNot.append(kartiCiz(istek.kart));
+
+  if (istek.ceviri) {
+    ceviriyiGoster(istek);
+    return;
   }
 
-  if (secili.kart) kutuNot.append(kartiCiz(secili.kart));
+  kutuCeviri.textContent = BEKLEME;
+  kutuCeviri.className = "sonuc sonuk";
+  const eser = istek.kaynak?.ad || "";
+  // Tek kelimede karşılık; öbekte tam çeviri ve zor ifadeler.
+  const sonuc = kelime.trim().includes(" ")
+    ? await cumle(ayarlar, kelime, baglam, eser)
+    : await cevir(ayarlar, kelime, baglam, eser);
+
+  if (sonuc.hata) {
+    if (secili === istek) {
+      kutuCeviri.textContent = sonuc.hata;
+      kutuCeviri.className = "sonuc uyari";
+    }
+    return;
+  }
+  istek.ceviri = sonuc.ceviri || sonuc.metin;
+  istek.notlar = sonuc.zorlar || [];
+  await sozlugeYaz(anahtar, { ceviri: istek.ceviri, notlar: istek.notlar });
+  if (secili === istek) ceviriyiGoster(istek);
+}
+
+function ceviriyiGoster(istek) {
+  kutuCeviri.textContent = istek.ceviri;
+  kutuCeviri.className = "sonuc";
+  kutuNotlar.innerHTML = "";
+  // Zor ifadeler çevirinin hemen altında, küçük: ifade — anlamı.
+  istek.notlar.forEach(n => {
+    if (!n?.ifade) return;
+    const satir = yap("div", "", "not");
+    const ifade = yap("b", n.ifade);
+    ifade.dir = "auto";
+    satir.append(ifade, yap("span", n.anlam ? ` — ${n.anlam}` : ""));
+    kutuNotlar.append(satir);
+  });
+}
+
+/**
+ * Sözlüğe yazar; kelime listedeyse kaydını da günceller.
+ *
+ * Kelime kaydı çeviriyi ve kartı kendi üstünde de taşıyor — liste
+ * ekranı ve yedek dosyası oradan okuyor.
+ */
+async function sozlugeYaz(anahtar, alanlar) {
+  await depo.sozlukYaz(anahtar, alanlar);
+  const kayit = (await depo.kelimeler()).find(k => k.anahtar === anahtar);
+  if (kayit) await depo.kelimeYaz({ ...kayit, ...alanlar });
 }
 
 /**
@@ -1025,7 +1191,7 @@ function kalemleriCiz(seciliKalem) {
 
 async function isaretle(kalem) {
   if (!secili) return;
-  const anahtar = anahtarla(secili.kelime);
+  const { anahtar } = secili;
   if (kalem === null) {
     await depo.kelimeSil(anahtar);
   } else {
@@ -1039,9 +1205,10 @@ async function isaretle(kalem) {
       baglam: secili.baglam,
       kitap: secili.kaynak?.id || eski?.kitap || "",
       eser: secili.kaynak?.ad || eski?.eser || "",
-      ceviri: kutuCeviri.classList.contains("uyari") ? "" : kutuCeviri.textContent,
-      // Kart bir kez alınıyor ve kelimeyle birlikte duruyor; desteye her
-      // dokunuşta yeniden sormak gereksiz.
+      // Çeviri henüz gelmediyse boş kalıyor; gelince `sozlugeYaz`
+      // kaydı tamamlıyor.
+      ceviri: secili.ceviri || gecerliCeviri(eski),
+      notlar: secili.notlar.length ? secili.notlar : (eski?.notlar || []),
       kart: secili.kart || eski?.kart || null,
     }));
   }
@@ -1049,50 +1216,51 @@ async function isaretle(kalem) {
   if (acikKitap) oku(acikKitap.id); else git("deste");
 }
 
-/**
- * Alınan kartı kelimeye yazıyor.
- *
- * Kart bir istek demek; aynı kelimeye her bakışta yeniden sormak hem
- * bekleme hem para. Kelime henüz destede değilse yazacak yer yok —
- * işaretlenince `isaretle` kartı da birlikte yazıyor.
- */
-async function kartiSakla(kelime, icerik) {
-  const anahtar = anahtarla(kelime);
-  const eski = (await depo.kelimeler()).find(x => x.anahtar === anahtar);
-  if (eski) await depo.kelimeYaz({ ...eski, kart: icerik });
-}
-
-kutuBilgi.onclick = async () => {
-  if (!secili) return;
-  kutuBilgi.disabled = true;
-  kutuBilgi.textContent = "Bakılıyor…";
-  const sonuc = await bilgi(ayarlar, secili.kelime, secili.baglam, secili.kaynak?.ad || "");
-  kutuBilgi.disabled = false;
-  kutuBilgi.textContent = "Bilgi al";
-  if (!secili) return;
-  kutuNot.innerHTML = "";
-  kutuNot.textContent = sonuc.metin || sonuc.hata;
-  kutuNot.className = sonuc.metin ? "sonuc" : "sonuc uyari";
-};
-
 kutuAyrinti.onclick = async () => {
   if (!secili) return;
+  const istek = secili;
   kutuAyrinti.disabled = true;
   kutuAyrinti.textContent = "Getiriliyor…";
-  const sonuc = await kart(ayarlar, secili.kelime, secili.baglam, secili.kaynak?.ad || "");
+  const sonuc = await kart(ayarlar, istek.kelime, istek.baglam, istek.kaynak?.ad || "");
+  if (sonuc.kart) {
+    istek.kart = sonuc.kart;
+    await sozlugeYaz(istek.anahtar, { kart: sonuc.kart });
+  }
+  if (secili !== istek) return;
   kutuAyrinti.disabled = false;
   kutuAyrinti.textContent = "Ayrıntı";
-  if (!secili) return;
   kutuNot.innerHTML = "";
   kutuNot.className = "sonuc";
   if (sonuc.kart) {
-    secili.kart = sonuc.kart;
-    kartiSakla(secili.kelime, sonuc.kart);
     kutuNot.append(kartiCiz(sonuc.kart));
   } else {
     kutuNot.className = "sonuc uyari";
     kutuNot.textContent = sonuc.hata;
   }
+};
+
+// "Soru sor" en altta, hafif: her seçimde gerekmiyor, göze batmasın.
+kutuSor.onclick = () => {
+  kutuSoruAlani.hidden = !kutuSoruAlani.hidden;
+  if (!kutuSoruAlani.hidden) kutuSoruMetin.focus();
+};
+kutuSoruMetin.addEventListener("keydown", e => {
+  if (e.key === "Enter") kutuSoruGonder.click();
+});
+kutuSoruGonder.onclick = async () => {
+  if (!secili) return;
+  const metin = kutuSoruMetin.value.trim();
+  if (!metin) { kutuSoruMetin.focus(); return; }
+  const istek = secili;
+  kutuSoruGonder.disabled = true;
+  kutuCevap.textContent = "Bakılıyor…";
+  kutuCevap.className = "sonuc sonuk";
+  const sonuc = await soru(ayarlar, istek.kelime, istek.baglam,
+    istek.kaynak?.ad || "", metin, istek.kart);
+  if (secili !== istek) return;
+  kutuSoruGonder.disabled = false;
+  kutuCevap.textContent = sonuc.metin || sonuc.hata;
+  kutuCevap.className = sonuc.metin ? "sonuc" : "sonuc uyari";
 };
 
 /**
@@ -1170,39 +1338,88 @@ async function deste() {
   calis.onclick = () => tekrarEkrani(bekleyen);
   ekran.append(calis);
 
-  ekran.append(yap("h2", `Bütün kelimeler (${kelimeler.length})`));
+  kelimeler.sort((a, b) => (b.eklendi || 0) - (a.eklendi || 0));
+
+  // Kelimeler kitaba göre bölünüyor; her kitap bir sekme. "Bütün
+  // kelimeler" başlığının ve her satırdaki kitap etiketinin yerine.
+  const eserler = [];
+  kelimeler.forEach(k => {
+    const id = k.kitap || "";
+    let eser = eserler.find(e => e.id === id);
+    if (!eser) {
+      eser = { id, ad: k.eser || "Diğer", kelimeler: [] };
+      eserler.push(eser);
+    }
+    eser.kelimeler.push(k);
+  });
+  if (!eserler.some(e => e.id === seciliEser)) seciliEser = eserler[0].id;
+
+  const sekmeler = yap("div", "", "sekmeler");
+  eserler.forEach(e => {
+    const sekme = yap("button", `${e.ad} (${e.kelimeler.length})`,
+      e.id === seciliEser ? "sekme secili" : "sekme");
+    sekme.onclick = () => { seciliEser = e.id; git("deste"); };
+    sekmeler.append(sekme);
+  });
+  ekran.append(sekmeler);
+
   const liste = yap("div", "");
-  kelimeler.sort((a, b) => (b.eklendi || 0) - (a.eklendi || 0)).forEach(k => {
+  const satirlar = new Map();
+  const gosterilen = eserler.find(e => e.id === seciliEser).kelimeler;
+  gosterilen.forEach(k => {
     const satir = yap("button", "", "kelime");
     const nokta = document.createElement("span");
     nokta.style.cssText = `width:10px;height:10px;border-radius:50%;flex:none;background:var(--${
       { YELLOW: "sari", BLUE: "mavi", GREEN: "yesil", RED: "kirmizi" }[k.kalem]})`;
     const kelime = yap("b", k.kelime);
     kelime.dir = "auto";
-    satir.append(nokta, kelime, yap("span", k.ceviri || ""));
-    // Kitabın adı yalnız burada, tek bir küçük etiket olarak. Kart açılınca
-    // görünmüyordu bile denemez: uzun ad kartın yarısını kaplıyordu.
-    if (k.eser) satir.append(yap("span", kisaAd(k.eser), "eser-etiket"));
+    const ceviri = yap("span", gecerliCeviri(k));
+    satirlar.set(k.anahtar, ceviri);
+    satir.append(nokta, kelime, ceviri);
     satir.onclick = () => kelimeKutusu(k);
     liste.append(satir);
   });
   ekran.append(liste);
+
+  eksikleriDoldur(gosterilen.filter(k => !gecerliCeviri(k)), satirlar);
 }
 
+let doldurma = null;
+
 /**
- * Etikete sığan kadarı.
+ * Çevirisi olmayan kelimeleri arka planda, tek tek tamamlar.
  *
- * Üç nokta yok — "Suç ve Ceza: Bir…" yerine "Suç ve Ceza" daha çok şey
- * söylüyor. Kelimenin ortasından kesmemek için son boşluğa geri sarılıyor.
+ * Çeviri gelmeden renge basılan kelimeler boş kalıyordu; listede öyle
+ * duruyor, dokunulunca alınıyordu. Şimdi liste açılınca sırayla
+ * alınıyor ve satır yerinde doluyor. Sırayla: aynı anda yedi istek
+ * atmanın anlamı yok. İlk hata sırayı durduruyor — anahtar yoksa hepsi
+ * aynı hatayı verir.
  */
-function kisaAd(ad, sinir = 15) {
-  const duz = ad.replace(/\s+/g, " ").trim();
-  if (duz.length <= sinir) return duz;
-  const kesik = duz.slice(0, sinir);
-  const bosluk = kesik.lastIndexOf(" ");
-  return (bosluk > sinir / 2 ? kesik.slice(0, bosluk) : kesik)
-    .replace(/[\s\p{P}]+$/u, "");
+function eksikleriDoldur(kelimeler, satirlar) {
+  if (doldurma || !kelimeler.length) return;
+  doldurma = (async () => {
+    for (const k of kelimeler) {
+      const sozluk = await depo.sozluk(k.anahtar);
+      let ceviri = sozluk?.ceviri || "";
+      let notlar = sozluk?.notlar || [];
+      if (!ceviri) {
+        const eser = k.eser || "";
+        const sonuc = k.kelime.trim().includes(" ")
+          ? await cumle(ayarlar, k.kelime, k.baglam || "", eser)
+          : await cevir(ayarlar, k.kelime, k.baglam || "", eser);
+        if (sonuc.hata) break;
+        ceviri = sonuc.ceviri || sonuc.metin;
+        notlar = sonuc.zorlar || [];
+      }
+      await sozlugeYaz(k.anahtar, { ceviri, notlar });
+      const satir = satirlar.get(k.anahtar);
+      if (satir) satir.textContent = ceviri;
+    }
+  })().finally(() => { doldurma = null; });
 }
+
+// Listede açık duran kitap; ekrandan çıkıp dönünce aynı sekme kalsın.
+let seciliEser = "";
 
 /**
  * Destede bir kelimeye dokunmak kartı açıyor.
@@ -1216,7 +1433,7 @@ function kisaAd(ad, sinir = 15) {
 async function kelimeKutusu(k) {
   await kutuyuAc(k.kelime, k.baglam || "", { id: k.kitap, ad: k.eser }, k);
   // Kart daha önce alınmadıysa bir kez alınıp kelimeye yazılıyor.
-  if (!k.kart) kutuAyrinti.onclick();
+  if (secili && !secili.kart) kutuAyrinti.onclick();
 }
 
 function tekrarEkrani(kuyruk) {
@@ -1243,7 +1460,7 @@ function tekrarEkrani(kuyruk) {
     kart.append(yap("div", kelime.kelime, "yuz"));
     if (acik) {
       const arka = yap("div", "", "arka");
-      if (kelime.ceviri) arka.append(yap("p", kelime.ceviri));
+      if (gecerliCeviri(kelime)) arka.append(yap("p", kelime.ceviri));
       if (kelime.baglam) arka.append(yap("p", kelime.baglam, "kucuk sonuk"));
       if (kelime.eser) arka.append(yap("p", kelime.eser, "kucuk sonuk"));
       kart.append(arka);
@@ -1404,6 +1621,8 @@ window.addEventListener("unhandledrejection", e => hataGoster(e.reason));
     try {
       okumaTercihi = { ...okumaTercihi, ...JSON.parse(await depo.ayar("okuma", "{}")) };
     } catch { /* bozuk kayıt varsayılanı bozmasın */ }
+    // Eski kayıtlarda dört zemin vardı; kalkanlar açığa düşsün.
+    if (!ZEMINLER[okumaTercihi.zemin]) okumaTercihi.zemin = "kagit";
     await git("kitaplik");
   } catch (e) {
     hataGoster(e);

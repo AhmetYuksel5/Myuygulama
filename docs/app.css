@@ -133,12 +133,22 @@ mark.BLUE   { background: rgba(79,163,247,.45); }
 mark.GREEN  { background: rgba(95,196,107,.45); }
 mark.RED    { background: rgba(242,112,138,.45); }
 
-.okuma-cubuk {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 14px;
+/*
+  Okuma alt çubuğu. Okurken görünmüyor; boş yere dokununca çıkıyor.
+  Rengini okuma zemininden alıyor: koyu zeminde açık bir şerit göz alır.
+*/
+#okuma-alt {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 4px;
+  background: var(--okuma-zemin, var(--kagit));
+  color: var(--okuma-yazi, var(--murekkep));
+  border-top: 1px solid var(--okuma-cizgi, var(--cizgi));
+  padding: 6px 8px calc(6px + var(--alt));
+  z-index: 25;
 }
-.okuma-cubuk .baslik { flex: 1; font-size: 14px; color: var(--sonuk);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#okuma-alt[hidden] { display: none; }
+#okuma-alt button { padding: 10px 12px; font-size: 14px; color: inherit; }
+#okuma-alt .bilgi { flex: 1; text-align: center; font-size: 12px; opacity: .6; }
 
 /* --- Seçim kutusu --- */
 /*
@@ -174,6 +184,18 @@ mark.RED    { background: rgba(242,112,138,.45); }
 #kutu-dugmeler { display: flex; gap: 8px; }
 #kutu-dugmeler button { flex: 1; }
 #kutu-not { margin-top: 14px; font-size: 15px; white-space: pre-wrap; }
+/* Zor ifadeler: çevirinin altında küçük satırlar. */
+#kutu-notlar { margin-top: 8px; font-size: 13px; color: var(--sonuk); }
+#kutu-notlar .not { margin-top: 3px; }
+#kutu-notlar b { color: var(--murekkep); font-weight: 600; }
+/* Soru: en altta, yazı kadar hafif bir düğme. */
+.hafif { color: var(--sonuk); font-size: 13px; padding: 10px 0 4px; width: 100%; }
+#kutu-soru { margin-top: 10px; }
+#kutu-soru-alani { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+#kutu-soru-alani[hidden] { display: none; }
+#kutu-soru-alani input { flex: 1; min-width: 0; }
+#kutu-soru-alani button { flex: none; }
+#kutu-cevap { margin-top: 10px; font-size: 14px; }
 
 /* --- Kitap menüsü ve tek seferlik pencereler --- */
 .perde {
@@ -220,12 +242,18 @@ mark.RED    { background: rgba(242,112,138,.45); }
 }
 .kelime b { font-size: 16px; }
 .kelime span { font-size: 14px; color: var(--sonuk); flex: 1; }
-/* Kitabın adı satırın ucunda küçük bir etiket: büyümesin, sarmasın. */
-.kelime .eser-etiket {
-  flex: none; font-size: 11px;
-  border: 1px solid var(--cizgi); border-radius: 999px;
-  padding: 1px 7px; white-space: nowrap;
+/* Kitap sekmeleri: yana kayan tek satır. */
+.sekmeler {
+  display: flex; gap: 8px; overflow-x: auto;
+  margin: 16px 0 6px; padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
 }
+.sekme {
+  flex: none; font-size: 13px; padding: 6px 12px;
+  border: 1px solid var(--cizgi); border-radius: 999px;
+  color: var(--sonuk); white-space: nowrap;
+}
+.sekme.secili { background: var(--vurgu); border-color: var(--vurgu); color: #fff; }
 
 #tekrar-kart {
   border: 1px solid var(--cizgi);
@@ -300,12 +328,20 @@ input, select, textarea {
 
 /* --- Görünüm kutusu --- */
 #gorunum-kutusu {
-  border: 1px solid var(--cizgi);
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(62px + var(--alt));
+  max-width: 420px; margin: 0 auto;
+  border: 1px solid var(--okuma-cizgi, var(--cizgi));
   border-radius: 16px;
   padding: 12px;
-  margin-bottom: 16px;
-  background: var(--kagit);
+  background: var(--okuma-zemin, var(--kagit));
+  color: var(--okuma-yazi, var(--murekkep));
+  box-shadow: 0 8px 30px rgba(0,0,0,.25);
+  z-index: 26;
 }
+#gorunum-kutusu .cizgili { border-color: var(--okuma-cizgi, var(--cizgi)); }
+#gorunum-kutusu .menu-madde { border-color: var(--okuma-cizgi, var(--cizgi)); margin-top: 8px; padding-bottom: 6px; }
+#gorunum-kutusu input { flex: 1; min-width: 0; }
 #gorunum-kutusu .olcu {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 10px;

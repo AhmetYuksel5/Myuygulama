@@ -12,7 +12,9 @@
  */
 
 const AD = "merkez";
-const SURUM = 1;
+// 2: "sozluk" — bir kez alınan çeviri, not ve kartlar. Aynı seçime her
+// dokunuşta yeniden sorulmasın diye.
+const SURUM = 2;
 
 let acik = null;
 
@@ -35,6 +37,9 @@ function ac() {
       }
       if (!db.objectStoreNames.contains("ayar")) {
         db.createObjectStore("ayar", { keyPath: "ad" });
+      }
+      if (!db.objectStoreNames.contains("sozluk")) {
+        db.createObjectStore("sozluk", { keyPath: "anahtar" });
       }
     };
     istek.onsuccess = () => tamam(istek.result);
@@ -68,6 +73,14 @@ export const depo = {
   kelimeler: () => is("kelime", "readonly", m => m.getAll()),
   kelimeYaz: k => is("kelime", "readwrite", m => m.put(k)),
   kelimeSil: anahtar => is("kelime", "readwrite", m => m.delete(anahtar)),
+
+  // Sözlük: anahtar → { ceviri, notlar, kart }. İşaretlenmemiş seçimler
+  // için de tutuluyor; kelime kaydı yalnız işaretlilerde var.
+  sozluk: anahtar => is("sozluk", "readonly", m => m.get(anahtar)),
+  async sozlukYaz(anahtar, alanlar) {
+    const eski = await this.sozluk(anahtar);
+    return is("sozluk", "readwrite", m => m.put({ ...eski, ...alanlar, anahtar }));
+  },
 
   async ayar(ad, varsayilan = "") {
     const satir = await is("ayar", "readonly", m => m.get(ad));
