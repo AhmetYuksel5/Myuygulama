@@ -49,13 +49,6 @@ class AiSettings @Inject constructor(
     companion object {
         const val DEFAULT_MODEL = "gpt-4o-mini"
 
-        /**
-         * Bir satırlık karşılık için kullanılan model.
-         *
-         * Kart üretimi için büyük model seçilmiş olabilir; okurken her
-         * kelimeye bakarken o modeli çalıştırmanın anlamı yok.
-         */
-        const val GLOSS_MODEL = "gpt-4o-mini"
 
         /**
          * Hazır seçenekler. Liste kapalı değil: OpenAI yeni bir model

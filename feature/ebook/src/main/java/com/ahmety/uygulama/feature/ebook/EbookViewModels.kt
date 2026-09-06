@@ -239,12 +239,13 @@ data class ReaderUiState(
 class BookReaderViewModel @Inject constructor(
     private val repository: BookRepository,
     openAi: OpenAiClient,
+    briefs: WorkBriefStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReaderUiState())
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
 
-    private val lookup = GlossLookup(openAi)
+    private val lookup = GlossLookup(openAi, briefs)
 
     /** Renk kutusunda gösterilen bir satırlık karşılık. */
     private val _gloss = MutableStateFlow(WordGloss())

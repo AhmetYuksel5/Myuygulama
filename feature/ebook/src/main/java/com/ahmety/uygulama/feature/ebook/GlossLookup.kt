@@ -3,6 +3,7 @@ package com.ahmety.uygulama.feature.ebook
 import com.ahmety.uygulama.core.ai.AiResult
 import com.ahmety.uygulama.core.ai.OpenAiClient
 import com.ahmety.uygulama.core.ai.WordInfo
+import com.ahmety.uygulama.core.ai.WorkBriefStore
 import com.ahmety.uygulama.core.designsystem.WordGloss
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -16,7 +17,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * Aynı kelime aynı okuma boyunca bir kez soruluyor: sayfayı ileri geri
  * gezerken aynı isteği tekrar tekrar göndermenin karşılığı yok.
  */
-class GlossLookup(private val openAi: OpenAiClient) {
+class GlossLookup(
+    private val openAi: OpenAiClient,
+    private val briefs: WorkBriefStore,
+) {
 
     private val cache = mutableMapOf<String, String>()
 
@@ -40,7 +44,10 @@ class GlossLookup(private val openAi: OpenAiClient) {
             return
         }
         state.value = WordGloss(busy = true)
-        when (val result = openAi.glossWord(word.trim(), context, sourceName)) {
+        // Eserin künyesi de gidiyor: aynı kelime bir mafya romanında ve
+        // bir iş kitabında başka şey demek oluyor.
+        val brief = briefs.get(sourceName).orEmpty()
+        when (val result = openAi.glossWord(word.trim(), context, sourceName, brief)) {
             is AiResult.Ok -> {
                 cache[key] = result.value
                 state.value = WordGloss(text = result.value)
@@ -67,7 +74,15 @@ class GlossLookup(private val openAi: OpenAiClient) {
         val trimmed = word.trim()
         if (trimmed.isEmpty()) return
         state.value = WordDetail(trimmed, context, more, busy = true)
-        when (val result = openAi.describeWord(trimmed, context, sourceName = sourceName)) {
+        val brief = briefs.get(sourceName).orEmpty()
+        when (
+            val result = openAi.describeWord(
+                word = trimmed,
+                context = context,
+                sourceName = sourceName,
+                brief = brief,
+            )
+        ) {
             is AiResult.Ok -> {
                 val fresh = result.value
                 state.value = WordDetail(

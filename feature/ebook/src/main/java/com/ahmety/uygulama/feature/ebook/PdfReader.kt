@@ -92,6 +92,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.ahmety.uygulama.core.ai.OpenAiClient
+import com.ahmety.uygulama.core.ai.WorkBriefStore
 import com.ahmety.uygulama.core.designsystem.WordGloss
 import javax.inject.Inject
 
@@ -121,12 +122,13 @@ data class PdfMark(
 class PdfReaderViewModel @Inject constructor(
     private val repository: BookRepository,
     openAi: OpenAiClient,
+    briefs: WorkBriefStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PdfUiState())
     val state: StateFlow<PdfUiState> = _state.asStateFlow()
 
-    private val lookup = GlossLookup(openAi)
+    private val lookup = GlossLookup(openAi, briefs)
 
     /** Renk kutusunda gösterilen bir satırlık karşılık. */
     private val _gloss = MutableStateFlow(WordGloss())

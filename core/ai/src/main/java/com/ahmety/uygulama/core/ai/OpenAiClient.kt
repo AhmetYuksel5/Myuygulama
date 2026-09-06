@@ -150,31 +150,43 @@ class OpenAiClient @Inject constructor(
      *
      * [describeWord] ile aynı şey değil: o kartın tamamını üretiyor ve
      * saniyeler sürüyor. Burada amaç işaretlemeden önceki o kısa bakış —
-     * "bunu zaten biliyor muyum?" — bu yüzden yanıt tek satır ve model
-     * her seferinde en ucuzu.
+     * "bunu zaten biliyor muyum?".
+     *
+     * Uygulamanın en çok okunan yazısı bu; kartla aynı modeli kullanıyor.
      */
     suspend fun glossWord(
         word: String,
         context: String = "",
         sourceName: String = "",
+        brief: String = "",
     ): AiResult<String> {
         val key = settings.apiKey
         if (key.isBlank()) return AiResult.Failed("OpenAI anahtarı girilmemiş.")
         if (word.isBlank()) return AiResult.Failed("Kelime boş.")
 
         val instruction = buildString {
-            append("Translate the given English text into Turkish, AS IT IS USED ")
-            append("in the passage. ")
+            append("You are a literary translator working into Turkish for a ")
+            append("reader who is in the middle of an English book. ")
+            append("Write the Turkish a good translator would write — natural, ")
+            append("idiomatic Turkish that reads as if it had been written in ")
+            append("Turkish — never a word-for-word rendering. ")
+            append("Use the passage to choose the right sense of an ambiguous ")
+            append("word. ")
             // Tek kelimede karşılık, öbekte çeviri isteniyor: ikisine tek
             // bir uzunluk vermek yanlıştı. Kısa tutmayı emretmek uzun bir
             // seçimde özete dönüyordu — cümlenin yarısı kayboluyordu.
-            append("A single word gets its Turkish equivalent(s) in a few words. ")
-            append("Anything longer gets a COMPLETE translation: translate every ")
-            append("part of it, do not summarise, do not shorten, do not leave ")
-            append("anything out. The translation may be as long as the original. ")
-            append("If the sense is figurative or idiomatic, give that sense, not ")
-            append("the literal one, and translate a phrase as a phrase rather ")
-            append("than word by word. ")
+            append("A single word gets its Turkish equivalent(s) for THIS ")
+            append("passage, in a few words. ")
+            append("Anything longer gets a COMPLETE translation: every clause, ")
+            append("nothing summarised, nothing left out. It may be as long as ")
+            append("the original. ")
+            append("Keep the register of the original — formal stays formal, ")
+            append("slang stays slang, coarse stays coarse; do not soften it and ")
+            append("do not make it more literary than it is. ")
+            append("An idiom becomes the Turkish idiom that means the same ")
+            append("thing, not its literal words. ")
+            append("Do not explain, do not comment, do not add anything that is ")
+            append("not in the text. ")
             append("No quotation marks, no markdown, no preamble, and never ")
             append("repeat the English text itself.")
         }
@@ -183,12 +195,23 @@ class OpenAiClient @Inject constructor(
             append("Input: ").append(word)
             if (context.isNotBlank()) append("\nPassage: ").append(context)
             if (sourceName.isNotBlank()) append("\nFrom: ").append(sourceName)
+            // Eserin künyesi: dönem, kişiler, dilin düzeyi. Aynı kelime bir
+            // mafya filminde ve bir iş kitabında başka şey demek oluyor.
+            if (brief.isNotBlank()) {
+                append("\nBackground on that work, for YOUR disambiguation only — ")
+                append("never write about it: ").append(brief)
+            }
         }
 
         val payload = JSONObject().apply {
-            // Kısa bakış her zaman ucuz modelle: kart üretimi için seçilen
-            // büyük model bir satırlık karşılık için gereksiz pahalı.
-            put("model", AiSettings.GLOSS_MODEL)
+            // Kartla aynı model.
+            //
+            // Burası bir süre koda gömülü ucuz modeli kullandı; o karar
+            // karşılık tek satırlık bir etiketken verilmişti. Karşılık tam
+            // çeviriye dönüşünce karar geçersizleşti ama yerinde kaldı:
+            // çeviri, uygulamanın en çok okunan yazısı olduğu hâlde en zayıf
+            // modelden çıkıyordu.
+            put("model", settings.model)
             put("temperature", 0.2)
             // Uzun bir seçimin çevirisi kesilmesin diye geniş bir sınır;
             // tek kelimede zaten birkaç belirteç harcanıyor.
