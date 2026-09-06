@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -398,24 +399,51 @@ fun ColorPickerDialog(
     /** Gelen bilgi notu. */
     note: WordGloss? = null,
 ) {
-    var keepContext by remember { mutableStateOf(true) }
+    // Bağlam cümlesi kutuda gösterilmiyor ama karta yine de yazılıyor:
+    // gösterilmesi ekranı dolduruyordu, saklanması ise kelimenin hangi
+    // cümlede görüldüğünü hatırlatan tek şey.
+    val keepContext = true
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
                 text = request.word,
-                maxLines = 3,
+                maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
                 style = if (request.word.length > 40) {
-                    MaterialTheme.typography.titleSmall
+                    MaterialTheme.typography.bodyMedium
                 } else {
-                    MaterialTheme.typography.titleLarge
+                    MaterialTheme.typography.titleMedium
                 },
             )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Çeviri seçimin hemen altında: kutuda ilk okunacak şey o.
+                // Kalemler onun altında duruyor — önce ne olduğunu görüp
+                // sonra işaretleyip işaretlememeye karar veriyorsun.
+                gloss?.let { info ->
+                    when {
+                        info.busy -> Text(
+                            text = "Anlamına bakılıyor…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        info.text.isNotBlank() -> Text(
+                            text = info.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+
+                        info.error.isNotBlank() -> Text(
+                            text = info.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+
                 // Renkler kendini anlatıyor; ad yazmaya gerek yok.
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     HighlightColor.entries.forEach { color ->
@@ -443,53 +471,36 @@ fun ColorPickerDialog(
                     }
                 }
 
-                // Kısa anlam renklerin hemen altında: karar buna bakarak
-                // veriliyor, bağlam cümlesi ondan sonra geliyor.
-                gloss?.let { info ->
-                    when {
-                        info.busy -> Text(
-                            text = "Anlamına bakılıyor…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        info.text.isNotBlank() -> Text(
-                            text = info.text,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-
-                        info.error.isNotBlank() -> Text(
-                            text = info.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-
                 // Karşılık "bu ne diyor" sorusuna cevap veriyor; okurken
                 // sorulan öteki soru "bu nedir". İkisi ayrı düğme: bilgi
                 // notu her seçimde istenmiyor ve her seferinde peşinen
                 // getirmek hem bekletir hem para yakar.
                 if (onDetail != null || onExplain != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Dolu düğme: renkli birer yazıyken basılabilir oldukları
+                    // belli olmuyordu.
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (onExplain != null) {
-                            TextButton(
+                            FilledTonalButton(
                                 onClick = onExplain,
                                 enabled = note?.busy != true,
-                                contentPadding = PaddingValues(
-                                    horizontal = 4.dp,
-                                    vertical = 0.dp,
-                                ),
-                            ) { Text(if (note?.busy == true) "Bakılıyor…" else "Bilgi al") }
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = if (note?.busy == true) "Bakılıyor…" else "Bilgi al",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
                         }
                         if (onDetail != null) {
-                            TextButton(
+                            FilledTonalButton(
                                 onClick = onDetail,
-                                contentPadding = PaddingValues(
-                                    horizontal = 4.dp,
-                                    vertical = 0.dp,
-                                ),
-                            ) { Text("Ayrıntı") }
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = "Ayrıntı",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
                         }
                     }
                 }
@@ -508,20 +519,12 @@ fun ColorPickerDialog(
                         )
                     }
                 }
-
-                if (request.sentence.isNotBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = keepContext, onCheckedChange = { keepContext = it })
-                        Text(
-                            text = request.sentence,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+        // "Kapat" yok: dışarı dokunmak kapatıyor ve renklerden birine
+        // basmak zaten kutuyu kapatıyor. Bir kutuda yapacak iş varken
+        // ayrıca "kapat" aramak gereksiz.
+        confirmButton = {},
         dismissButton = {
             if (current != null) {
                 TextButton(onClick = onRemove) {
@@ -645,7 +648,13 @@ fun readingContext(block: String, word: String): String {
 }
 
 private const val MAX_SENTENCE_WORDS = 10
-private const val WINDOW_WORDS = 5
+/**
+ * Uzun cümlede kelimenin çevresinden alınan pencere.
+ *
+ * Beş kelimeydi; çeviri için yeterli bağlam vermiyordu. Bu pencere yalnız
+ * modele gönderilen bağlam — çevrilen şey her zaman seçimin kendisi.
+ */
+private const val WINDOW_WORDS = 15
 
 /** Composable olmayan yerlerden kullanılabilen renk eşlemesi. */
 /**

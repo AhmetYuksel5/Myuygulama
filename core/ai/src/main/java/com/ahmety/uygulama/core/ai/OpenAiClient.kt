@@ -170,8 +170,14 @@ class OpenAiClient @Inject constructor(
             append("Write the Turkish a good translator would write — natural, ")
             append("idiomatic Turkish that reads as if it had been written in ")
             append("Turkish — never a word-for-word rendering. ")
-            append("Use the passage to choose the right sense of an ambiguous ")
-            append("word. ")
+            // Bağlam penceresi genişledi (seçimin on beş kelime öncesi ve
+            // sonrası). Genişleyince "hangisini çevireceğim" sorusu
+            // ortaya çıkıyor: cevabı her zaman Input.
+            append("Translate ONLY the text given as Input. The passage is ")
+            append("there so you can choose the right sense of an ambiguous ")
+            append("word; never translate the passage, never extend the ")
+            append("translation beyond the Input, and never trim it either — ")
+            append("what comes back must correspond exactly to the Input. ")
             // Tek kelimede karşılık, öbekte çeviri isteniyor: ikisine tek
             // bir uzunluk vermek yanlıştı. Kısa tutmayı emretmek uzun bir
             // seçimde özete dönüyordu — cümlenin yarısı kayboluyordu.
