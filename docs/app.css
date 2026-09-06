@@ -138,6 +138,14 @@ mark.RED    { background: rgba(242,112,138,.45); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* --- Seçim kutusu --- */
+/*
+  hidden özelliğini kendi kuralımız eziyordu.
+  Tarayıcı "hidden" işaretini display:none ile uyguluyor; aşağıdaki
+  display:grid ondan daha güçlü olduğu için kutu hiç kapanmıyor ve
+  ekrandaki bütün dokunuşları yiyordu.
+*/
+#perde[hidden] { display: none; }
+
 #perde {
   position: fixed; inset: 0;
   background: rgba(0,0,0,.35);
