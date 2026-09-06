@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Arapça Kitap Okuyucu</string>
+
+    <!--
+        Sayfanın adresi. GitHub Pages bu depodaki docs/ klasörünü buradan
+        yayınlıyor. Adres değişirse APK'yı yeniden derlemek gerekiyor;
+        sayfanın içeriği değişirse gerekmiyor.
+    -->
+    <string name="adres" translatable="false">https://ahmetyuksel5.github.io/Myuygulama/</string>
+
+    <string name="yedek_kaydedildi">Yedek İndirilenler klasörüne kaydedildi</string>
+    <string name="yedek_kaydedilemedi">Yedek kaydedilemedi</string>
+    <string name="baglanti_yok">Sayfa açılamadı. İnternet bağlantısını kontrol et.</string>
+</resources>

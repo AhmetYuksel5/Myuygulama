@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Başlık çubuğu yok: sayfanın kendi alt çubuğu var, üstte ikinci bir
+        çubuk okuma alanını yiyordu. Pencere zemini sayfanın kâğıt rengiyle
+        aynı, böylece açılışta beyaz bir kare çakmıyor.
+    -->
+    <style name="Theme.ArapcaOkuyucu" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/zemin</item>
+        <item name="android:statusBarColor">@color/zemin</item>
+        <item name="android:navigationBarColor">@color/zemin</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

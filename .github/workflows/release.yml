@@ -94,11 +94,15 @@ jobs:
           set -o pipefail
           ./gradlew --no-daemon assembleRelease 2>&1 | tee -a derleme.log
 
-      - name: APK'yı adlandır
+      # İki APK çıkıyor: Merkez'in kendisi ve tarayıcı sürümünü kendi
+      # penceresinde açan Arapça Kitap Okuyucu. İkisi ayrı uygulama, telefonda
+      # yan yana duruyorlar.
+      - name: APK'ları adlandır
         if: steps.keystore.outputs.ready == 'true'
         run: |
           mkdir -p yayin
           cp app/build/outputs/apk/release/app-release.apk "yayin/merkez-0.${{ github.run_number }}.apk"
+          cp okuyucu/build/outputs/apk/release/okuyucu-release.apk "yayin/arapca-kitap-okuyucu-0.${{ github.run_number }}.apk"
 
       - name: Sürümü yayınla
         if: steps.keystore.outputs.ready == 'true'
@@ -108,7 +112,9 @@ jobs:
           name: Merkez 0.${{ github.run_number }}
           body: |
             ${{ github.event.head_commit.message }}
-          files: yayin/merkez-0.${{ github.run_number }}.apk
+          files: |
+            yayin/merkez-0.${{ github.run_number }}.apk
+            yayin/arapca-kitap-okuyucu-0.${{ github.run_number }}.apk
           make_latest: true
 
       # Kırılınca hataları log'un en sonuna yazıyoruz. Gradle'ın yığın izi

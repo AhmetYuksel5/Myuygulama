@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sayfanın kendi kâğıt rengi; açılışta beyaz parlama olmasın diye aynısı. -->
+    <color name="zemin">#faf7f0</color>
+    <color name="murekkep">#2d2a24</color>
+
+    <!-- İkon: koyu zemin üstünde kâğıt rengi açık kitap. -->
+    <color name="ikon_zemin">#2d2a24</color>
+</resources>
