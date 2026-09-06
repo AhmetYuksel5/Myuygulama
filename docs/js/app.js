@@ -146,6 +146,9 @@ async function kitapEkle(dosya) {
   ekran.append(bekle);
   try {
     const tampon = await dosya.arrayBuffer();
+    if (!tampon || tampon.byteLength === 0) {
+      throw new Error("Dosya boş geldi; seçiciden bir daha dene.");
+    }
     const id = `k${Date.now()}`;
 
     // Uzantıya değil dosyanın kendisine bakılıyor: PDF'ler "%PDF-" ile
@@ -178,8 +181,15 @@ async function kitapEkle(dosya) {
     await kaliciIste();
     git("kitaplik");
   } catch (e) {
-    bekle.textContent = "Bu dosya okunamadı. EPUB ya da PDF olduğundan emin misin?";
+    // Hatanın kendisi de yazılıyor.
+    //
+    // Önce yalnız "okunamadı" deniyordu ve elde tek bilgi o cümleydi;
+    // dosyanın biçimi mi bozuk, depo mu dolu, ayrıştırıcı mı takıldı,
+    // ayırt etmenin yolu yoktu.
+    bekle.innerHTML = "";
     bekle.className = "uyari";
+    bekle.append(yap("div", "Bu dosya okunamadı."));
+    bekle.append(yap("div", `${e?.name || "Hata"}: ${e?.message || e}`, "kucuk"));
   }
 }
 

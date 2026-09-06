@@ -30,7 +30,11 @@ export async function zipAc(tampon) {
   for (let i = 0; i < adet; i++) {
     if (veri.getUint32(yer, true) !== 0x02014b50) break;
     const yontem = veri.getUint16(yer + 10, true);
-    const boyut = veri.getUint32(yer + 24, true);
+    // Merkezî dizinde 20. bayt sıkıştırılmış, 24. bayt açılmış boyut.
+    // Yanlışlıkla açılmış boyut okunuyordu: dosyadan gereğinden fazla
+    // bayt kesiliyor ve çözücü "sıkıştırılmış verinin ardında çöp var"
+    // diyerek her kitabı reddediyordu.
+    const boyut = veri.getUint32(yer + 20, true);
     const adUzunluk = veri.getUint16(yer + 28, true);
     const ekUzunluk = veri.getUint16(yer + 30, true);
     const yorumUzunluk = veri.getUint16(yer + 32, true);
