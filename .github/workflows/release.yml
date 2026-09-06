@@ -144,6 +144,7 @@ jobs:
           body: |
             ${{ github.event.head_commit.message }}
           files: yayin/merkez-0.${{ github.run_number }}.apk
+          fail_on_unmatched_files: true
           make_latest: true
 
       - name: Okuyucu sürümünü yayınla
@@ -160,6 +161,10 @@ jobs:
             Karttaki, listedeki ve okuyucudaki değişiklikler bu APK yeniden
             kurulmadan geliyor — sayfa GitHub Pages'ten iniyor. Bu dosya
             yalnız kabuğun kendisi değiştiğinde yenileniyor.
+          files: yayin/arapca-kitap-okuyucu-0.${{ github.run_number }}.apk
+          # Dosya boş çıkarsa sürüm de boş yayınlanıyor; adım sessizce
+          # geçtiği için bir kez APK'sız bir sürüm çıktı.
+          fail_on_unmatched_files: true
           # "En son sürüm" Merkez'de kalıyor; okuyucu kendi etiket dizisinde.
           make_latest: false
 
