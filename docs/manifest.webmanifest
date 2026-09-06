@@ -1,6 +1,6 @@
 {
-  "name": "Merkez",
-  "short_name": "Merkez",
+  "name": "Arapça Kitap Okuyucu",
+  "short_name": "Arapça Kitap",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

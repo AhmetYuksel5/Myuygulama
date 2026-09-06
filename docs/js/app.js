@@ -1,5 +1,5 @@
 /*
- * Merkez — tarayıcı sürümü.
+ * Arapça Kitap Okuyucu — tarayıcı sürümü.
  *
  * Android uygulamasının okuma ve kelime çalışma kısmının karşılığı.
  * Tek kişilik: veri telefondan çıkmıyor, hesap yok, sunucu yok. Sayfa
@@ -1539,7 +1539,7 @@ async function ayarlarEkrani() {
     const bag = document.createElement("a");
     bag.href = URL.createObjectURL(
       new Blob([JSON.stringify(paket)], { type: "application/json" }));
-    bag.download = `merkez-yedek-${new Date().toISOString().slice(0, 10)}.json`;
+    bag.download = `arapca-kitap-yedek-${new Date().toISOString().slice(0, 10)}.json`;
     bag.click();
   };
   const geri = yap("button", "Yedeği geri yükle", "tonlu");
