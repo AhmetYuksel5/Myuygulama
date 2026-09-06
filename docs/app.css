@@ -180,6 +180,12 @@ mark.RED    { background: rgba(242,112,138,.45); }
 }
 .kelime b { font-size: 16px; }
 .kelime span { font-size: 14px; color: var(--sonuk); flex: 1; }
+/* Kitabın adı satırın ucunda küçük bir etiket: büyümesin, sarmasın. */
+.kelime .eser-etiket {
+  flex: none; font-size: 11px;
+  border: 1px solid var(--cizgi); border-radius: 999px;
+  padding: 1px 7px; white-space: nowrap;
+}
 
 #tekrar-kart {
   border: 1px solid var(--cizgi);

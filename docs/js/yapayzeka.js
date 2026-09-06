@@ -7,9 +7,25 @@
  *
  * Yönergeler Android sürümündekilerin aynısı — iki uygulamanın aynı şeyi
  * söylemesi gerekiyor.
+ *
+ * Ortak kural: ortada iki dil var, Türkçe ve seçilen metnin kendi dili.
+ * Üçüncü bir dil hiçbir yerde geçmiyor. Yönergeler önce "İngilizce
+ * kitap okuyan biri" varsayımıyla yazılmıştı; Arapça bir kelime sorulunca
+ * model tanımı Türkçe, örnekleri İngilizce veriyordu — soranın istemediği
+ * bir dil.
  */
 
 const UC = "https://api.openai.com/v1/chat/completions";
+
+// Her yönergenin sonuna eklenen dil kuralı. Kaynak dili biz söylemiyoruz;
+// modelin metne bakıp anlaması yeter, biz yalnız "başka dile sapma"
+// diyoruz.
+const DIL_KURALI = [
+  "The Input may be in any language — English, Arabic, anything.",
+  "Only two languages may appear in your answer: Turkish, and the",
+  "language of the Input itself. Never bring in a third language; an",
+  "Arabic word is never explained with English words.",
+].join(" ");
 
 async function sor(ayarlar, yonerge, istek, sinir) {
   if (!ayarlar.anahtar) return { hata: "OpenAI anahtarı girilmemiş." };
@@ -53,7 +69,8 @@ function okunurHata(kod, veri) {
 export function cevir(ayarlar, secim, baglam, eser) {
   const yonerge = [
     "You are a literary translator working into Turkish for a reader who is",
-    "in the middle of an English book.",
+    "in the middle of a book.",
+    DIL_KURALI,
     "Write the Turkish a good translator would write — natural, idiomatic",
     "Turkish that reads as if it had been written in Turkish — never a",
     "word-for-word rendering.",
@@ -69,7 +86,7 @@ export function cevir(ayarlar, secim, baglam, eser) {
     "An idiom becomes the Turkish idiom that means the same thing.",
     "Do not explain, do not comment, do not add anything that is not in the",
     "text. No quotation marks, no markdown, no preamble, and never repeat",
-    "the English text itself.",
+    "the original text itself.",
   ].join(" ");
 
   return sor(ayarlar, yonerge, istekMetni(secim, baglam, eser), 700);
@@ -78,9 +95,10 @@ export function cevir(ayarlar, secim, baglam, eser) {
 /** "Bu nedir" sorusunun cevabı; elli-yüz kelime. */
 export function bilgi(ayarlar, secim, baglam, eser) {
   const yonerge = [
-    "Explain the given English word, phrase or sentence to a Turkish reader",
-    "who met it in a book. Answer IN TURKISH, in 50 to 100 words, as one or",
-    "two plain paragraphs.",
+    "Explain the given word, phrase or sentence to a Turkish reader who met",
+    "it in a book. Answer IN TURKISH, in 50 to 100 words, as one or two",
+    "plain paragraphs.",
+    DIL_KURALI,
     "Say what it means and then the thing worth knowing about it: where a",
     "term comes from, what a concept is for, who a person was, what a",
     "reference points to, why a phrase is said that way.",
@@ -107,25 +125,28 @@ export async function kart(ayarlar, secim, baglam, eser) {
   // İngilizce kalsın" diye. Kart o hâlde okunmuyordu — kelimeyi bilmeyen
   // biri için İngilizce tanım da bilinmeyen bir cümle.
   //
-  // Örnek cümleler yine İngilizce, çünkü öğrenilen şey onlar; ama her
-  // birinin altında Türkçesi var. Eş anlamlı, karşıt ve kökendaş
-  // kelimeler de İngilizce kalıyor — onlar İngilizce kelime — ama
-  // yanlarında karşılıkları yazıyor.
+  // Örnek cümleler, eş ve karşıt anlamlılar kelimenin kendi dilinde
+  // kalıyor — öğrenilen şey onlar — ama her birinin yanında Türkçesi var.
+  // Alan adı "asil": "en" yazıyordu ve model Arapça bir kelimeye bile
+  // İngilizce örnek uyduruyordu, çünkü alanın adı öyle diyordu.
   const yonerge = [
-    "You are a bilingual English-Turkish dictionary for an adult Turkish",
-    "learner of English. Return JSON with exactly these keys and nothing",
-    "else. EVERY explanation is written IN TURKISH:",
+    "You are a bilingual dictionary for an adult Turkish reader who is",
+    "learning the language of the Input.",
+    DIL_KURALI,
+    "Return JSON with exactly these keys and nothing else. EVERY",
+    "explanation is written IN TURKISH:",
     '"karsilik": the Turkish equivalent(s), a few words.',
     '"tanim": what the word means, IN TURKISH, one or two plain sentences.',
-    '"ornekler": 3 objects, each {"en": an English example sentence,',
-    '"tr": its Turkish translation}.',
-    '"kok": the origin IN TURKISH, one line, e.g.',
+    '"ornekler": 3 objects, each {"asil": an example sentence in the',
+    'language of the Input, "tr": its Turkish translation}.',
+    '"kok": the origin IN TURKISH, one line — for an Arabic word its',
+    'root letters, for a European word its etymology, e.g.',
     '"morph- (Yun. morphē = şekil)". Empty string if there is nothing to say.',
-    '"aile": other English words from the same root, each written as',
-    '"word — Türkçe karşılığı".',
-    '"esanlam": English synonyms, "karsit": English antonyms,',
-    '"birliktelik": typical English collocations —',
-    'each of these also written as "english — Türkçe karşılığı".',
+    '"aile": other words from the same root, in the language of the Input,',
+    'each written as "kelime — Türkçe karşılığı".',
+    '"esanlam": synonyms, "karsit": antonyms, "birliktelik": typical',
+    "collocations — all three in the language of the Input, and each also",
+    'written as "kelime — Türkçe karşılığı".',
     "Choose the sense that fits the passage. Keep every list at most six",
     "items. Plain text inside the values; no markdown.",
   ].join(" ");
