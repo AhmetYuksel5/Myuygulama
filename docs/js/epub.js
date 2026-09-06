@@ -130,7 +130,7 @@ export async function epubOku(tampon) {
     if (!kaynak || !kaynak.tur.includes("html")) continue;
     const ham = await zip.oku(kaynak.yol);
     if (!ham) continue;
-    const bolum = bolumCikar(metneCevir(ham));
+    const bolum = bolumCikar(metneCevir(ham), kaynak.yol);
     if (bolum.paragraflar.length) bolumler.push(bolum);
   }
 
@@ -143,18 +143,49 @@ export async function epubOku(tampon) {
  * Biçimlendirmenin tamamı atılıyor: okuyucu yazı tipini ve puntoyu kendi
  * veriyor, kitabın kendi stilini taşımak okumayı iyileştirmiyor.
  */
-function bolumCikar(metin) {
+function bolumCikar(metin, dosyaYolu) {
   const belge = new DOMParser().parseFromString(metin, "text/html");
   belge.querySelectorAll("script, style").forEach(x => x.remove());
 
   const baslik = belge.querySelector("h1, h2, h3")?.textContent?.trim() || "";
   const paragraflar = [];
-  belge.querySelectorAll("p, h1, h2, h3, h4, li, blockquote").forEach(oge => {
+
+  // Resimler de metnin akışında: seçici sıraya göre dolaşıldığı için
+  // görsel, kitapta hangi paragrafların arasındaysa orada duruyor.
+  const secici = "p, h1, h2, h3, h4, li, blockquote, img, image";
+  belge.querySelectorAll(secici).forEach(oge => {
+    const ad = oge.tagName.toLowerCase();
+    if (ad === "img" || ad === "image") {
+      // SVG içine konmuş görseller "image" etiketiyle ve xlink ile
+      // geliyor; kapaklar çoğu kitapta böyle.
+      const kaynak = oge.getAttribute("src")
+        || oge.getAttribute("xlink:href")
+        || oge.getAttribute("href");
+      if (kaynak) paragraflar.push({ resim: yoluCoz(dosyaYolu, kaynak) });
+      return;
+    }
     const yazi = oge.textContent.replace(/\s+/g, " ").trim();
     if (!yazi) return;
-    const baslikMi = /^H[1-4]$/.test(oge.tagName);
-    paragraflar.push({ yazi, baslik: baslikMi });
+    paragraflar.push({ yazi, baslik: /^h[1-4]$/.test(ad) });
   });
 
   return { baslik, paragraflar };
+}
+
+/**
+ * Görselin ZIP içindeki gerçek yolu.
+ *
+ * Bölüm dosyası "OEBPS/text/b1.xhtml" ise ve görsel "../gorsel/a.jpg"
+ * diyorsa aranacak giriş "OEBPS/gorsel/a.jpg". Yolu çözmeden ZIP'te
+ * karşılığı bulunamıyor.
+ */
+function yoluCoz(dosyaYolu, kaynak) {
+  if (/^[a-z]+:/i.test(kaynak)) return kaynak;
+  const parcalar = dosyaYolu.split("/").slice(0, -1);
+  for (const parca of decodeURIComponent(kaynak).split("/")) {
+    if (parca === "." || parca === "") continue;
+    if (parca === "..") parcalar.pop();
+    else parcalar.push(parca);
+  }
+  return parcalar.join("/");
 }

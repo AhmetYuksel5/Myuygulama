@@ -12,7 +12,7 @@
  */
 
 import { depo, kaliciIste, disaAktar, iceAktar } from "./depo.js";
-import { epubOku } from "./epub.js";
+import { epubOku, zipAc } from "./epub.js";
 import { pdfAc, sayfaCiz } from "./pdf.js";
 import { cevir, bilgi, kart } from "./yapayzeka.js";
 import { yeniKelime, bekleyenler, karar, bugun } from "./tekrar.js";
@@ -66,6 +66,7 @@ async function git(ad) {
   acikKitap = null;
   if (pdfTemizle) pdfTemizle();
   if (okumaTemizle) okumaTemizle();
+  adresleriBirak();
   tercihleriBirak();
   cubuk.querySelectorAll("button").forEach(d =>
     d.classList.toggle("secili", d.dataset.git === ad));
@@ -236,12 +237,24 @@ async function oku(id) {
   const govde = yap("div", "");
   govde.id = "okuma";
   const isaretler = await isaretHaritasi(kitap.id);
+  const resimler = [];
   bolum.paragraflar.forEach(p => {
+    if (p.resim) {
+      const resim = document.createElement("img");
+      resim.alt = "";
+      // Kaynağı sonra doldruluyor: ZIP'i açmak için okumanın başlamasını
+      // beklemek gerekmiyor, metin hemen görünsün.
+      resimler.push({ oge: resim, yol: p.resim });
+      govde.append(resim);
+      return;
+    }
     const oge = document.createElement(p.baslik ? "h3" : "p");
     oge.innerHTML = kelimele(p.yazi, isaretler);
     govde.append(oge);
   });
   ekran.append(govde);
+
+  if (resimler.length) resimleriDoldur(kitap, resimler);
 
   const alt = yap("div", "", "satir");
   alt.style.marginTop = "24px";
@@ -290,6 +303,51 @@ async function oku(id) {
 }
 
 let okumaTemizle = null;
+
+/** Sayfada duran görsellerin ömrü; bölüm değişince serbest bırakılıyor. */
+let acikAdresler = [];
+
+function adresleriBirak() {
+  acikAdresler.forEach(URL.revokeObjectURL);
+  acikAdresler = [];
+}
+
+/**
+ * Bölümün görsellerini kitabın kendi dosyasından çıkarır.
+ *
+ * Görseller ayrıca saklanmıyor: EPUB zaten olduğu gibi duruyor, aynı
+ * baytları ikinci kez yazmak yerini iki katına çıkarırdı. Bölüm açılınca
+ * ZIP'ten okunup geçici bir adrese bağlanıyorlar.
+ */
+async function resimleriDoldur(kitap, resimler) {
+  try {
+    const dosya = await depo.dosya(kitap.id);
+    if (!dosya) return;
+    const zip = await zipAc(dosya.veri);
+    for (const { oge, yol } of resimler) {
+      if (acikKitap?.id !== kitap.id) return;
+      const bayt = await zip.oku(yol);
+      if (!bayt) {
+        // Bulunamayan görselin yerinde boş bir kutu kalmasın.
+        oge.remove();
+        continue;
+      }
+      const adres = URL.createObjectURL(new Blob([bayt], { type: turBul(yol) }));
+      acikAdresler.push(adres);
+      oge.src = adres;
+    }
+  } catch {
+    resimler.forEach(({ oge }) => oge.remove());
+  }
+}
+
+const turBul = yol => {
+  const uzanti = yol.split(".").pop().toLowerCase();
+  return {
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+    gif: "image/gif", svg: "image/svg+xml", webp: "image/webp",
+  }[uzanti] || "application/octet-stream";
+};
 
 /** Görünüm kutusu: punto, zemin, kenar boşluğu. */
 function gorunumKutusu() {
@@ -341,6 +399,7 @@ function gorunumKutusu() {
 }
 
 async function bolumeGit(kitap, yon) {
+  adresleriBirak();
   kitap.bolum = Math.max(0, Math.min(kitap.bolumler.length - 1, (kitap.bolum || 0) + yon));
   await depo.kitapYaz(kitap);
   oku(kitap.id);
