@@ -1033,6 +1033,9 @@ const kutuCevap = document.getElementById("kutu-cevap");
 
 const BEKLEME = "Anlamına bakılıyor…";
 
+/** Seçim tek kelime mi, cümle/öbek mi? Kutu buna göre davranıyor. */
+const cokKelime = metin => metin.trim().includes(" ");
+
 let secili = null;
 
 perde.addEventListener("click", e => {
@@ -1103,6 +1106,15 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   kutuCevap.textContent = "";
   kutuAyrinti.disabled = false;
   kutuAyrinti.textContent = "Ayrıntı";
+  /*
+   * Cümlede "Ayrıntı" yok.
+   *
+   * Düğme bütün cümle için kelime kartı istiyordu: karşılık, kök, aile,
+   * eş anlamlı… Cümlenin kökü olmuyor, çıkan şey saçmalıyordu. Cümlede
+   * istenen zaten kutuda duruyor — anlamı, altında gerekiyorsa birkaç
+   * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
+   */
+  kutuAyrinti.parentElement.hidden = cokKelime(kelime);
   perde.hidden = false;
 
   const [sozluk, kelimeler] = await Promise.all([depo.sozluk(anahtar), depo.kelimeler()]);
@@ -1125,7 +1137,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   kutuCeviri.className = "sonuc sonuk";
   const eser = istek.kaynak?.ad || "";
   // Tek kelimede karşılık; öbekte tam çeviri ve zor ifadeler.
-  const sonuc = kelime.trim().includes(" ")
+  const sonuc = cokKelime(kelime)
     ? await cumle(ayarlar, kelime, baglam, eser)
     : await cevir(ayarlar, kelime, baglam, eser);
 
@@ -1222,7 +1234,7 @@ async function isaretle(kalem) {
 }
 
 kutuAyrinti.onclick = async () => {
-  if (!secili) return;
+  if (!secili || cokKelime(secili.kelime)) return;
   const istek = secili;
   kutuAyrinti.disabled = true;
   kutuAyrinti.textContent = "Getiriliyor…";
@@ -1519,7 +1531,7 @@ function eksikleriDoldur(kelimeler, satirlar) {
       let notlar = sozluk?.notlar || [];
       if (!ceviri) {
         const eser = k.eser || "";
-        const sonuc = k.kelime.trim().includes(" ")
+        const sonuc = cokKelime(k.kelime)
           ? await cumle(ayarlar, k.kelime, k.baglam || "", eser)
           : await cevir(ayarlar, k.kelime, k.baglam || "", eser);
         if (sonuc.hata) break;
@@ -1548,7 +1560,10 @@ let seciliEser = "";
 async function kelimeKutusu(k) {
   await kutuyuAc(k.kelime, k.baglam || "", { id: k.kitap, ad: k.eser }, k);
   // Kart daha önce alınmadıysa bir kez alınıp kelimeye yazılıyor.
-  if (secili && !secili.kart) kutuAyrinti.onclick();
+  // Cümlede kart yok; düğme de gizli.
+  if (secili && !secili.kart && !kutuAyrinti.parentElement.hidden) {
+    kutuAyrinti.onclick();
+  }
 }
 
 function tekrarEkrani(kuyruk) {

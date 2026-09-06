@@ -125,40 +125,118 @@ export function soru(ayarlar, secim, baglam, eser, soruMetni, kart) {
 }
 
 /**
- * Cümle ya da öbek: tam çeviri ve altında zor olabilecek ifadeler.
+ * Cümle ya da öbek: anlamı, altında gerekiyorsa birkaç not.
  *
- * Tek kelimede karşılık yetiyor; cümlede çeviri okunduktan sonra "şu
- * ifade neydi" sorusu kalıyordu. Notlar o soruya peşinen cevap: yaygın
- * iki bin kelimenin dışındaki kelimeler, deyimler, Arapçada fiilin
- * babı. Zor bir şey yoksa liste boş — zorlama not istenmiyor.
+ * Cümle öğelerine bölünmüyor ve içindeki her az bilinen kelime
+ * sayılmıyor — önce öyleydi, kutu kalabalıklaşıyor ve asıl istenen şey,
+ * cümlenin ne dediği, listenin altında kalıyordu. Kelimenin kendisi
+ * merak edilirse ona dokunmak kartını açıyor; buranın işi o değil.
+ *
+ * Not yalnızca, kelimelerin hepsini tek tek bilen birinin yine de
+ * cümleyi yanlış anlayacağı yerde yazılıyor. Not olmaması olağan
+ * durum, eksiklik değil.
  */
 export async function cumle(ayarlar, secim, baglam, eser) {
-  const yonerge = [
-    "You are a literary translator working into Turkish for a reader who is",
-    "in the middle of a book.",
-    DIL_KURALI,
-    "Return JSON with exactly two keys.",
-    '"ceviri": the COMPLETE Turkish translation of the Input — every clause,',
-    "nothing summarised, nothing left out; natural, idiomatic Turkish, the",
-    "register of the original kept; an idiom becomes the Turkish idiom.",
-    "Translate ONLY the Input; the passage is there for choosing senses.",
-    '"zorlar": an array of the expressions IN THE INPUT a Turkish learner',
-    "may not know, each {\"ifade\": the expression exactly as it appears,",
-    '"anlam": its meaning here IN TURKISH, a few words}.',
-    "Include: words outside the 2000 most common words of the language;",
-    "idioms and phrasal verbs whose meaning is not the sum of their parts;",
-    "for an Arabic verb, add its verb form (bāb) in parentheses after the",
-    'meaning, e.g. "(bâb-ı tef\'îl)". Do NOT include ordinary words the',
-    "reader surely knows. If nothing in the Input is hard, return an empty",
-    "array — that is the normal case, not a failure. At most six items.",
-    "Plain text inside the values; no markdown.",
-  ].join(" ");
-
-  const sonuc = await iste(ayarlar, yonerge, istekMetni(secim, baglam, eser), 900);
+  const arapca = ARAPCA.test(secim);
+  const sonuc = await iste(
+    ayarlar, cumleYonergesi(arapca), istekMetni(secim, baglam, eser), 900);
   if (sonuc.hata) return sonuc;
   const veri = jsonCoz(sonuc.metin);
   if (!veri || typeof veri.ceviri !== "string") return { hata: "Çeviri okunamadı." };
-  return { ceviri: veri.ceviri.trim(), zorlar: Array.isArray(veri.zorlar) ? veri.zorlar : [] };
+  const notlar = Array.isArray(veri.zorlar) ? veri.zorlar : [];
+  return {
+    ceviri: veri.ceviri.trim(),
+    // Üçten fazlası kutuyu kalabalıklaştırıyor; model sınırı aşarsa
+    // fazlası burada kesiliyor.
+    zorlar: notlar.filter(n => n?.ifade).slice(0, 3),
+  };
+}
+
+function cumleYonergesi(arapca) {
+  const ortak = [
+    "You are a bilingual teacher. The Input is a sentence or clause a",
+    "Turkish learner did not understand.",
+    DIL_KURALI,
+    "Any surrounding text is context only — explain THE INPUT itself.",
+    "Return STRICT JSON with exactly two keys.",
+
+    '"ceviri": the COMPLETE Turkish translation of the Input — every',
+    "clause, nothing summarised, nothing left out. Natural, idiomatic",
+    "Turkish, the register of the original kept; an idiom becomes the",
+    "Turkish idiom that means the same thing. Do not carry information",
+    "from the surrounding passage into it. This is the main thing the",
+    "reader wants; get it right before anything else.",
+
+    '"zorlar": an array of AT MOST 3 notes, each',
+    '{"ifade": the expression exactly as it appears in the Input,',
+    '"anlam": what it means here, IN TURKISH, a few words}.',
+
+    "Write a note ONLY when a reader who knows every word separately",
+    "would STILL read the sentence wrongly. If the sentence means what",
+    "its words say, return an EMPTY array — that is the normal case and",
+    "not a failure. Never pad the list.",
+
+    "NEVER list ordinary vocabulary. A word being uncommon is not a",
+    "reason: the reader can tap any word to open its own card. Do not",
+    "break the sentence into its parts, do not gloss it word by word,",
+    "and do not restate the translation.",
+  ];
+
+  // Arapçada okuyucuyu yanıltan şeyler İngilizcedekilerden başka:
+  // harekesiz yazı edilgeni gizliyor, olumsuzluk edatı zamanı
+  // kaydırıyor, fiilin anlamını yanındaki harf belirliyor.
+  const arapcaTuzaklar = [
+    "The Input is Arabic. Write a note when — and only when — one of",
+    "these is present and actually changes how the sentence is read:",
+
+    "(1) an idiom or fixed expression whose meaning is not the sum of",
+    "its parts;",
+
+    "(2) a verb bound to a preposition (harf-i cer) where the",
+    "preposition decides the meaning — give the verb and the preposition",
+    "together as one ifade, e.g. رغب في versus رغب عن. This is the",
+    "single most useful note in Arabic, because the dictionary entry for",
+    "the bare verb is misleading;",
+
+    "(3) a negation particle that moves the tense: لم with the jussive",
+    "is PAST negative although the verb looks present, لن is future",
+    "negative, ما with the perfect is past;",
+
+    "(4) the passive (mabnī li-l-majhūl) — unvowelled writing hides it",
+    "and the reader takes the object for the subject;",
+
+    "(5) a structure that reverses or hides the plain reading: كان and",
+    "its sisters, إنّ and its sisters, the ḥāl (the indefinite",
+    "accusative that means \"-arak/-erek\" and looks like an object),",
+    "كاد / ما زال / ما لبث, لو (counterfactual) against إذا (real),",
+    "ما used as a relative rather than as negation;",
+
+    "(6) a verb form (bāb) that carries the meaning of the sentence —",
+    "استفعل asking or seeking, تفاعل reciprocity, انفعل the action",
+    "turning back on itself. Name the bāb in parentheses.",
+
+    "You may use the traditional Turkish terms (harf-i cer, meçhul,",
+    "hâl, bâb) — the reader is studying Arabic and knows them. One short",
+    "sentence each; no grammar lecture.",
+
+    "The reader is a bit past the beginning: they know the alphabet,",
+    "the present and past tenses and the common nouns. Write for that",
+    "person — not for someone who knows nothing, not for a philologist.",
+  ];
+
+  const genelTuzaklar = [
+    "Write a note only for a figurative use, an idiom or a phrasal verb",
+    "whose meaning is not the sum of its parts, or something left out of",
+    "the sentence. Give the plain meaning and the sense it carries here,",
+    "in ordinary Turkish.",
+  ];
+
+  return [
+    ...ortak,
+    ...(arapca ? arapcaTuzaklar : genelTuzaklar),
+    "Never explain that a swear word is rude; the reader knows.",
+    "Plain text inside the values; no markdown.",
+  ].join(" ");
 }
 
 /** Metinde Arap harfi var mı? Kart yönergesini bu seçiyor. */
