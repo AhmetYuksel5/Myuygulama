@@ -253,14 +253,23 @@ mark.RED    { background: rgba(242,112,138,.45); }
 #kutu-notlar b { color: var(--murekkep); font-weight: 600; }
 /* Soru: en altta, yazı kadar hafif bir düğme. */
 #kutu-soru { margin-top: 14px; text-align: center; }
+/* Yalnız düğme yüzüyor: altındaki şerit kartı ikiye bölüyordu. */
 #kutu-alt {
   position: sticky;
-  bottom: -20px;
-  margin: 12px -20px -20px;
-  padding: 10px 20px;
+  bottom: 0;
+  margin-top: 12px;
+  padding: 6px 0;
   text-align: center;
+  background: none;
+  pointer-events: none;
+}
+/* Düğmenin kendisi dolu: arkasından kartın yazısı akıyor, yarı saydam
+   bir düğme orada okunmuyordu. */
+#kutu #kutu-alt button {
+  pointer-events: auto;
   background: var(--okuma-zemin, var(--kagit));
-  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
 }
 #kutu-alt button { border-radius: 3px; font-size: 14px; padding: 8px 18px; }
 .sessiz {

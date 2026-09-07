@@ -1309,6 +1309,9 @@ const kelimeSayisi = metin => metin.trim().split(/\s+/).filter(Boolean).length;
 const cumleMi = metin => kelimeSayisi(metin) > OBEK_SINIRI;
 
 let secili = null;
+/* Kutunun renk seçicisi listede hiç çıkmıyor; durum burada saklanıyor
+   ki iç kartlar arasında gidip gelirken kaybolmasın. */
+let kalemlerGizli = false;
 
 perde.addEventListener("click", e => {
   // Dışarı dokunmak kapatıyor; kutunun içi kapatmıyor.
@@ -1371,9 +1374,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   // iri puntoda kutuyu tek başına dolduruyor.
   kutuSecim.classList.toggle("tek", !cumleMi(kelime));
   kutuCeviri.hidden = false;
-  // Listeden açılan kutuda renk seçici yok: kelime zaten listede ve dört
-  // büyük yuvarlak kartın önünü kapatıyordu.
-  kutuKalemler.hidden = Boolean(kayit);
+  kutuKalemler.hidden = kalemlerGizli;
   kutuNotlar.innerHTML = "";
   kutuNot.innerHTML = "";
   kutuNot.className = "sonuc";
@@ -1390,8 +1391,12 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    * istenen zaten kutuda duruyor — anlamı, altında gerekiyorsa birkaç
    * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
    */
+  kutuAyrinti.parentElement.hidden = false;
   kutuAyrinti.hidden = cumleMi(kelime);
   kutuAlt.hidden = true;
+  // Listeden açılan kutuda renk seçici yok; iç kartta da gizleniyor,
+  // durumu burada saklıyoruz.
+  kalemlerGizli = Boolean(kayit);
   if (perde.hidden) derinles();
   perde.hidden = false;
 
@@ -1553,8 +1558,11 @@ kutuSoruGonder.onclick = async () => {
   kutuSoruGonder.disabled = true;
   kutuCevap.textContent = "Bakılıyor…";
   kutuCevap.className = "sonuc sonuk";
-  const sonuc = await soru(ayarlar, istek.kelime, istek.baglam,
-    istek.kaynak?.ad || "", metin, istek.kart);
+  // Soru ekrandaki karta ait olmalı: iç karttayken dıştaki kelimeyi
+  // sormak yanıltıcıydı.
+  const ust = kartYigini[kartYigini.length - 1];
+  const sonuc = await soru(ayarlar, ust?.kelime || istek.kelime, istek.baglam,
+    istek.kaynak?.ad || "", metin, ust?.kart || istek.kart);
   if (secili !== istek) return;
   kutuSoruGonder.disabled = false;
   kutuCevap.textContent = sonuc.metin || sonuc.hata;
@@ -1619,6 +1627,17 @@ function yiginiCiz() {
   kutuCeviri.hidden = true;
   kutuNot.innerHTML = "";
   kutuNot.className = "sonuc";
+  /*
+   * Üste binen kartta yalnız o kartın kendi şeyleri duruyor. Kutunun
+   * renk seçicisi ilk seçilen kelimeye ait; iç kartın kendi seçicisi
+   * varken ikisi yan yana durunca hangisinin hangi kelimeye ait olduğu
+   * anlaşılmıyordu. Önceki kelimeye verilen cevap da siliniyor.
+   */
+  const icKart = kartYigini.length > 1;
+  kutuKalemler.hidden = kalemlerGizli || icKart;
+  kutuNotlar.hidden = icKart;
+  kutuSoruAlani.hidden = true;
+  kutuCevap.textContent = "";
   const ust = kartYigini[kartYigini.length - 1];
   if (!ust) return;
   kutuNot.append(kartiCiz(ust.kart, ust.kelime, kartYigini.length - 1));
