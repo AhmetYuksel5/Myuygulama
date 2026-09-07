@@ -5,7 +5,7 @@
  * zaten cihazda olduğu için internetsiz okumak mümkün. OpenAI istekleri
  * doğal olarak internet istiyor, onlar buradan geçmiyor.
  */
-const SURUM = "merkez-23";
+const SURUM = "merkez-24";
 const DOSYALAR = [
   ".", "index.html", "app.css", "manifest.webmanifest",
   "js/app.js", "js/depo.js", "js/epub.js", "js/pdf.js", "js/tekrar.js",

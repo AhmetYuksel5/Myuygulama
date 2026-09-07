@@ -69,12 +69,19 @@ const sadeKok = s => s.replace(HAREKE, "").replace(/^ال/, "").trim();
  */
 function tondanZemin(ton) {
   const l = Math.max(0, Math.min(100, Number(ton) || 0));
+  /*
+   * Doygunluk açık uçta yüksek, koyu uçta düşük. Sabit tutulunca çubuk
+   * boyunca hep aynı gri geliyordu; oysa açık taraf krem ve hafif sarımsı
+   * tonlardan geçmeli, kâğıt rengi orada. Koyuda ise renk artarsa çamur
+   * gibi duruyor.
+   */
+  const s = Math.round(5 + (l / 100) * 25);
   const acik = l > 55;
   return {
     ad: "Özel",
-    zemin: `hsl(40 8% ${l}%)`,
+    zemin: `hsl(40 ${s}% ${l}%)`,
     yazi: acik ? "hsl(40 12% 12%)" : "hsl(40 8% 82%)",
-    cizgi: `hsl(40 8% ${acik ? Math.max(0, l - 12) : Math.min(100, l + 14)}%)`,
+    cizgi: `hsl(40 ${s}% ${acik ? Math.max(0, l - 12) : Math.min(100, l + 14)}%)`,
   };
 }
 
@@ -168,23 +175,59 @@ function birKademeGeri() {
  * yeni sürümü getirmenin en kısa yolu. Kitap okurken kapalı: orada aşağı
  * çekmek sayfayı kaydırmak demek. Kutu açıkken de kapalı.
  */
+const CEKME_ESIGI = 90;
 let cekmeBasi = 0;
+let cekmeIzi = null;
+
+function iziGoster(mesafe) {
+  if (!cekmeIzi) {
+    cekmeIzi = yap("div", "↻", "yenile-izi");
+    document.body.append(cekmeIzi);
+  }
+  // Parmak kadar değil, yarısı kadar iniyor: çekmenin bir direnci olsun.
+  const yol = Math.min(mesafe * 0.5, CEKME_ESIGI);
+  const hazir = mesafe >= CEKME_ESIGI;
+  cekmeIzi.style.transform =
+    `translate(-50%, ${yol}px) rotate(${Math.min(mesafe * 2, 360)}deg)`;
+  cekmeIzi.classList.toggle("hazir", hazir);
+  cekmeIzi.hidden = false;
+  return hazir;
+}
+
+function iziKaldir() {
+  if (cekmeIzi) cekmeIzi.hidden = true;
+}
+
 document.addEventListener("touchstart", olay => {
   const uygun = !acikKitap && perde.hidden && window.scrollY <= 0
     && olay.touches.length === 1;
   cekmeBasi = uygun ? olay.touches[0].clientY : 0;
 }, { passive: true });
 
+// Pasif değil: çekerken sayfanın kendi esnemesi araya girmesin.
 document.addEventListener("touchmove", olay => {
   if (!cekmeBasi) return;
-  // Yüz on piksel: kazara sıyırmayla yenilenmesin.
-  if (olay.touches[0].clientY - cekmeBasi > 110) {
+  const mesafe = olay.touches[0].clientY - cekmeBasi;
+  // Yukarı gidiyorsa bu bir kaydırma; çekmeyi hiç başlatma.
+  if (mesafe <= 0) {
     cekmeBasi = 0;
-    location.reload();
+    iziKaldir();
+    return;
   }
-}, { passive: true });
+  olay.preventDefault();
+  iziGoster(mesafe);
+}, { passive: false });
 
-document.addEventListener("touchend", () => { cekmeBasi = 0; }, { passive: true });
+document.addEventListener("touchend", olay => {
+  if (!cekmeBasi) return;
+  const bitis = olay.changedTouches[0]?.clientY ?? cekmeBasi;
+  const yeter = bitis - cekmeBasi >= CEKME_ESIGI;
+  cekmeBasi = 0;
+  if (!yeter) { iziKaldir(); return; }
+  // Bırakınca iz yerinde kalıyor ve dönüyor: yenilendiği görülsün.
+  if (cekmeIzi) cekmeIzi.classList.add("donuyor");
+  location.reload();
+}, { passive: true });
 
 window.addEventListener("popstate", () => {
   yedekVar = false;
@@ -1236,10 +1279,10 @@ const BEKLEME = "Anlamına bakılıyor…";
  * Boşluk görür görmez cümle saymak yanlıştı: "سيارة إسعاف" iki kelime
  * ama tek bir şeyin adı — ambulans. Cümle yoluna girince model onu
  * çevirmek yerine içinde geçtiği cümleyi çeviriyordu, üstelik kelime
- * kartı düğmesi de kapanıyordu. Üç kelimeye kadar olan her şey öbek:
+ * kartı düğmesi de kapanıyordu. İki kelimeye kadar olan her şey öbek:
  * karşılığı veriliyor ve kartı açılabiliyor.
  */
-const OBEK_SINIRI = 3;
+const OBEK_SINIRI = 2;
 const kelimeSayisi = metin => metin.trim().split(/\s+/).filter(Boolean).length;
 const cumleMi = metin => kelimeSayisi(metin) > OBEK_SINIRI;
 
