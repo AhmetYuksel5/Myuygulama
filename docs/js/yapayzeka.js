@@ -466,6 +466,42 @@ function genelKart(v) {
   };
 }
 
+/**
+ * Karta üç örnek cümle daha.
+ *
+ * Kartın kendi örnekleri üçle sınırlı; bir kelimeyi oturtmak için çoğu
+ * zaman yetiyor ama yetmediğinde tek yol kartı baştan almaktı. Elde
+ * olanlar isteğe konuyor ki aynı cümleler tekrar gelmesin.
+ */
+export async function ekOrnekler(ayarlar, secim, baglam, eser, eldekiler) {
+  const arapca = ARAPCA.test(secim);
+  const yonerge = [
+    "You are a bilingual lexicographer writing example sentences for a",
+    "Turkish learner.",
+    DIL_KURALI,
+    'Return STRICT JSON: {"ornekler": [3 objects]}, each',
+    '{"asil": a natural example sentence in the language of the Input',
+    "using the Input itself, 6-14 words",
+    ...(arapca ? ["with harakat on the Input word only,"] : [","]),
+    '"tr": that sentence in natural Turkish}.',
+    "The sentences must be different from the ones already shown and",
+    "different from each other: another sense, another register, another",
+    "kind of situation. Never repeat a sentence you are given.",
+    "Plain text inside the values; no markdown.",
+  ].join(" ");
+
+  let istek = istekMetni(secim, baglam, eser);
+  if (eldekiler?.length) {
+    istek += `\nAlready shown: ${JSON.stringify(eldekiler)}`;
+  }
+  const sonuc = await iste(ayarlar, yonerge, istek, 700);
+  if (sonuc.hata) return sonuc;
+  const veri = jsonCoz(sonuc.metin);
+  const liste = Array.isArray(veri?.ornekler) ? veri.ornekler : null;
+  if (!liste) return { hata: "Örnekler okunamadı." };
+  return { ornekler: liste.filter(o => o?.asil) };
+}
+
 /** Model bazen JSON'u kod çitiyle sarıyor; çiti soyup ayrıştırır. */
 function jsonCoz(metin) {
   try {

@@ -14,7 +14,7 @@
 import { depo, kaliciIste, disaAktar, iceAktar } from "./depo.js";
 import { epubOku, zipAc } from "./epub.js";
 import { pdfAc, sayfaCiz } from "./pdf.js";
-import { cevir, cumle, kart, soru } from "./yapayzeka.js";
+import { cevir, cumle, ekOrnekler, kart, soru } from "./yapayzeka.js";
 import { yeniKelime, bekleyenler, karar, bugun } from "./tekrar.js";
 
 const ekran = document.getElementById("ekran");
@@ -137,17 +137,20 @@ let acikEkran = "kitaplik";
  * yedek koyuyoruz. Geri alınacak bir şey kalmayınca yedek konmuyor ve
  * geri tuşu sayfadan çıkıyor.
  */
-let yedekVar = false;
+let derinlik = 0;
 
-function yedekGerek() {
-  if (yedekVar) return;
-  history.pushState({ merkez: true }, "");
-  yedekVar = true;
-}
-
-/** Geri alınacak bir şey duruyor mu? Yedeği boşuna koymamak için. */
-function geriAlinacakVar() {
-  return !perde.hidden || Boolean(acikKitap) || acikEkran !== "kitaplik";
+/**
+ * Bir kademe derinleşildi; geçmişe kendi adımını bırakıyor.
+ *
+ * Önce tek bir "yedek adım" tutuluyor, geri tuşu onu tükettikçe yenisi
+ * konuyordu. Kırılgandı: kitap, kutu ve üste binen kartlar tek adımı
+ * paylaşınca geri tuşu kademe atlıyor, kartın üstünden doğrudan
+ * kitaplığa düşüyordu. Artık her kademenin kendi adımı var ve geçmişin
+ * derinliği uygulamanınkiyle birebir.
+ */
+function derinles() {
+  derinlik += 1;
+  history.pushState({ merkez: derinlik }, "");
 }
 
 /** Kart yığınında bir kademe geri; karttaki geri düğmesi bunu çağırıyor. */
@@ -229,16 +232,21 @@ document.addEventListener("touchend", olay => {
   location.reload();
 }, { passive: true });
 
-window.addEventListener("popstate", () => {
-  yedekVar = false;
-  // Kitaplığa dönüldüyse geri alınacak bir şey kalmıyor; yedek koymazsak
-  // bir sonraki geri tuşu sayfadan çıkıyor, boşa basılmış olmuyor.
-  if (birKademeGeri() && geriAlinacakVar()) yedekGerek();
+window.addEventListener("popstate", olay => {
+  // Geçmişteki adımın derinliği hedefimiz; oraya inene kadar kademe
+  // kademe geri alıyoruz. Genellikle tek kademe, ama tarayıcı birkaç
+  // adımı birden geri alırsa da doğru yere düşüyoruz.
+  const hedef = olay.state?.merkez || 0;
+  while (derinlik > hedef && birKademeGeri()) derinlik -= 1;
+  derinlik = hedef;
 });
 
 async function git(ad) {
+  // Yalnız kitaplıktan ayrılırken adım bırakılıyor. Liste ile ayarlar
+  // arasında gidip gelmek yeni kademe sayılmıyor; geri tuşu her ikisinden
+  // de doğrudan kitaplığa dönüyor.
+  if (ad !== "kitaplik" && acikEkran === "kitaplik") derinles();
   acikEkran = ad;
-  if (ad !== "kitaplik") yedekGerek();
   acikKitap = null;
   if (pdfTemizle) pdfTemizle();
   if (okumaTemizle) okumaTemizle();
@@ -579,9 +587,11 @@ const ilerleme = k => {
 async function oku(id) {
   const kitap = await depo.kitap(id);
   if (!kitap) return git("kitaplik");
+  // Kitap açıkken geri tuşu kitaplığa dönsün. Bölüm değiştirmek ya da
+  // harekeleri açıp kapatmak aynı kitabı yeniden çiziyor; o yeni kademe
+  // değil.
+  if (acikKitap?.id !== kitap.id) derinles();
   acikKitap = kitap;
-  // Kitap açıkken geri tuşu kitaplığa dönsün.
-  yedekGerek();
   kitap.acildi = Date.now();
   await depo.kitapYaz(kitap);
 
@@ -1369,8 +1379,8 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
    */
   kutuAyrinti.parentElement.hidden = cumleMi(kelime);
+  if (perde.hidden) derinles();
   perde.hidden = false;
-  yedekGerek();
 
   const [sozluk, kelimeler] = await Promise.all([depo.sozluk(anahtar), depo.kelimeler()]);
   if (secili !== istek) return;
@@ -1619,7 +1629,7 @@ async function kartaGir(kelime) {
   const istek = secili;
   const kademe = { kart: null, kelime: temiz };
   kartYigini.push(kademe);
-  yedekGerek();
+  derinles();
   yiginiCiz();
 
   const sozluk = await depo.sozluk(anahtar);
@@ -1775,6 +1785,37 @@ function kartiCiz(k, kelime = "", kademe = 0) {
       liste.append(madde);
     });
     kart.append(liste);
+
+    /*
+     * Üç örnek çoğu kelimeyi oturtuyor; oturtmadığında tek yol kartı
+     * baştan almaktı. Artı düğmesi üç tane daha getiriyor ve karta
+     * yazıyor, bir daha istenmesin.
+     */
+    if (kelime) {
+      const ekle = yap("button", "+", "ornek-ekle");
+      ekle.setAttribute("aria-label", "Örnek ekle");
+      ekle.onclick = async () => {
+        if (!secili) return;
+        ekle.disabled = true;
+        ekle.textContent = "…";
+        const sonuc = await ekOrnekler(
+          ayarlar, kelime, secili.baglam, secili.kaynak?.ad || "", k.ornekler);
+        ekle.disabled = false;
+        ekle.textContent = "+";
+        if (!sonuc.ornekler?.length) {
+          if (sonuc.hata) ekle.title = sonuc.hata;
+          return;
+        }
+        k.ornekler = [...k.ornekler, ...sonuc.ornekler];
+        // Eski kayıtlar düzeltilirken kopyalanıyor; yığındaki kart da
+        // yenilenmezse eklenen örnekler yeniden çizimde kayboluyor.
+        const ust = kartYigini[kartYigini.length - 1];
+        if (ust) ust.kart = k;
+        await sozlugeYaz(anahtarla(kelime), { kart: k });
+        yiginiCiz();
+      };
+      kart.append(ekle);
+    }
   }
 
   /*
