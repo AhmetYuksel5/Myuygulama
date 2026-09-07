@@ -716,6 +716,8 @@ function secimiKur(govde) {
   let bas = -1;
   let son = -1;
   let seciyor = false;
+  // Seçimin başladığı yükseklik; cam oraya demirleniyor.
+  let camDemir = 0;
 
   const kelimeBul = (x, y) => {
     const oge = document.elementFromPoint(x, y);
@@ -744,7 +746,7 @@ function secimiKur(govde) {
    * kalmadığında altına geçiyor, yoksa sayfanın ilk satırlarında ekranın
    * dışında kalıyor.
    */
-  const camiGoster = (x, y) => {
+  const camiGoster = () => {
     let cam = document.getElementById("cam");
     if (!cam) {
       cam = yap("div", "");
@@ -752,16 +754,25 @@ function secimiKur(govde) {
       document.body.append(cam);
     }
     const [a, b] = [Math.min(bas, son), Math.max(bas, son)];
-    cam.textContent = kelimeler.slice(a, b + 1).map(sozcuk).join(" ");
+    const metin = kelimeler.slice(a, b + 1).map(sozcuk).join(" ");
+    cam.textContent = metin;
     cam.hidden = false;
 
-    const yukari = 110;
-    const ustte = y - yukari;
-    cam.style.top = `${ustte > 60 ? ustte : y + yukari}px`;
-    // Yatayda ekranın dışına taşmasın; genişliği ölçtükten sonra
-    // ortalanıyor.
-    const yari = cam.offsetWidth / 2;
-    cam.style.left = `${Math.min(Math.max(x, yari + 8), window.innerWidth - yari - 8)}px`;
+    /*
+     * Seçim uzadıkça yazı küçülüyor. Önce tek satıra sığdırılıp fazlası
+     * kırpılıyordu; parmak ilerledikçe cümlenin başı kayboluyor ve
+     * büyüteç ne seçtiğini göstermez oluyordu.
+     */
+    const u = metin.length;
+    cam.style.fontSize = `${u > 110 ? 15 : u > 70 ? 17 : u > 38 ? 19 : 22}px`;
+
+    /*
+     * Cam parmağı takip etmiyor: seçimin başladığı yerin biraz
+     * yukarısında duruyor ve alt kenarı orada sabit kalıyor. Uzadıkça
+     * yukarı doğru büyüyor, böylece okunan satır yerinde kalıyor.
+     */
+    const yukseklik = cam.offsetHeight;
+    cam.style.top = `${Math.max(yukseklik + 10, camDemir - 30)}px`;
   };
 
   const camiKapat = () => {
@@ -773,11 +784,11 @@ function secimiKur(govde) {
     const kelime = olay.target.closest?.("span.k");
     if (!kelime) return;
     bas = son = Number(kelime.dataset.sira);
-    const nokta = olay.touches[0];
+    camDemir = olay.touches[0].clientY;
     zamanlayici = setTimeout(() => {
       seciyor = true;
       boya();
-      camiGoster(nokta.clientX, nokta.clientY);
+      camiGoster();
     }, 350);
   }, { passive: true });
 
@@ -795,7 +806,7 @@ function secimiKur(govde) {
     if (!kelime) return;
     son = Number(kelime.dataset.sira);
     boya();
-    camiGoster(nokta.clientX, nokta.clientY);
+    camiGoster();
   }, { passive: false });
 
   const bitir = () => {
@@ -1211,8 +1222,18 @@ const kutuCevap = document.getElementById("kutu-cevap");
 
 const BEKLEME = "Anlamına bakılıyor…";
 
-/** Seçim tek kelime mi, cümle/öbek mi? Kutu buna göre davranıyor. */
-const cokKelime = metin => metin.trim().includes(" ");
+/*
+ * Seçim öbek mi, cümle mi? Kutu buna göre davranıyor.
+ *
+ * Boşluk görür görmez cümle saymak yanlıştı: "سيارة إسعاف" iki kelime
+ * ama tek bir şeyin adı — ambulans. Cümle yoluna girince model onu
+ * çevirmek yerine içinde geçtiği cümleyi çeviriyordu, üstelik kelime
+ * kartı düğmesi de kapanıyordu. Üç kelimeye kadar olan her şey öbek:
+ * karşılığı veriliyor ve kartı açılabiliyor.
+ */
+const OBEK_SINIRI = 3;
+const kelimeSayisi = metin => metin.trim().split(/\s+/).filter(Boolean).length;
+const cumleMi = metin => kelimeSayisi(metin) > OBEK_SINIRI;
 
 let secili = null;
 
@@ -1275,7 +1296,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   kutuSecim.hidden = false;
   // Tek kelime kutunun başlığı sayılıyor ve iri yazılıyor; cümle uzun,
   // iri puntoda kutuyu tek başına dolduruyor.
-  kutuSecim.classList.toggle("tek", !cokKelime(kelime));
+  kutuSecim.classList.toggle("tek", !cumleMi(kelime));
   kutuCeviri.hidden = false;
   // Listeden açılan kutuda renk seçici yok: kelime zaten listede ve dört
   // büyük yuvarlak kartın önünü kapatıyordu.
@@ -1296,7 +1317,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    * istenen zaten kutuda duruyor — anlamı, altında gerekiyorsa birkaç
    * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
    */
-  kutuAyrinti.hidden = cokKelime(kelime);
+  kutuAyrinti.hidden = cumleMi(kelime);
   perde.hidden = false;
   yedekGerek();
 
@@ -1320,7 +1341,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   kutuCeviri.className = "sonuc sonuk";
   const eser = istek.kaynak?.ad || "";
   // Tek kelimede karşılık; öbekte tam çeviri ve zor ifadeler.
-  const sonuc = cokKelime(kelime)
+  const sonuc = cumleMi(kelime)
     ? await cumle(ayarlar, kelime, baglam, eser)
     : await cevir(ayarlar, kelime, baglam, eser);
 
@@ -1417,7 +1438,7 @@ async function isaretle(kalem) {
 }
 
 kutuAyrinti.onclick = async () => {
-  if (!secili || cokKelime(secili.kelime)) return;
+  if (!secili || cumleMi(secili.kelime)) return;
   const istek = secili;
   kutuAyrinti.disabled = true;
   ayrintiYaz("Getiriliyor…");
@@ -1834,7 +1855,7 @@ async function deste() {
      * aşağı doğru uzayıp satırı devleştiriyordu. Cümlede Arapça kendi
      * satırında, Türkçesi altında baştan sona.
      */
-    const uzun = cokKelime(k.kelime);
+    const uzun = cumleMi(k.kelime);
     const satir = yap("button", "", uzun ? "kelime uzun" : "kelime");
     const nokta = yap("span", "", "im");
     nokta.style.background = `var(--${
@@ -1899,7 +1920,7 @@ function eksikleriDoldur(kelimeler, satirlar) {
       let notlar = sozluk?.notlar || [];
       if (!ceviri) {
         const eser = k.eser || "";
-        const sonuc = cokKelime(k.kelime)
+        const sonuc = cumleMi(k.kelime)
           ? await cumle(ayarlar, k.kelime, k.baglam || "", eser)
           : await cevir(ayarlar, k.kelime, k.baglam || "", eser);
         if (sonuc.hata) break;
