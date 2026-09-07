@@ -26,25 +26,50 @@ let ayarlar = { anahtar: "", model: "gpt-4o-mini" };
 /**
  * Okuma tercihleri.
  *
- * Üç zemin: açık, orta, koyu. Koyu zeminin metni bilerek arayüzünkinden
- * sönük: siyah üstüne beyaz uzun okumada yoruyor. Orta, ikisinin
- * arasında gri — gece odada açık zemin göz alıyor, koyu zemin bazı
- * gözlere fazla sert geliyor.
+ * İki hazır zemin: açık ve koyu. Eskiden üç vardı; en koyusu (neredeyse
+ * siyah) kaldırıldı, uzun okumada sert geliyordu. Koyu artık ikisinin
+ * arasındaki gri — metni de bilerek sönük, siyah üstüne beyaz yoruyor.
+ *
+ * Bu ikisi yetmezse "Özelleştir": zemin tonu kademesiz seçiliyor.
  */
 const ZEMINLER = {
   kagit: { ad: "Açık", zemin: "#faf7f0", yazi: "#22201c", cizgi: "#ddd5c7" },
-  orta: { ad: "Orta", zemin: "#3a3d43", yazi: "#d9d5cd", cizgi: "#565a62" },
-  gece: { ad: "Koyu", zemin: "#0f1013", yazi: "#bfbbb3", cizgi: "#2a2c31" },
+  koyu: { ad: "Koyu", zemin: "#3a3d43", yazi: "#d9d5cd", cizgi: "#565a62" },
 };
 
-let okumaTercihi = { punto: 19, zemin: "kagit", kenar: 16, satir: 1.7 };
+let okumaTercihi = { punto: 19, zemin: "kagit", kenar: 16, satir: 1.9, ton: 22 };
+
+/**
+ * Özel ton: 0 en koyu, 100 en açık.
+ *
+ * Yazı rengi tondan kendiliğinden çıkıyor — açık zeminde koyu mürekkep,
+ * koyu zeminde sönük açık yazı. En açık yazı bile tam beyaz değil:
+ * siyaha yakın zeminde tam beyaz göz kamaştırıyor.
+ */
+function tondanZemin(ton) {
+  const l = Math.max(0, Math.min(100, Number(ton) || 0));
+  const acik = l > 55;
+  return {
+    ad: "Özel",
+    zemin: `hsl(40 8% ${l}%)`,
+    yazi: acik ? "hsl(40 12% 12%)" : "hsl(40 8% 82%)",
+    cizgi: `hsl(40 8% ${acik ? Math.max(0, l - 12) : Math.min(100, l + 14)}%)`,
+  };
+}
+
+function seciliZemin() {
+  if (okumaTercihi.zemin === "ozel") return tondanZemin(okumaTercihi.ton);
+  return ZEMINLER[okumaTercihi.zemin] || ZEMINLER.kagit;
+}
 
 function tercihleriUygula() {
-  const z = ZEMINLER[okumaTercihi.zemin] || ZEMINLER.kagit;
+  const z = seciliZemin();
   const govde = document.getElementById("okuma");
   if (govde) {
     govde.style.fontSize = `${okumaTercihi.punto}px`;
-    govde.style.lineHeight = String(okumaTercihi.satir);
+    // Satır aralığı değişkenden gidiyor: Arapça paragrafın kendi kuralı
+    // buradaki değeri eziyordu ve ayar hiç işlemiyor görünüyordu.
+    govde.style.setProperty("--satir", String(okumaTercihi.satir));
     govde.style.padding = `0 ${okumaTercihi.kenar}px`;
   }
   // Okuma zemini sayfanın tamamını kaplıyor: metnin çevresinde başka
@@ -829,16 +854,41 @@ function gorunumKutusu() {
   };
 
   const zeminler = yap("div", "", "satir");
+  const zeminSec = anahtar => {
+    okumaTercihi.zemin = anahtar;
+    yaz();
+    kutu.remove();
+    gorunumKutusu();
+  };
   Object.entries(ZEMINLER).forEach(([anahtar, z]) => {
     const dugme = yap("button", z.ad, anahtar === okumaTercihi.zemin ? "dolu" : "tonlu");
-    dugme.onclick = () => {
-      okumaTercihi.zemin = anahtar;
-      yaz();
-      kutu.remove();
-      gorunumKutusu();
-    };
+    dugme.onclick = () => zeminSec(anahtar);
     zeminler.append(dugme);
   });
+  const ozel = yap("button", "Özelleştir",
+    okumaTercihi.zemin === "ozel" ? "dolu" : "tonlu");
+  ozel.onclick = () => zeminSec("ozel");
+  zeminler.append(ozel);
+
+  /*
+   * Ton çubuğu yalnız "Özelleştir" seçiliyken duruyor: iki hazır zemin
+   * çoğu zaman yetiyor, çubuk hep açık dursa kutuyu kalabalıklaştırırdı.
+   */
+  const tonSatiri = yap("div", "", "olcu");
+  if (okumaTercihi.zemin === "ozel") {
+    tonSatiri.append(yap("span", "Ton"));
+    const kaydirac = document.createElement("input");
+    kaydirac.type = "range";
+    // Uçlara kadar gitmiyor: tam siyah ve tam beyaz ikisi de yoruyor.
+    kaydirac.min = "6";
+    kaydirac.max = "97";
+    kaydirac.value = String(okumaTercihi.ton);
+    kaydirac.oninput = () => {
+      okumaTercihi.ton = Number(kaydirac.value);
+      yaz();
+    };
+    tonSatiri.append(kaydirac);
+  }
 
   // AI anahtarı: kapalı bir satır, dokununca giriş alanı açılıyor.
   const anahtarSatiri = yap("button", ayarlar.anahtar ? "AI anahtarı · girili" : "AI anahtarı · girilmemiş", "menu-madde");
@@ -868,6 +918,7 @@ function gorunumKutusu() {
     kademe("Satır", "satir", 0.1, 1.2, 2.4, v => v.toFixed(1)),
     kademe("Kenar", "kenar", 4, 0, 48),
     zeminler,
+    tonSatiri,
     anahtarSatiri, anahtarAlani,
   );
   document.body.append(kutu);
@@ -1078,6 +1129,10 @@ const kutuNotlar = document.getElementById("kutu-notlar");
 const kutuKalemler = document.getElementById("kutu-kalemler");
 const kutuNot = document.getElementById("kutu-not");
 const kutuAyrinti = document.getElementById("kutu-ayrinti");
+/** Düğmenin yazısı; ok işaretini taşıyan parçaya dokunmuyor. */
+const ayrintiYaz = metin => {
+  kutuAyrinti.querySelector(".yazi").textContent = metin;
+};
 const kutuSor = document.getElementById("kutu-sor");
 const kutuSoruAlani = document.getElementById("kutu-soru-alani");
 const kutuSoruMetin = document.getElementById("kutu-soru-metin");
@@ -1148,6 +1203,9 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   kutuSecim.textContent = kelime;
   kutuSecim.dir = "auto";
   kutuSecim.hidden = false;
+  // Tek kelime kutunun başlığı sayılıyor ve iri yazılıyor; cümle uzun,
+  // iri puntoda kutuyu tek başına dolduruyor.
+  kutuSecim.classList.toggle("tek", !cokKelime(kelime));
   kutuCeviri.hidden = false;
   // Listeden açılan kutuda renk seçici yok: kelime zaten listede ve dört
   // büyük yuvarlak kartın önünü kapatıyordu.
@@ -1159,7 +1217,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
   kutuSoruMetin.value = "";
   kutuCevap.textContent = "";
   kutuAyrinti.disabled = false;
-  kutuAyrinti.textContent = "Ayrıntı";
+  ayrintiYaz("Kelime kartı");
   /*
    * Cümlede "Ayrıntı" yok.
    *
@@ -1292,7 +1350,7 @@ kutuAyrinti.onclick = async () => {
   if (!secili || cokKelime(secili.kelime)) return;
   const istek = secili;
   kutuAyrinti.disabled = true;
-  kutuAyrinti.textContent = "Getiriliyor…";
+  ayrintiYaz("Getiriliyor…");
   const sonuc = await kart(ayarlar, istek.kelime, istek.baglam, istek.kaynak?.ad || "");
   if (sonuc.kart) {
     istek.kart = sonuc.kart;
@@ -1300,7 +1358,7 @@ kutuAyrinti.onclick = async () => {
   }
   if (secili !== istek) return;
   kutuAyrinti.disabled = false;
-  kutuAyrinti.textContent = "Ayrıntı";
+  ayrintiYaz("Kelime kartı");
   if (sonuc.kart) {
     kartiGoster(sonuc.kart, istek.kelime);
   } else {
@@ -1960,8 +2018,12 @@ window.addEventListener("unhandledrejection", e => hataGoster(e.reason));
       // büyütmek gerekmesin.
       kartPunto = Number(await depo.ayar("kartPunto", "16")) || 16;
     } catch { /* bozuk kayıt varsayılanı bozmasın */ }
-    // Eski kayıtlarda dört zemin vardı; kalkanlar açığa düşsün.
-    if (!ZEMINLER[okumaTercihi.zemin]) okumaTercihi.zemin = "kagit";
+    // Kalkan zeminler: "orta" ve "gece" artık tek bir "koyu"; tanınmayan
+    // her şey açığa düşüyor. "ozel" hazır listede yok ama geçerli.
+    if (okumaTercihi.zemin !== "ozel" && !ZEMINLER[okumaTercihi.zemin]) {
+      const koyuydu = okumaTercihi.zemin === "orta" || okumaTercihi.zemin === "gece";
+      okumaTercihi.zemin = koyuydu ? "koyu" : "kagit";
+    }
     await git("kitaplik");
   } catch (e) {
     hataGoster(e);
