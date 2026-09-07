@@ -53,6 +53,14 @@ const HAREKE = /[ً-ْٰـ]/g;
 const gorunen = sade => (okumaTercihi.harekesiz ? sade.replace(HAREKE, "") : sade);
 
 /**
+ * Karşılaştırma gövdesi: harekesiz ve harf-i tarifsiz.
+ *
+ * Model aynı kelimeyi bir yerde harekeli, başka yerde başına "el" alarak
+ * yazıyor; öbeğin içindeki asıl kelimeyi bulmak için ikisi de eşleşmeli.
+ */
+const sadeKok = s => s.replace(HAREKE, "").replace(/^ال/, "").trim();
+
+/**
  * Özel ton: 0 en koyu, 100 en açık.
  *
  * Yazı rengi tondan kendiliğinden çıkıyor — açık zeminde koyu mürekkep,
@@ -1610,15 +1618,20 @@ function kartiCiz(k, kelime = "", kademe = 0) {
    * bilinmeyen bir kelime görülünce ona dokunmak kartını üste
    * bindiriyor.
    */
-  const dokunulur = (metin, sinif) => {
+  const dokunulur = (metin, sinif, silikMi) => {
     const kap = yonlu(yap("span", "", sinif));
     metin.split(/(\s+)/).forEach(parca => {
       if (!parca.trim()) {
         kap.append(document.createTextNode(parca));
         return;
       }
-      const sozcuk = yap("span", parca, "kk");
-      sozcuk.onclick = () => kartaGir(parca);
+      const sozcuk = yap("span", parca, silikMi?.(parca) ? "kk silik" : "kk");
+      // Örnek cümlede kelimeye dokunmak kartı açıyor, cümlenin Türkçesini
+      // açmıyor; iki iş birbirine karışmasın.
+      sozcuk.onclick = olay => {
+        olay.stopPropagation();
+        kartaGir(parca);
+      };
       kap.append(sozcuk);
     });
     return kap;
@@ -1690,16 +1703,20 @@ function kartiCiz(k, kelime = "", kademe = 0) {
       const ceviri = typeof o === "string" ? "" : o.tr;
       if (ceviri) {
         /*
-         * Türkçesi ilk dokunuşta açılıyor. Açıkken cümleyi okumadan
-         * gözün Türkçeye kayması öğrenmeyi baltalıyor; önce Arapçayı
-         * anlamaya çalışmak, sonra bakmak.
+         * Türkçesi ilk dokunuşta açılıyor. Açık dururken göz cümleyi
+         * anlamaya çalışmadan Türkçeye kayıyor.
+         *
+         * Yanında "Türkçesi" yazmıyor; cümlenin altındaki ince kesik
+         * çizgi dokunulabilir olduğunu söylüyor, bağırmadan.
          */
-        const alt = yap("div", "Türkçesi", "tr ceviri-kapali");
-        alt.onclick = () => {
-          alt.textContent = ceviri;
-          alt.className = "tr";
-        };
+        const alt = yap("div", ceviri, "tr");
+        alt.hidden = true;
         madde.append(alt);
+        madde.classList.add("acilir");
+        madde.onclick = () => {
+          alt.hidden = false;
+          madde.classList.remove("acilir");
+        };
       }
       liste.append(madde);
     });
@@ -1766,26 +1783,21 @@ function kartiCiz(k, kelime = "", kademe = 0) {
   baloncuklar([{ liste: k.ilgili, sinif: "ilgili" }]);
 
   /*
-   * Birliktelik: her öğe asıl kelimeyle birlikte yazılıyor. Tek başına
-   * bir kelime listesi neyle nasıl kurulduğunu göstermiyordu. Asıl
-   * kelime her satırda tekrar ettiği için silik.
+   * Birliktelik: öbek modelden olduğu gibi geliyor.
    *
-   * Sıra grubun adından geliyor: "+ isim" asıl kelimeden sonra geleni,
-   * "fiil +" asıl kelimeden önce geleni anlatıyor.
+   * Sıralamayı grubun adından çıkarmaya çalışıyorduk ve yanlış diziyordu:
+   * Arapçada sıfat mevsuftan sonra geliyor, "sıfat +" etiketi ise önce
+   * geleceğini söylüyor. Etiket ortağın cinsini anlatıyor, yerini değil.
+   * Ayrıca asıl kelimeyi öbeğin yanına biz eklediğimiz için tamlamada
+   * kelime iki kez yazılıyordu. Artık tam öbeği model veriyor; biz
+   * yalnız içindeki asıl kelimeyi silik gösteriyoruz — her satırda
+   * tekrar ettiğinden.
    */
+  const asilKok = kelime ? sadeKok(kelime) : "";
+  const asilMi = parca => Boolean(asilKok) && sadeKok(parca) === asilKok;
   k.birliktelik?.forEach(g => {
     if (!g?.grup || !g.kelimeler?.length) return;
-    const basOnce = g.grup.trim().startsWith("+");
-    const parcalar = g.kelimeler.map(oge => {
-      const kap = document.createElement("span");
-      const asil = kelime ? dokunulur(kelime, `${kaynak} silik`) : null;
-      const yanindaki = dokunulur(oge, kaynak);
-      if (!asil) kap.append(yanindaki);
-      else if (basOnce) kap.append(asil, document.createTextNode(" "), yanindaki);
-      else kap.append(yanindaki, document.createTextNode(" "), asil);
-      return kap;
-    });
-    bolum(g.grup, parcalar, true);
+    bolum(g.grup, g.kelimeler.map(obek => dokunulur(obek, kaynak, asilMi)), true);
   });
 
   if (k.karistirma?.length) {

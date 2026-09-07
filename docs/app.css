@@ -505,14 +505,14 @@ input, select, textarea {
 .silik { opacity: 0.45; }
 
 /*
-  Örneğin Türkçesi ilk dokunuşta açılıyor. Kapalıyken cümleyi anlamaya
-  çalışmadan göz Türkçeye kayıyor ve okuma öğretmiyor.
+  Örneğin Türkçesi kapalı geliyor; cümlenin altındaki ince kesik çizgi
+  dokunulabilir olduğunu belli ediyor. Yanına "Türkçesi" yazmıyoruz —
+  bir kez dokunulunca çizgi de kalkıyor.
 */
-.ceviri-kapali {
-  cursor: pointer;
-  opacity: 0.55;
+.kelime-kart .ornekler li.acilir { cursor: pointer; }
+.kelime-kart .ornekler li.acilir > span:first-child {
   border-bottom: 1px dashed var(--cizgi);
-  display: inline-block;
+  padding-bottom: 2px;
 }
 
 /* Eş anlamlı mavi, karşıt kırmızı, ilgili gri — Android'deki kartla aynı. */
