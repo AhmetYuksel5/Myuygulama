@@ -216,6 +216,8 @@ mark.RED    { background: rgba(242,112,138,.45); }
   border-radius: 3px;
   font-size: 14px;
   padding: 8px 12px;
+  /* Yazı iki satıra inince düğme yükseliyordu; tek satırda kalıyor. */
+  white-space: nowrap;
 }
 #kutu .tonlu, #kutu .sessiz {
   background: rgba(128, 128, 128, 0.18);
@@ -243,7 +245,7 @@ mark.RED    { background: rgba(242,112,138,.45); }
   font-size: 18px;
   line-height: 1;
 }
-.ikili .yazi { flex: 1; padding: 8px 12px; }
+.ikili .yazi { flex: 1; padding: 8px 10px; white-space: nowrap; }
 #kutu-not { margin-top: 14px; font-size: 15px; white-space: pre-wrap; }
 /* Zor ifadeler: çevirinin altında küçük satırlar. */
 #kutu-notlar { margin-top: 8px; font-size: 13px; color: var(--sonuk); }
@@ -251,6 +253,16 @@ mark.RED    { background: rgba(242,112,138,.45); }
 #kutu-notlar b { color: var(--murekkep); font-weight: 600; }
 /* Soru: en altta, yazı kadar hafif bir düğme. */
 #kutu-soru { margin-top: 14px; text-align: center; }
+#kutu-alt {
+  position: sticky;
+  bottom: -20px;
+  margin: 12px -20px -20px;
+  padding: 10px 20px;
+  text-align: center;
+  background: var(--okuma-zemin, var(--kagit));
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+}
+#kutu-alt button { border-radius: 3px; font-size: 14px; padding: 8px 18px; }
 .sessiz {
   font-size: 13px;
   color: var(--sonuk);
@@ -468,6 +480,10 @@ input, select, textarea {
 .kelime-kart .tr { font-size: calc(var(--punto) * 0.98); color: var(--sonuk); }
 
 .kart-punto { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+/* Üste binen kartın kendi renk seçicisi; kutununkinden küçük. */
+.kart-kalemler { display: flex; gap: 12px; justify-content: center; margin: 8px 0 12px; }
+.kart-kalemler span { width: 26px; height: 26px; border-radius: 50%; }
+.kart-kalemler span.secili { outline: 3px solid currentColor; outline-offset: 2px; }
 /* Geri solda, punto sağda: aradaki boşluğu bu esnek parça dolduruyor. */
 .kart-punto .esne { flex: 1; }
 .punto-dugme.geri { font-size: 20px; line-height: 1; padding: 0 12px 3px; }

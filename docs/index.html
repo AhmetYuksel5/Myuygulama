@@ -60,6 +60,7 @@
       </button>
       <button id="kutu-sor" class="tonlu">Soru sor</button>
     </div>
+    <div id="kutu-not" class="sonuc"></div>
     <div id="kutu-soru">
       <div id="kutu-soru-alani" hidden>
         <input id="kutu-soru-metin" placeholder="Sorun…" autocomplete="off">
@@ -67,7 +68,14 @@
       </div>
       <div id="kutu-cevap" class="sonuc"></div>
     </div>
-    <div id="kutu-not" class="sonuc"></div>
+    <!--
+      Kart açıkken soru düğmesi buraya geçiyor: kutunun dibine yapışık
+      duruyor ve kart kaydırılırken de yerinde kalıyor. Üstteki sıra kart
+      gelince gizlendiği için soru sormanın yolu bu.
+    -->
+    <div id="kutu-alt" hidden>
+      <button id="kutu-sor-alt" class="tonlu">Soru sor</button>
+    </div>
   </div>
 </div>
 

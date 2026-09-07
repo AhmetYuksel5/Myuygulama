@@ -52,13 +52,23 @@ let okumaTercihi = {
 const HAREKE = /[ً-ْٰـ]/g;
 const gorunen = sade => (okumaTercihi.harekesiz ? sade.replace(HAREKE, "") : sade);
 
+/** Karşılaştırma gövdesi: yalnız harekeler atılmış hâli. */
+const sadeKok = s => s.replace(HAREKE, "").trim();
+
 /**
- * Karşılaştırma gövdesi: harekesiz ve harf-i tarifsiz.
+ * İki yazılış aynı kelime mi?
  *
- * Model aynı kelimeyi bir yerde harekeli, başka yerde başına "el" alarak
- * yazıyor; öbeğin içindeki asıl kelimeyi bulmak için ikisi de eşleşmeli.
+ * Arapçada kelimenin başına "ve", "el", "bi", "li" gibi harfler
+ * yapışıyor, sonuna da hâl eki geliyor. Harf harf karşılaştırınca
+ * "والمثالية" ile "المثالية" tutmuyor ve öbekteki asıl kelime silik
+ * yazılmıyordu. Kısa olan uzunun içinde geçiyorsa aynı kelime sayılıyor;
+ * üç harften kısa gövdelerde bu ölçüt gevşek kaçtığı için aranmıyor.
  */
-const sadeKok = s => s.replace(HAREKE, "").replace(/^ال/, "").trim();
+function ayniKelime(a, b) {
+  if (!a || !b) return false;
+  const [kisa, uzun] = a.length <= b.length ? [a, b] : [b, a];
+  return kisa.length >= 3 && uzun.includes(kisa);
+}
 
 /**
  * Özel ton: 0 en koyu, 100 en açık.
@@ -1276,6 +1286,8 @@ const ayrintiYaz = metin => {
   kutuAyrinti.querySelector(".yazi").textContent = metin;
 };
 const kutuSor = document.getElementById("kutu-sor");
+const kutuSorAlt = document.getElementById("kutu-sor-alt");
+const kutuAlt = document.getElementById("kutu-alt");
 const kutuSoruAlani = document.getElementById("kutu-soru-alani");
 const kutuSoruMetin = document.getElementById("kutu-soru-metin");
 const kutuSoruGonder = document.getElementById("kutu-soru-gonder");
@@ -1379,6 +1391,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
    */
   kutuAyrinti.hidden = cumleMi(kelime);
+  kutuAlt.hidden = true;
   if (perde.hidden) derinles();
   perde.hidden = false;
 
@@ -1520,11 +1533,15 @@ kutuAyrinti.onclick = async () => {
   }
 };
 
-// Soru alanı düğmeye basınca açılıyor; her seçimde gerekmiyor.
-kutuSor.onclick = () => {
+// Soru alanı düğmeye basınca açılıyor; her seçimde gerekmiyor. İki
+// düğme aynı işi yapıyor: üstteki sırada duran ve kart açıkken dipte
+// beliren.
+const soruyuAc = () => {
   kutuSoruAlani.hidden = !kutuSoruAlani.hidden;
   if (!kutuSoruAlani.hidden) kutuSoruMetin.focus();
 };
+kutuSor.onclick = soruyuAc;
+kutuSorAlt.onclick = soruyuAc;
 kutuSoruMetin.addEventListener("keydown", e => {
   if (e.key === "Enter") kutuSoruGonder.click();
 });
@@ -1590,9 +1607,10 @@ let kartYigini = [];
  */
 function kartiGoster(k, kelime) {
   kartYigini = [{ kart: k, kelime }];
-  // Kart getirildi; getirme düğmesinin işi bitti. "Soru sor" satırda
-  // kalıyor.
-  kutuAyrinti.hidden = true;
+  // Kart getirildi; üstteki sıranın işi bitti ve kartın önünde duruyordu.
+  // Soru sormanın yolu kutunun dibindeki yapışık düğme.
+  kutuAyrinti.parentElement.hidden = true;
+  kutuAlt.hidden = false;
   yiginiCiz();
 }
 
@@ -1604,6 +1622,68 @@ function yiginiCiz() {
   const ust = kartYigini[kartYigini.length - 1];
   if (!ust) return;
   kutuNot.append(kartiCiz(ust.kart, ust.kelime, kartYigini.length - 1));
+}
+
+/** Sözlükten eklenen kelimeler listede kendi başlığı altında toplanıyor. */
+const SOZLUK_ESER = "Sözlükten";
+
+/**
+ * Üste binen kartın renk seçicisi.
+ *
+ * Kutunun kendi seçicisi ilk seçilen kelimeye ait; kartın içinden başka
+ * bir kelimeye gidildiğinde ona yaramıyordu. Buradan işaretlenen kelime
+ * bir kitaba değil sözlüğe bağlanıyor ve listede "Sözlükten" başlığı
+ * altında duruyor.
+ */
+function sozlukKalemleri(kelime) {
+  const sira = yap("div", "", "kart-kalemler");
+  const anahtar = anahtarla(kelime);
+  const ciz = seciliKalem => {
+    sira.innerHTML = "";
+    KALEMLER.forEach(kalem => {
+      const nokta = yap("span", "", kalem === seciliKalem ? "secili" : "");
+      nokta.style.background = `var(--${
+        { YELLOW: "sari", BLUE: "mavi", GREEN: "yesil", RED: "kirmizi" }[kalem]})`;
+      // Seçili renge tekrar basmak kelimeyi listeden çıkarıyor.
+      nokta.onclick = async () => {
+        const yeni = kalem === seciliKalem ? null : kalem;
+        await sozluktenIsaretle(kelime, yeni);
+        ciz(yeni);
+      };
+      sira.append(nokta);
+    });
+  };
+  ciz(null);
+  // Kayıt depodan gelince seçili renk yerine oturuyor.
+  depo.kelimeler().then(hepsi => {
+    const kayit = hepsi.find(k => k.anahtar === anahtar);
+    if (kayit?.kalem) ciz(kayit.kalem);
+  });
+  return sira;
+}
+
+async function sozluktenIsaretle(kelime, kalem) {
+  const anahtar = anahtarla(kelime);
+  if (!kalem) {
+    await depo.kelimeSil(anahtar);
+    return;
+  }
+  const [hepsi, sozluk] = await Promise.all([depo.kelimeler(), depo.sozluk(anahtar)]);
+  const eski = hepsi.find(k => k.anahtar === anahtar);
+  await depo.kelimeYaz(yeniKelime({
+    ...eski,
+    anahtar,
+    kelime,
+    kalem,
+    baglam: eski?.baglam || "",
+    // Kitaptan gelmediyse sözlüğe bağlanıyor; kitaptan geldiyse kendi
+    // kitabında kalıyor.
+    kitap: eski?.kitap || "",
+    eser: eski?.eser || SOZLUK_ESER,
+    ceviri: sozluk?.ceviri || gecerliCeviri(eski),
+    notlar: sozluk?.notlar || eski?.notlar || [],
+    kart: sozluk?.kart || eski?.kart || null,
+  }));
 }
 
 /** Bir kademe geri: üstteki kart kalkıyor, altındaki görünüyor. */
@@ -1752,6 +1832,13 @@ function kartiCiz(k, kelime = "", kademe = 0) {
   kart.append(ustSira);
 
   if (kelime) kart.append(yonlu(yap("div", kelime, `kart-baslik ${kaynak}`)));
+
+  /*
+   * Üste binen kartta kendi renk seçicisi var: sözlükte gezerken
+   * rastlanan kelime de listeye alınabilsin. Kutunun kendi seçicisi ilk
+   * seçilen kelimeye ait, buradakine yaramıyordu.
+   */
+  if (kademe > 0 && kelime) kart.append(sozlukKalemleri(kelime));
 
   // Kart daha gelmediyse ya da gelemediyse başlıkla birlikte durumu yaz.
   if (!k || k.hata) {
@@ -1913,7 +2000,7 @@ function kartiCiz(k, kelime = "", kademe = 0) {
    * tekrar ettiğinden.
    */
   const asilKok = kelime ? sadeKok(kelime) : "";
-  const asilMi = parca => Boolean(asilKok) && sadeKok(parca) === asilKok;
+  const asilMi = parca => ayniKelime(sadeKok(parca), asilKok);
   k.birliktelik?.forEach(g => {
     if (!g?.grup || !g.kelimeler?.length) return;
     bolum(g.grup, g.kelimeler.map(obek => dokunulur(obek, kaynak, asilMi)), true);
@@ -1965,6 +2052,10 @@ async function deste() {
     }
     eser.kelimeler.push(k);
   });
+  // Sözlükten eklenenler kitapların ardında: kitap sekmeleri asıl iş,
+  // sözlük torbası en sonda.
+  eserler.sort((a, b) =>
+    Number(a.ad === SOZLUK_ESER) - Number(b.ad === SOZLUK_ESER));
   if (!eserler.some(e => e.id === seciliEser)) seciliEser = eserler[0].id;
 
   const sekmeler = yap("div", "", "sekmeler");
