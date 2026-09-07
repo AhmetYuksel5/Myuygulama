@@ -201,20 +201,26 @@ mark.RED    { background: rgba(242,112,138,.45); }
 #kutu-notlar b { unicode-bidi: isolate; }
 #kutu-kalemler { display: flex; gap: 14px; margin: 14px 0; }
 #kutu-kalemler span {
-  width: 44px; height: 44px; border-radius: 50%;
+  width: 37px; height: 37px; border-radius: 50%;
   display: inline-block;
 }
 #kutu-kalemler span.secili { outline: 3px solid var(--murekkep); outline-offset: 2px; }
-#kutu-dugmeler { display: flex; gap: 8px; }
+#kutu-dugmeler { display: flex; gap: 8px; justify-content: center; }
 /*
-  Kutunun düğmeleri: köşeli ve ölçülü. Yuvarlak ve iri hâlleri kutunun
-  yarısını yiyordu; köşeler yalnız birkaç piksel kırık.
+  Kutunun düğmeleri: köşeli, ölçülü ve satırı kaplamıyorlar. Renkleri
+  kutunun zemininden türüyor — okuma koyu zeminliyken düğme de koyu
+  kalsın, uygulamanın açık zeminini taşımasın.
 */
 #kutu-dugmeler button {
-  flex: 1;
+  flex: 0 1 auto;
   border-radius: 3px;
   font-size: 14px;
   padding: 8px 12px;
+}
+#kutu .tonlu, #kutu .sessiz {
+  background: rgba(128, 128, 128, 0.18);
+  color: inherit;
+  border-color: rgba(128, 128, 128, 0.35);
 }
 
 /*
@@ -458,8 +464,8 @@ input, select, textarea {
   Satır yüksekliği de bu yüzden geniş — harekeler üstte yer istiyor.
 */
 .kelime-kart { text-align: start; --punto: 16px; }
-.kelime-kart .ar { font-size: calc(var(--punto) * 1.35); line-height: 1.95; }
-.kelime-kart .tr { font-size: calc(var(--punto) * 0.85); color: var(--sonuk); }
+.kelime-kart .ar { font-size: calc(var(--punto) * 1.15); line-height: 1.95; }
+.kelime-kart .tr { font-size: calc(var(--punto) * 0.98); color: var(--sonuk); }
 
 .kart-punto { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 /* Geri solda, punto sağda: aradaki boşluğu bu esnek parça dolduruyor. */
@@ -511,19 +517,19 @@ input, select, textarea {
 .kart-baslik {
   text-align: center;
   font-weight: 700;
-  font-size: calc(var(--punto) * 2.1);
+  font-size: calc(var(--punto) * 1.8);
   line-height: 1.7;
 }
 /* Okunuş ve tanım kartın gövdesinden bir tık küçük: başlık onlar değil. */
 .kelime-kart .kart-okunus.ar,
-.kelime-kart .tanim.ar { font-size: calc(var(--punto) * 1.15); }
+.kelime-kart .tanim.ar { font-size: calc(var(--punto) * 0.98); }
 .kart-okunus { text-align: center; color: var(--sonuk); margin-bottom: 8px; }
 
 .kelime-kart .karsilik {
   text-align: center;
   font-weight: 700;
   color: var(--vurgu);
-  font-size: calc(var(--punto) * 1.05);
+  font-size: calc(var(--punto) * 1.2);
   margin: 8px 0 6px;
 }
 /*
@@ -532,7 +538,7 @@ input, select, textarea {
   olarak görüyor.
 */
 .tanim-kutu {
-  border: 1px solid var(--cizgi);
+  border: 1px solid rgba(128, 128, 128, 0.45);
   border-radius: 0;
   padding: 10px 12px;
   margin: 4px 0 14px;
@@ -569,7 +575,7 @@ input, select, textarea {
   font-size: calc(var(--punto) * 0.85);
   align-items: baseline;
 }
-.kart-bolum .etiket { color: var(--vurgu); min-width: 62px; flex: none; }
+.kart-bolum .etiket { color: var(--vurgu); flex: none; }
 .kart-deger { min-width: 0; flex: 1; }
 /*
   "kelime — Türkçe" maddesi iki uca yaslanıyor: Arapça kendi tarafında,
@@ -601,7 +607,7 @@ input, select, textarea {
 /* Eş anlamlı mavi, karşıt kırmızı, ilgili gri — Android'deki kartla aynı. */
 .baloncuklar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .baloncuk { border-radius: 999px; padding: 4px 14px; }
-.baloncuk .ar { line-height: 1.65; font-size: calc(var(--punto) * 1.2); }
+.baloncuk .ar { line-height: 1.65; font-size: calc(var(--punto) * 1.02); }
 .baloncuk.es { background: var(--mavi); color: #10233a; }
 .baloncuk.karsit { background: var(--kirmizi); color: #3a1018; }
 .baloncuk.ilgili { background: var(--cizgi); color: var(--murekkep); }

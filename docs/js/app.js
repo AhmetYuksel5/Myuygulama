@@ -14,7 +14,7 @@
 import { depo, kaliciIste, disaAktar, iceAktar } from "./depo.js";
 import { epubOku, zipAc } from "./epub.js";
 import { pdfAc, sayfaCiz } from "./pdf.js";
-import { cevir, cumle, ekOrnekler, kart, soru } from "./yapayzeka.js";
+import { cevir, cumle, ekOrnekler, kart as kartIste, soru } from "./yapayzeka.js";
 import { yeniKelime, bekleyenler, karar, bugun } from "./tekrar.js";
 
 const ekran = document.getElementById("ekran");
@@ -1378,7 +1378,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    * istenen zaten kutuda duruyor — anlamı, altında gerekiyorsa birkaç
    * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
    */
-  kutuAyrinti.parentElement.hidden = cumleMi(kelime);
+  kutuAyrinti.hidden = cumleMi(kelime);
   if (perde.hidden) derinles();
   perde.hidden = false;
 
@@ -1503,7 +1503,7 @@ kutuAyrinti.onclick = async () => {
   const istek = secili;
   kutuAyrinti.disabled = true;
   ayrintiYaz("Getiriliyor…");
-  const sonuc = await kart(ayarlar, istek.kelime, istek.baglam, istek.kaynak?.ad || "");
+  const sonuc = await kartIste(ayarlar, istek.kelime, istek.baglam, istek.kaynak?.ad || "");
   if (sonuc.kart) {
     istek.kart = sonuc.kart;
     await sozlugeYaz(istek.anahtar, { kart: sonuc.kart });
@@ -1590,9 +1590,9 @@ let kartYigini = [];
  */
 function kartiGoster(k, kelime) {
   kartYigini = [{ kart: k, kelime }];
-  // Kart getirildi; getirme düğmesinin işi bitti ve kartın önünde
-  // duruyordu.
-  kutuAyrinti.parentElement.hidden = true;
+  // Kart getirildi; getirme düğmesinin işi bitti. "Soru sor" satırda
+  // kalıyor.
+  kutuAyrinti.hidden = true;
   yiginiCiz();
 }
 
@@ -1635,7 +1635,7 @@ async function kartaGir(kelime) {
   const sozluk = await depo.sozluk(anahtar);
   let veri = sozluk?.kart || null;
   if (!veri) {
-    const sonuc = await kart(ayarlar, temiz, istek.baglam, istek.kaynak?.ad || "");
+    const sonuc = await kartIste(ayarlar, temiz, istek.baglam, istek.kaynak?.ad || "");
     if (sonuc.kart) {
       veri = sonuc.kart;
       await sozlugeYaz(anahtar, { kart: veri });
@@ -1720,6 +1720,30 @@ function kartiCiz(k, kelime = "", kademe = 0) {
     ustSira.append(geri);
   }
   const bosluk = yap("span", "", "esne");
+  /*
+   * Kartı yenileme. Depodaki kart bir kez alınıp saklanıyor; yönerge
+   * sonradan değişince eski kartlar eski biçimleriyle açılmaya devam
+   * ediyordu ve tazelemenin yolu yoktu.
+   */
+  if (kelime) {
+    const yenile = yap("button", "↻", "punto-dugme");
+    yenile.setAttribute("aria-label", "Kartı yenile");
+    yenile.onclick = async () => {
+      const istek = secili;
+      if (!istek) return;
+      yenile.disabled = true;
+      const sonuc = await kartIste(
+        ayarlar, kelime, istek.baglam, istek.kaynak?.ad || "");
+      if (secili !== istek) return;
+      yenile.disabled = false;
+      if (!sonuc.kart) return;
+      await sozlugeYaz(anahtarla(kelime), { kart: sonuc.kart });
+      const ust = kartYigini[kartYigini.length - 1];
+      if (ust) ust.kart = sonuc.kart;
+      yiginiCiz();
+    };
+    ustSira.append(yenile);
+  }
   const kucult = yap("button", "A−", "punto-dugme");
   const buyut = yap("button", "A+", "punto-dugme");
   kucult.onclick = () => puntoDegistir(-1);
@@ -1972,7 +1996,26 @@ async function deste() {
     const ceviri = yap("span", gecerliCeviri(k), "karsiligi");
     satirlar.set(k.anahtar, ceviri);
     satir.append(nokta, kelime, ceviri);
-    satir.onclick = () => kelimeKutusu(k);
+
+    // Uzun basmak (masaüstünde sağ tuş) kelimenin menüsünü açıyor.
+    // Parmak kalkınca tarayıcı bir de tıklama gönderiyor; menü açıldıysa
+    // o tıklama kutuyu açmamalı.
+    let zaman;
+    let menuAcildi = false;
+    satir.onclick = () => {
+      if (menuAcildi) { menuAcildi = false; return; }
+      kelimeKutusu(k);
+    };
+    satir.addEventListener("touchstart", () => {
+      zaman = setTimeout(() => { menuAcildi = true; kelimeMenusu(k); }, 600);
+    }, { passive: true });
+    ["touchend", "touchmove", "touchcancel"].forEach(o =>
+      satir.addEventListener(o, () => clearTimeout(zaman), { passive: true }));
+    satir.addEventListener("contextmenu", olay => {
+      olay.preventDefault();
+      clearTimeout(zaman);
+      kelimeMenusu(k);
+    });
     liste.append(satir);
   });
   ekran.append(liste);
@@ -2005,6 +2048,22 @@ function renkSuzgeciDugmesi() {
     git("deste");
   };
   return dugme;
+}
+
+/** Listedeki kelimenin menüsü. Şimdilik tek iş: listeden çıkarmak. */
+function kelimeMenusu(k) {
+  // İki yol aynı anda açmasın: Android'de uzun basma hem bizim sayacı
+  // hem tarayıcının sağ tuş olayını tetikliyor.
+  if (document.querySelector(".perde")) return;
+  const baslik = yap("div", k.kelime, "menu-baslik");
+  baslik.dir = "auto";
+  const sil = yap("button", "Listeden sil", "menu-madde tehlike");
+  const pencere = pencereAc([baslik, sil]);
+  sil.onclick = async () => {
+    pencere.remove();
+    await depo.kelimeSil(k.anahtar);
+    git("deste");
+  };
 }
 
 let doldurma = null;
@@ -2057,7 +2116,7 @@ async function kelimeKutusu(k) {
   await kutuyuAc(k.kelime, k.baglam || "", { id: k.kitap, ad: k.eser }, k);
   // Kart daha önce alınmadıysa bir kez alınıp kelimeye yazılıyor.
   // Cümlede kart yok; düğme de gizli.
-  if (secili && !secili.kart && !kutuAyrinti.parentElement.hidden) {
+  if (secili && !secili.kart && !kutuAyrinti.hidden) {
     kutuAyrinti.onclick();
   }
 }

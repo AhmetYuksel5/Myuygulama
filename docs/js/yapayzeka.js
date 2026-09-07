@@ -276,6 +276,15 @@ function arapcaYonergesi() {
     "word or a phrase; treat it as one unit. Modern Standard Arabic is",
     "the default, but if the input is dialect, say so and give the MSA",
     "equivalent.",
+
+    "If the Input is a PLURAL, build the whole card on its SINGULAR",
+    "(mufrad): the meaning, the definition, the examples, the",
+    "collocations and the family are all about the singular, and y gives",
+    "the singular first with this plural after it. A learner memorises a",
+    "noun as singular-plus-plural, never the other way round, and a card",
+    "built on the plural teaches a form they cannot look up. The same",
+    "goes for a conjugated verb: build the card on its base past form.",
+
     "Return STRICT JSON with keys:",
 
     "t (Turkish meanings, 1-3, comma separated. Write the Turkish a",
