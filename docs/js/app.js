@@ -1368,7 +1368,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    * istenen zaten kutuda duruyor — anlamı, altında gerekiyorsa birkaç
    * not — ve onu tekrar eden bir düğme kalabalıktan başka bir şey değil.
    */
-  kutuAyrinti.hidden = cumleMi(kelime);
+  kutuAyrinti.parentElement.hidden = cumleMi(kelime);
   perde.hidden = false;
   yedekGerek();
 
@@ -1580,6 +1580,9 @@ let kartYigini = [];
  */
 function kartiGoster(k, kelime) {
   kartYigini = [{ kart: k, kelime }];
+  // Kart getirildi; getirme düğmesinin işi bitti ve kartın önünde
+  // duruyordu.
+  kutuAyrinti.parentElement.hidden = true;
   yiginiCiz();
 }
 
@@ -1661,7 +1664,7 @@ function kartiCiz(k, kelime = "", kademe = 0) {
    * bilinmeyen bir kelime görülünce ona dokunmak kartını üste
    * bindiriyor.
    */
-  const dokunulur = (metin, sinif, silikMi) => {
+  const dokunulur = (metin, sinif, silikMi, izinli) => {
     const kap = yonlu(yap("span", "", sinif));
     metin.split(/(\s+)/).forEach(parca => {
       if (!parca.trim()) {
@@ -1669,9 +1672,14 @@ function kartiCiz(k, kelime = "", kademe = 0) {
         return;
       }
       const sozcuk = yap("span", parca, silikMi?.(parca) ? "kk silik" : "kk");
-      // Örnek cümlede kelimeye dokunmak kartı açıyor, cümlenin Türkçesini
-      // açmıyor; iki iş birbirine karışmasın.
+      /*
+       * Örnek cümlede iki kademe var: kapalıyken kelimeye dokunmak da
+       * cümlenin Türkçesini açıyor, kart gelmiyor. Türkçesi açıldıktan
+       * sonra kelimeye dokunmak kartını getiriyor. Kartın başka
+       * yerlerinde kademe yok, ilk dokunuş kartı açıyor.
+       */
       sozcuk.onclick = olay => {
+        if (izinli && !izinli()) return;
         olay.stopPropagation();
         kartaGir(parca);
       };
@@ -1683,7 +1691,7 @@ function kartiCiz(k, kelime = "", kademe = 0) {
   // "kelime — Türkçe" maddesi: sol yarı kaynak dilinde ve büyük, sağ
   // yarı Türkçe ve küçük.
   const ikili = metin => {
-    const kap = document.createElement("span");
+    const kap = yap("span", "", "ikili-madde");
     const yer = metin.indexOf("—");
     if (yer < 0) {
       kap.append(dokunulur(metin, kaynak));
@@ -1742,8 +1750,12 @@ function kartiCiz(k, kelime = "", kademe = 0) {
     k.ornekler.forEach(o => {
       const madde = document.createElement("li");
       const asil = typeof o === "string" ? o : (o.asil || o.en || "");
-      madde.append(dokunulur(asil, kaynak));
       const ceviri = typeof o === "string" ? "" : o.tr;
+      // Türkçesi kapalıyken kelimeye dokunmak kartı açmıyor; önce cümle
+      // açılıyor.
+      if (ceviri) madde.classList.add("acilir");
+      madde.append(dokunulur(asil, kaynak, null,
+        () => !madde.classList.contains("acilir")));
       if (ceviri) {
         /*
          * Türkçesi ilk dokunuşta açılıyor. Açık dururken göz cümleyi
@@ -1755,7 +1767,6 @@ function kartiCiz(k, kelime = "", kademe = 0) {
         const alt = yap("div", ceviri, "tr");
         alt.hidden = true;
         madde.append(alt);
-        madde.classList.add("acilir");
         madde.onclick = () => {
           alt.hidden = false;
           madde.classList.remove("acilir");
@@ -1792,7 +1803,7 @@ function kartiCiz(k, kelime = "", kademe = 0) {
 
   /** "ب ش ش (gülümsemek)" — harfler kaynak dilinde, parantez Türkçe. */
   const kokYaz = metin => {
-    const kap = document.createElement("span");
+    const kap = yap("span", "", "ikili-madde");
     const yer = metin.indexOf("(");
     if (yer < 0) {
       kap.append(dokunulur(metin, kaynak));
@@ -1819,10 +1830,10 @@ function kartiCiz(k, kelime = "", kademe = 0) {
     }));
     kart.append(sar);
   };
-  baloncuklar([
-    { liste: k.esanlam, sinif: "es" },
-    { liste: k.karsit, sinif: "karsit" },
-  ]);
+  // Üçü ayrı satırda: aynı satırda akınca eş anlamlının nerede bitip
+  // karşıtın nerede başladığı seçilmiyordu.
+  baloncuklar([{ liste: k.esanlam, sinif: "es" }]);
+  baloncuklar([{ liste: k.karsit, sinif: "karsit" }]);
   baloncuklar([{ liste: k.ilgili, sinif: "ilgili" }]);
 
   /*
@@ -2005,7 +2016,7 @@ async function kelimeKutusu(k) {
   await kutuyuAc(k.kelime, k.baglam || "", { id: k.kitap, ad: k.eser }, k);
   // Kart daha önce alınmadıysa bir kez alınıp kelimeye yazılıyor.
   // Cümlede kart yok; düğme de gizli.
-  if (secili && !secili.kart && !kutuAyrinti.hidden) {
+  if (secili && !secili.kart && !kutuAyrinti.parentElement.hidden) {
     kutuAyrinti.onclick();
   }
 }

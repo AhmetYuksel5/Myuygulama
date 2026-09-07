@@ -326,14 +326,22 @@ function arapcaYonergesi() {
     'mechanical list. Write each as "kelime — Türkçe":',
     '"مَكْتَب — yazıhane, ofis". Never repeat the input),',
 
-    "x (LOOK-ALIKES: 2-3 Arabic words that LOOK like the input on the",
-    "page even though their meaning and root are unrelated. In Arabic",
-    "this matters more than in Latin script: words differ by a single",
-    "dot or by letters that share a shape (ب ت ث، ج ح خ، د ذ، ر ز،",
-    "س ش، ص ض، ط ظ، ع غ). Look for exactly that kind of pair —",
-    'بَحَث/بَحَت، ضَلَّ/ظَلَّ. Write each as "kelime — Türkçe" and nothing',
-    "else; do not spell out which letter differs, the reader sees it.",
-    "Never list the input itself or a form of it),",
+    "x (LOOK-ALIKES: at most 2 Arabic words a reader could really",
+    "mistake for the input on the page. The bar is high and it is a",
+    "MINIMAL PAIR: the same letter skeleton, the same number of letters,",
+    "differing only by dots or by one letter of the same shape",
+    "(ب ت ث، ج ح خ، د ذ، ر ز، س ش، ص ض، ط ظ، ع غ) — بَحَث/بَحَت،",
+    "ضَلَّ/ظَلَّ. A word that merely begins with the same letter or",
+    "rhymes with the input is NOT a look-alike.",
+    "Every word listed must be a real, current Modern Standard Arabic",
+    "word the learner could actually meet in a book. Never invent one,",
+    "never reach for a rare or dialect word to fill the slot, and never",
+    "list the input itself or a form of it.",
+    "If no such word exists — and for most words none does — return an",
+    "EMPTY array. Empty is the normal and correct answer here; an",
+    "invented or far-fetched pair is worse than nothing.",
+    'Write each as "kelime — Türkçe" and nothing else; do not spell out',
+    "which letter differs, the reader sees it),",
 
     "c (COLLOCATIONS grouped by grammatical pattern: array of objects",
     "with g and w. Decide the input's part of speech first, then use",
@@ -357,9 +365,9 @@ function arapcaYonergesi() {
     "it must not repeat it.",
     "Arabic only, vowelled, no translation. Give 2-4 groups).",
 
-    "Never pad a section to reach a count: fewer good items beat filler.",
-    "This does not apply to x — give the 2-3 closest look-alikes you",
-    "found. No markdown, no extra keys, no commentary.",
+    "Never pad a section to reach a count: fewer good items beat filler;",
+    "this holds for x above all — it was the section that invented most.",
+    "No markdown, no extra keys, no commentary.",
   ].join(" ");
 }
 

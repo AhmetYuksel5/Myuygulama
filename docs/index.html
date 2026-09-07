@@ -49,20 +49,26 @@
       en altta düğmesiz bir yazıydı, kartın altında kaybolup gidiyordu.
       Cümlede Ayrıntı gizleniyor, Soru sor tek başına kalıyor.
     -->
+    <!-- Kart getirme düğmesi; kart açılınca bütün sıra gizleniyor. -->
     <div id="kutu-dugmeler">
       <button id="kutu-ayrinti" class="tonlu ikili">
         <span class="ok">‹</span><span class="yazi">Kelime kartı</span>
       </button>
-      <button id="kutu-sor" class="tonlu">Soru sor</button>
     </div>
+    <div id="kutu-not" class="sonuc"></div>
+    <!--
+      Soru en altta: her seçimde gerekmiyor. Küçük, ortalanmış ve sessiz
+      duruyor; üstte iri bir düğme olarak durduğunda kartın önüne
+      geçiyordu.
+    -->
     <div id="kutu-soru">
+      <button id="kutu-sor" class="sessiz">Soru sor</button>
       <div id="kutu-soru-alani" hidden>
         <input id="kutu-soru-metin" placeholder="Sorun…" autocomplete="off">
         <button id="kutu-soru-gonder" class="tonlu">Sor</button>
       </div>
       <div id="kutu-cevap" class="sonuc"></div>
     </div>
-    <div id="kutu-not" class="sonuc"></div>
   </div>
 </div>
 

@@ -192,7 +192,13 @@ mark.RED    { background: rgba(242,112,138,.45); }
 /* Tek kelime seçildiğinde kelimenin kendisi kutunun başlığı: iri olsun,
    harekeler küçük puntoda seçilmiyor. Cümlede eski ölçü kalıyor. */
 #kutu-secim.tek { font-size: 34px; line-height: 1.7; margin-bottom: 4px; }
+#kutu-ceviri, #kutu-notlar, #kutu-cevap {
+  direction: ltr;
+  text-align: left;
+}
 #kutu-ceviri { font-size: 15px; }
+/* Notun içindeki Arapça ifade kendi yönünde yazılıyor. */
+#kutu-notlar b { unicode-bidi: isolate; }
 #kutu-kalemler { display: flex; gap: 14px; margin: 14px 0; }
 #kutu-kalemler span {
   width: 44px; height: 44px; border-radius: 50%;
@@ -238,7 +244,14 @@ mark.RED    { background: rgba(242,112,138,.45); }
 #kutu-notlar .not { margin-top: 3px; }
 #kutu-notlar b { color: var(--murekkep); font-weight: 600; }
 /* Soru: en altta, yazı kadar hafif bir düğme. */
-#kutu-soru { margin-top: 10px; }
+#kutu-soru { margin-top: 14px; text-align: center; }
+.sessiz {
+  font-size: 13px;
+  color: var(--sonuk);
+  padding: 6px 14px;
+  border-radius: 3px;
+  border: 1px solid var(--cizgi);
+}
 #kutu-soru-alani { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 #kutu-soru-alani input { flex: 1; min-width: 0; }
 #kutu-soru-alani button { flex: none; }
@@ -537,7 +550,14 @@ input, select, textarea {
   align-items: baseline;
 }
 .kart-bolum .etiket { color: var(--vurgu); min-width: 62px; flex: none; }
-.kart-deger { min-width: 0; }
+.kart-deger { min-width: 0; flex: 1; }
+/*
+  "kelime — Türkçe" maddesi iki uca yaslanıyor: Arapça kendi tarafında,
+  Türkçesi en solda. Yan yana aktığında Türkçe, Arapçanın bittiği yerden
+  başlıyor ve maddeler hizasız duruyordu.
+*/
+.ikili-madde { display: flex; justify-content: space-between; gap: 12px; }
+.ikili-madde .tr { direction: ltr; text-align: left; flex: none; }
 .kart-deger.satirli { display: flex; flex-direction: column; gap: 2px; }
 
 /* Karttaki her kelimeye dokunulabiliyor; dokunma anında hafif bir iz. */
