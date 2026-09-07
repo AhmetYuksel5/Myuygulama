@@ -369,7 +369,10 @@ input, select, textarea {
 .kelime-kart .ar { font-size: calc(var(--punto) * 1.35); line-height: 1.95; }
 .kelime-kart .tr { font-size: calc(var(--punto) * 0.85); color: var(--sonuk); }
 
-.kart-punto { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px; }
+.kart-punto { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+/* Geri solda, punto sağda: aradaki boşluğu bu esnek parça dolduruyor. */
+.kart-punto .esne { flex: 1; }
+.punto-dugme.geri { font-size: 20px; line-height: 1; padding: 0 12px 3px; }
 .punto-dugme {
   border: 1px solid var(--cizgi);
   background: none;
@@ -385,7 +388,10 @@ input, select, textarea {
   font-size: calc(var(--punto) * 2.1);
   line-height: 1.7;
 }
-.kart-okunus { text-align: center; color: var(--sonuk); margin-bottom: 6px; }
+/* Okunuş ve tanım kartın gövdesinden bir tık küçük: başlık onlar değil. */
+.kelime-kart .kart-okunus.ar,
+.kelime-kart .tanim.ar { font-size: calc(var(--punto) * 1.15); }
+.kart-okunus { text-align: center; color: var(--sonuk); margin-bottom: 8px; }
 
 .kelime-kart .karsilik {
   text-align: center;
@@ -394,7 +400,18 @@ input, select, textarea {
   font-size: calc(var(--punto) * 1.05);
   margin: 8px 0 6px;
 }
-.kelime-kart .tanim { text-align: center; margin-bottom: 12px; }
+/*
+  Tanım kendi çerçevesinde. Köşeleri keskin: kartın geri kalanı yuvarlak,
+  bu yüzden köşeli kutu tanımı gövdeden ayırıyor ve göz onu bir blok
+  olarak görüyor.
+*/
+.tanim-kutu {
+  border: 1px solid var(--cizgi);
+  border-radius: 0;
+  padding: 10px 12px;
+  margin: 4px 0 14px;
+}
+.kelime-kart .tanim { text-align: center; margin: 0; display: block; }
 
 .kelime-kart .ornekler { margin: 12px 0; padding-inline-start: 22px; }
 .kelime-kart .ornekler li { margin-bottom: 10px; }
@@ -410,10 +427,28 @@ input, select, textarea {
 .kart-deger { min-width: 0; }
 .kart-deger.satirli { display: flex; flex-direction: column; gap: 2px; }
 
+/* Karttaki her kelimeye dokunulabiliyor; dokunma anında hafif bir iz. */
+.kk { cursor: pointer; border-radius: 4px; }
+.kk:active { background: var(--zemin); }
+
+/* Birliktelikte asıl kelime her satırda tekrar ediyor; silik duruyor. */
+.silik { opacity: 0.45; }
+
+/*
+  Örneğin Türkçesi ilk dokunuşta açılıyor. Kapalıyken cümleyi anlamaya
+  çalışmadan göz Türkçeye kayıyor ve okuma öğretmiyor.
+*/
+.ceviri-kapali {
+  cursor: pointer;
+  opacity: 0.55;
+  border-bottom: 1px dashed var(--cizgi);
+  display: inline-block;
+}
+
 /* Eş anlamlı mavi, karşıt kırmızı, ilgili gri — Android'deki kartla aynı. */
 .baloncuklar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .baloncuk { border-radius: 999px; padding: 4px 14px; }
-.baloncuk .ar { line-height: 1.65; }
+.baloncuk .ar { line-height: 1.65; font-size: calc(var(--punto) * 1.2); }
 .baloncuk.es { background: var(--mavi); color: #10233a; }
 .baloncuk.karsit { background: var(--kirmizi); color: #3a1018; }
 .baloncuk.ilgili { background: var(--cizgi); color: var(--murekkep); }

@@ -68,8 +68,59 @@ function tercihleriBirak() {
 // zorunda; "ayarlarEkrani" yazılıydı ve o sekme hiç açılmıyordu.
 const sayfalar = { kitaplik, deste, ayarlar: ayarlarEkrani };
 let acikKitap = null;
+let acikEkran = "kitaplik";
+
+/*
+ * Telefonun geri tuşu.
+ *
+ * Sayfa tek ekran olduğu için geri tuşu, hiçbir şey yapılmazsa doğrudan
+ * uygulamadan çıkıyordu — kart açıkken bile. Yöntem şu: geri alınacak
+ * bir şey varken tarayıcı geçmişine bir "yedek adım" bırakılıyor. Geri
+ * tuşu o adımı tüketiyor, biz uygulamada bir kademe geri gidip yeni bir
+ * yedek koyuyoruz. Geri alınacak bir şey kalmayınca yedek konmuyor ve
+ * geri tuşu sayfadan çıkıyor.
+ */
+let yedekVar = false;
+
+function yedekGerek() {
+  if (yedekVar) return;
+  history.pushState({ merkez: true }, "");
+  yedekVar = true;
+}
+
+/** Geri alınacak bir şey duruyor mu? Yedeği boşuna koymamak için. */
+function geriAlinacakVar() {
+  return !perde.hidden || Boolean(acikKitap) || acikEkran !== "kitaplik";
+}
+
+/** Kart yığınında bir kademe geri; karttaki geri düğmesi bunu çağırıyor. */
+function tarayiciGeri() {
+  history.back();
+}
+
+/**
+ * Bir kademe geri al. Geri alacak bir şey bulduysa true döner.
+ *
+ * Sıra kullanıcının beklediği sıra: önce üste binmiş kart, sonra kutu,
+ * sonra hangi ekranda olursa olsun kitaplığa dönüş.
+ */
+function birKademeGeri() {
+  if (!perde.hidden && kartYigini.length > 1) { kartGeri(); return true; }
+  if (!perde.hidden) { kutuyuKapat(); return true; }
+  if (acikKitap || acikEkran !== "kitaplik") { git("kitaplik"); return true; }
+  return false;
+}
+
+window.addEventListener("popstate", () => {
+  yedekVar = false;
+  // Kitaplığa dönüldüyse geri alınacak bir şey kalmıyor; yedek koymazsak
+  // bir sonraki geri tuşu sayfadan çıkıyor, boşa basılmış olmuyor.
+  if (birKademeGeri() && geriAlinacakVar()) yedekGerek();
+});
 
 async function git(ad) {
+  acikEkran = ad;
+  if (ad !== "kitaplik") yedekGerek();
   acikKitap = null;
   if (pdfTemizle) pdfTemizle();
   if (okumaTemizle) okumaTemizle();
@@ -411,6 +462,8 @@ async function oku(id) {
   const kitap = await depo.kitap(id);
   if (!kitap) return git("kitaplik");
   acikKitap = kitap;
+  // Kitap açıkken geri tuşu kitaplığa dönsün.
+  yedekGerek();
   kitap.acildi = Date.now();
   await depo.kitapYaz(kitap);
 
@@ -1046,6 +1099,7 @@ perde.addEventListener("click", e => {
 function kutuyuKapat() {
   perde.hidden = true;
   secili = null;
+  kartYigini = [];
 }
 
 async function kelimeyeDokun(e) {
@@ -1116,6 +1170,7 @@ async function kutuyuAc(kelime, baglam, kaynak, kayit) {
    */
   kutuAyrinti.hidden = cokKelime(kelime);
   perde.hidden = false;
+  yedekGerek();
 
   const [sozluk, kelimeler] = await Promise.all([depo.sozluk(anahtar), depo.kelimeler()]);
   if (secili !== istek) return;
@@ -1306,6 +1361,81 @@ function kartiDuzle(k) {
   return k;
 }
 
+/*
+ * Kart yığını.
+ *
+ * Karttaki bir kelimeye dokunmak onun kartını üste bindiriyor; geri her
+ * seferinde bir kademe iniyor. Kaç kademe olacağının sınırı yok — bir
+ * kelimenin ailesinden başka bir kelimeye, oradan onun eş anlamlısına
+ * gitmek okurken kurulan zincirin ta kendisi.
+ */
+let kartYigini = [];
+
+/**
+ * Kartı kutuya yerleştirir; yığını sıfırlar.
+ *
+ * Kart kendi başına tam bir madde: en üstünde kelimenin kendisi ve
+ * karşılığı var. Bu yüzden kutunun kendi başlık ve çeviri satırı
+ * gizleniyor — aynı şey iki kez yazılmasın.
+ */
+function kartiGoster(k, kelime) {
+  kartYigini = [{ kart: k, kelime }];
+  yiginiCiz();
+}
+
+function yiginiCiz() {
+  kutuSecim.hidden = true;
+  kutuCeviri.hidden = true;
+  kutuNot.innerHTML = "";
+  kutuNot.className = "sonuc";
+  const ust = kartYigini[kartYigini.length - 1];
+  if (!ust) return;
+  kutuNot.append(kartiCiz(ust.kart, ust.kelime, kartYigini.length - 1));
+}
+
+/** Bir kademe geri: üstteki kart kalkıyor, altındaki görünüyor. */
+function kartGeri() {
+  kartYigini.pop();
+  yiginiCiz();
+}
+
+/**
+ * Karttaki bir kelimenin kartını üste bindirir.
+ *
+ * Kart daha önce alınmışsa sözlükten geliyor, istek atılmıyor.
+ */
+async function kartaGir(kelime) {
+  if (!secili) return;
+  const temiz = kelime.trim();
+  const anahtar = anahtarla(temiz);
+  if (!anahtar) return;
+  // Aynı kelimenin üstüne yine kendisi binmesin.
+  const ust = kartYigini[kartYigini.length - 1];
+  if (ust && anahtarla(ust.kelime || "") === anahtar) return;
+
+  const istek = secili;
+  const kademe = { kart: null, kelime: temiz };
+  kartYigini.push(kademe);
+  yedekGerek();
+  yiginiCiz();
+
+  const sozluk = await depo.sozluk(anahtar);
+  let veri = sozluk?.kart || null;
+  if (!veri) {
+    const sonuc = await kart(ayarlar, temiz, istek.baglam, istek.kaynak?.ad || "");
+    if (sonuc.kart) {
+      veri = sonuc.kart;
+      await sozlugeYaz(anahtar, { kart: veri });
+    } else {
+      veri = { hata: sonuc.hata };
+    }
+  }
+  // Kutu kapanmış ya da kademe geri alınmış olabilir.
+  if (secili !== istek || !kartYigini.includes(kademe)) return;
+  kademe.kart = veri;
+  yiginiCiz();
+}
+
 /**
  * Kelime kartı — Android'deki kartın düzeni.
  *
@@ -1318,14 +1448,32 @@ function kartiDuzle(k) {
  * örneklerin altı, "kelime — Türkçe" maddelerinin sağ yarısı — bir
  * kademe küçük.
  */
-function kartiCiz(k, kelime = "") {
-  k = kartiDuzle(k);
-  const arapca = k.arapca ?? (kelime ? arapcaMi(kelime) : false);
+function kartiCiz(k, kelime = "", kademe = 0) {
+  const arapca = k?.arapca ?? (kelime ? arapcaMi(kelime) : false);
   const kaynak = arapca ? "ar" : "tr";
   const kart = yap("div", "", "kelime-kart");
   kart.style.setProperty("--punto", `${kartPunto}px`);
 
   const yonlu = oge => { oge.dir = "auto"; return oge; };
+
+  /*
+   * Kaynak dilindeki metni kelime kelime dokunulur yapıyor: kartta
+   * bilinmeyen bir kelime görülünce ona dokunmak kartını üste
+   * bindiriyor.
+   */
+  const dokunulur = (metin, sinif) => {
+    const kap = yonlu(yap("span", "", sinif));
+    metin.split(/(\s+)/).forEach(parca => {
+      if (!parca.trim()) {
+        kap.append(document.createTextNode(parca));
+        return;
+      }
+      const sozcuk = yap("span", parca, "kk");
+      sozcuk.onclick = () => kartaGir(parca);
+      kap.append(sozcuk);
+    });
+    return kap;
+  };
 
   // "kelime — Türkçe" maddesi: sol yarı kaynak dilinde ve büyük, sağ
   // yarı Türkçe ve küçük.
@@ -1333,42 +1481,76 @@ function kartiCiz(k, kelime = "") {
     const kap = document.createElement("span");
     const yer = metin.indexOf("—");
     if (yer < 0) {
-      kap.append(yonlu(yap("span", metin, kaynak)));
+      kap.append(dokunulur(metin, kaynak));
       return kap;
     }
-    kap.append(yonlu(yap("span", metin.slice(0, yer).trim(), kaynak)));
+    kap.append(dokunulur(metin.slice(0, yer).trim(), kaynak));
     kap.append(yap("span", ` — ${metin.slice(yer + 1).trim()}`, "tr"));
     return kap;
   };
 
-  // Punto düğmeleri en üstte; okurken göz yorulunca elin oraya gidiyor.
-  const puntoSira = yap("div", "", "kart-punto");
+  // Üst sıra: solda bir kademe geri (üste binmiş kartta), sağda punto.
+  const ustSira = yap("div", "", "kart-punto");
+  if (kademe > 0) {
+    const geri = yap("button", "‹", "punto-dugme geri");
+    geri.onclick = () => tarayiciGeri();
+    ustSira.append(geri);
+  }
+  const bosluk = yap("span", "", "esne");
   const kucult = yap("button", "A−", "punto-dugme");
   const buyut = yap("button", "A+", "punto-dugme");
   kucult.onclick = () => puntoDegistir(-1);
   buyut.onclick = () => puntoDegistir(1);
-  puntoSira.append(kucult, buyut);
-  kart.append(puntoSira);
+  ustSira.append(bosluk, kucult, buyut);
+  kart.append(ustSira);
 
   if (kelime) kart.append(yonlu(yap("div", kelime, `kart-baslik ${kaynak}`)));
-  // Okunuş satırı: harekeli yazım — Latin okunuş — çoğul ya da mastar.
-  // Arapçada kartın en işe yarar satırı; harekesiz yazı kendi okunuşunu
-  // göstermiyor ve çoğul kuralsız.
-  if (k.okunus) kart.append(yonlu(yap("div", k.okunus, `kart-okunus ${kaynak}`)));
+
+  // Kart daha gelmediyse ya da gelemediyse başlıkla birlikte durumu yaz.
+  if (!k || k.hata) {
+    kart.append(yap("p", k?.hata || BEKLEME, k?.hata ? "uyari" : "sonuk"));
+    return kart;
+  }
+
+  /*
+   * Okunuş satırı. İsimde harekeli yazım ve çoğul; fiilde mazi, muzari
+   * ve mastar. Latin okunuş istenmiyor — okuyan yazıyı zaten okuyor,
+   * araya giren çevriyazı işi zorlaştırıyor.
+   */
+  k = kartiDuzle(k);
+
+  if (k.okunus) kart.append(dokunulur(k.okunus, `kart-okunus ${kaynak}`));
   if (k.karsilik) kart.append(yap("p", k.karsilik, "karsilik"));
-  if (k.tanim) kart.append(yonlu(yap("p", k.tanim, `tanim ${kaynak}`)));
+  // Tanım kendi çerçevesinde: kartın en yoğun satırı, gövdeden ayrılınca
+  // gözü yormuyor.
+  if (k.tanim) {
+    const kutu = yap("div", "", "tanim-kutu");
+    kutu.append(dokunulur(k.tanim, `tanim ${kaynak}`));
+    kart.append(kutu);
+  }
 
   if (k.ornekler?.length) {
     const liste = yap("ol", "", "ornekler");
+    // Arapçada bütün maddeler aynı yönde dizilsin; madde madde yön
+    // sezdirilince kimi sağdan kimi soldan başlıyordu.
+    if (arapca) liste.dir = "rtl";
     k.ornekler.forEach(o => {
       const madde = document.createElement("li");
-      if (typeof o === "string") {
-        madde.append(yonlu(yap("div", o, kaynak)));
-      } else {
-        // Alan "asil": örnek cümle kelimenin kendi dilinde. Eski
-        // kartlarda adı "en" idi, onlar da okunsun.
-        madde.append(yonlu(yap("div", o.asil || o.en || "", kaynak)));
-        if (o.tr) madde.append(yap("div", o.tr, "tr"));
+      const asil = typeof o === "string" ? o : (o.asil || o.en || "");
+      madde.append(dokunulur(asil, kaynak));
+      const ceviri = typeof o === "string" ? "" : o.tr;
+      if (ceviri) {
+        /*
+         * Türkçesi ilk dokunuşta açılıyor. Açıkken cümleyi okumadan
+         * gözün Türkçeye kayması öğrenmeyi baltalıyor; önce Arapçayı
+         * anlamaya çalışmak, sonra bakmak.
+         */
+        const alt = yap("div", "Türkçesi", "tr ceviri-kapali");
+        alt.onclick = () => {
+          alt.textContent = ceviri;
+          alt.className = "tr";
+        };
+        madde.append(alt);
       }
       liste.append(madde);
     });
@@ -1399,6 +1581,19 @@ function kartiCiz(k, kelime = "") {
     kart.append(satir);
   };
 
+  /** "ب ش ش (gülümsemek)" — harfler kaynak dilinde, parantez Türkçe. */
+  const kokYaz = metin => {
+    const kap = document.createElement("span");
+    const yer = metin.indexOf("(");
+    if (yer < 0) {
+      kap.append(dokunulur(metin, kaynak));
+      return kap;
+    }
+    kap.append(dokunulur(metin.slice(0, yer).trim(), kaynak));
+    kap.append(yap("span", ` ${metin.slice(yer).trim()}`, "tr"));
+    return kap;
+  };
+
   if (k.kok) bolum("Kök", [kokYaz(k.kok)]);
   bolum("Aile", k.aile?.map(ikili), true);
 
@@ -1421,29 +1616,31 @@ function kartiCiz(k, kelime = "") {
   ]);
   baloncuklar([{ liste: k.ilgili, sinif: "ilgili" }]);
 
-  // Birliktelik dilbilgisi kalıbına göre gruplu: "fiil +", "+ isim"…
+  /*
+   * Birliktelik: her öğe asıl kelimeyle birlikte yazılıyor. Tek başına
+   * bir kelime listesi neyle nasıl kurulduğunu göstermiyordu. Asıl
+   * kelime her satırda tekrar ettiği için silik.
+   *
+   * Sıra grubun adından geliyor: "+ isim" asıl kelimeden sonra geleni,
+   * "fiil +" asıl kelimeden önce geleni anlatıyor.
+   */
   k.birliktelik?.forEach(g => {
-    if (g?.grup && g.kelimeler?.length) {
-      bolum(g.grup, [yonlu(yap("span", g.kelimeler.join(" · "), kaynak))]);
-    }
+    if (!g?.grup || !g.kelimeler?.length) return;
+    const basOnce = g.grup.trim().startsWith("+");
+    const parcalar = g.kelimeler.map(oge => {
+      const kap = document.createElement("span");
+      const asil = kelime ? dokunulur(kelime, `${kaynak} silik`) : null;
+      const yanindaki = dokunulur(oge, kaynak);
+      if (!asil) kap.append(yanindaki);
+      else if (basOnce) kap.append(asil, document.createTextNode(" "), yanindaki);
+      else kap.append(yanindaki, document.createTextNode(" "), asil);
+      return kap;
+    });
+    bolum(g.grup, parcalar, true);
   });
 
-  /** "ب ش ش (gülümsemek)" — harfler kaynak dilinde, parantez Türkçe. */
-  function kokYaz(metin) {
-    const kap = document.createElement("span");
-    const yer = metin.indexOf("(");
-    if (yer < 0) {
-      kap.append(yonlu(yap("span", metin, kaynak)));
-      return kap;
-    }
-    kap.append(yonlu(yap("span", metin.slice(0, yer).trim(), kaynak)));
-    kap.append(yap("span", ` ${metin.slice(yer).trim()}`, "tr"));
-    return kap;
-  }
-
   if (k.karistirma?.length) {
-    const baslik = yap("div", "Karıştırma", "kart-ayrac");
-    kart.append(baslik);
+    kart.append(yap("div", "Karıştırma", "kart-ayrac"));
     k.karistirma.forEach(madde => {
       const satir = yap("div", "", "karistirma");
       satir.append(ikili(madde));
@@ -1452,21 +1649,6 @@ function kartiCiz(k, kelime = "") {
   }
 
   return kart;
-}
-
-/**
- * Kartı kutuya yerleştirir.
- *
- * Kart kendi başına tam bir madde: en üstünde kelimenin kendisi ve
- * karşılığı var. Bu yüzden kutunun kendi başlık ve çeviri satırı
- * gizleniyor — aynı şey iki kez yazılmasın.
- */
-function kartiGoster(k, kelime) {
-  kutuSecim.hidden = true;
-  kutuCeviri.hidden = true;
-  kutuNot.innerHTML = "";
-  kutuNot.className = "sonuc";
-  kutuNot.append(kartiCiz(k, kelime));
 }
 
 // --- Deste -----------------------------------------------------------
