@@ -37,7 +37,20 @@ const ZEMINLER = {
   koyu: { ad: "Koyu", zemin: "#3a3d43", yazi: "#d9d5cd", cizgi: "#565a62" },
 };
 
-let okumaTercihi = { punto: 19, zemin: "kagit", kenar: 16, satir: 1.9, ton: 22 };
+let okumaTercihi = {
+  punto: 19, zemin: "kagit", kenar: 16, satir: 1.9, ton: 22, harekesiz: false,
+};
+
+/*
+ * Harekeler: harfin üstüne ve altına konan seslendirme işaretleri, şedde
+ * ve sükûn dâhil; tatvîl de aynı yere giriyor.
+ *
+ * Gizleme yalnız gösterimde. Kelimenin kendisi harekeleriyle saklanıyor,
+ * yoksa işaretlenmiş kelime bulunamaz ve dokunulan kelimenin kartı başka
+ * bir kelimeninki olurdu.
+ */
+const HAREKE = /[ً-ْٰـ]/g;
+const gorunen = sade => (okumaTercihi.harekesiz ? sade.replace(HAREKE, "") : sade);
 
 /**
  * Özel ton: 0 en koyu, 100 en açık.
@@ -85,6 +98,10 @@ function tercihleriUygula() {
 function tercihleriBirak() {
   document.body.style.background = "";
   document.body.style.color = "";
+  // Seçim kutusu bu değişkenlerden besleniyor: kitaptan çıkınca
+  // bırakılmazsa liste açık zeminliyken kutu koyu kalıyor.
+  ["--okuma-zemin", "--okuma-yazi", "--okuma-cizgi"]
+    .forEach(ad => document.body.style.removeProperty(ad));
 }
 
 // --- Yönlendirme -----------------------------------------------------
@@ -135,6 +152,31 @@ function birKademeGeri() {
   if (acikKitap || acikEkran !== "kitaplik") { git("kitaplik"); return true; }
   return false;
 }
+
+/*
+ * Aşağı çekince sayfa yenileniyor.
+ *
+ * Sayfa GitHub'dan iniyor ve servis çalışanı önce ağa bakıyor; yenilemek
+ * yeni sürümü getirmenin en kısa yolu. Kitap okurken kapalı: orada aşağı
+ * çekmek sayfayı kaydırmak demek. Kutu açıkken de kapalı.
+ */
+let cekmeBasi = 0;
+document.addEventListener("touchstart", olay => {
+  const uygun = !acikKitap && perde.hidden && window.scrollY <= 0
+    && olay.touches.length === 1;
+  cekmeBasi = uygun ? olay.touches[0].clientY : 0;
+}, { passive: true });
+
+document.addEventListener("touchmove", olay => {
+  if (!cekmeBasi) return;
+  // Yüz on piksel: kazara sıyırmayla yenilenmesin.
+  if (olay.touches[0].clientY - cekmeBasi > 110) {
+    cekmeBasi = 0;
+    location.reload();
+  }
+}, { passive: true });
+
+document.addEventListener("touchend", () => { cekmeBasi = 0; }, { passive: true });
 
 window.addEventListener("popstate", () => {
   yedekVar = false;
@@ -594,15 +636,29 @@ function okumaKabugu(bilgi) {
   okumaAlt.id = "okuma-alt";
   okumaAlt.hidden = true;
 
-  const geri = yap("button", "‹ Kitaplık");
+  const geri = yap("button", "Kitaplık ›");
   geri.onclick = () => git("kitaplik");
   const liste = yap("button", "Kelimeler");
   liste.onclick = () => git("deste");
-  const ayar = yap("button", "⚙");
+  const ayar = yap("button", "⚙", "disli");
   ayar.setAttribute("aria-label", "Görünüm");
   ayar.onclick = gorunumKutusu;
   const yazi = yap("span", bilgi || "", "bilgi");
-  okumaAlt.append(geri, liste, yazi, ayar);
+
+  /*
+   * Harekeleri gizleyip geri getiren düğme. Harekeli metin okumayı
+   * öğretiyor ama bir yere gelince köstek oluyor: harekesiz yazıyı
+   * sökmek ayrı bir alışkanlık ve kitap onu çalıştırmıyordu.
+   */
+  const hareke = yap("button", "◌َ", okumaTercihi.harekesiz ? "hareke kapali" : "hareke");
+  hareke.setAttribute("aria-label", "Harekeler");
+  hareke.onclick = async () => {
+    okumaTercihi.harekesiz = !okumaTercihi.harekesiz;
+    await depo.ayarYaz("okuma", JSON.stringify(okumaTercihi));
+    if (acikKitap) oku(acikKitap.id);
+  };
+
+  okumaAlt.append(geri, liste, yazi, hareke, ayar);
   document.body.append(okumaAlt);
 
   ekran.addEventListener("click", kabugaDokunma);
@@ -696,7 +752,7 @@ function secimiKur(govde) {
       document.body.append(cam);
     }
     const [a, b] = [Math.min(bas, son), Math.max(bas, son)];
-    cam.textContent = kelimeler.slice(a, b + 1).map(k => k.textContent).join(" ");
+    cam.textContent = kelimeler.slice(a, b + 1).map(sozcuk).join(" ");
     cam.hidden = false;
 
     const yukari = 110;
@@ -747,7 +803,7 @@ function secimiKur(govde) {
     if (!seciyor) return;
     seciyor = false;
     const [a, b] = [Math.min(bas, son), Math.max(bas, son)];
-    const secim = kelimeler.slice(a, b + 1).map(k => k.textContent).join(" ");
+    const secim = kelimeler.slice(a, b + 1).map(sozcuk).join(" ");
     temizle();
     camiKapat();
     // Tıklama olayı bunun ardından da geliyor; tek kelime kutusunu
@@ -1064,7 +1120,7 @@ function kelimele(yazi, isaretler) {
     const on = bulundu.ham.slice(0, bulundu.ham.indexOf(ic));
     const arka = bulundu.ham.slice(bulundu.ham.indexOf(ic) + ic.length);
     const govde = ic.split(/(\s+)/)
-      .map(p => (p.trim() ? `<span class="k">${kacir(p)}</span>` : p))
+      .map(p => (p.trim() ? sozcukEtiketi(p) : p))
       .join("");
     cikti.push(kacir(on) +
       `<mark class="${bulundu.kalem}" data-tam="${kacir(ic).replace(/"/g, "&quot;")}">${govde}</mark>` +
@@ -1074,13 +1130,27 @@ function kelimele(yazi, isaretler) {
   return cikti.join("");
 }
 
+/**
+ * Bir sözcüğün etiketi.
+ *
+ * Görünen yazı harekesiz olabilir; aslı data-ham'da duruyor ve dokunma,
+ * seçim ve büyüteç hep oradan okuyor.
+ */
+function sozcukEtiketi(sade) {
+  const ham = kacir(sade).replace(/"/g, "&quot;");
+  return `<span class="k" data-ham="${ham}">${kacir(gorunen(sade))}</span>`;
+}
+
 /** İşaretsiz tek kelime: noktalaması dışarıda kalacak şekilde sarılıyor. */
 function kelimeyiSar(parca) {
   const sade = parca.replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, "");
   if (!sade) return kacir(parca);
   const [on, arka] = parca.split(sade);
-  return kacir(on || "") + `<span class="k">${kacir(sade)}</span>` + kacir(arka || "");
+  return kacir(on || "") + sozcukEtiketi(sade) + kacir(arka || "");
 }
+
+/** Bir sözcük etiketinin asıl yazısı; harekesiz gösterimde bile tam. */
+const sozcuk = oge => oge.dataset.ham || oge.textContent;
 
 /**
  * İşaret anahtarı.
@@ -1167,7 +1237,7 @@ async function kelimeyeDokun(e) {
   // İşaretli bir cümlenin ortasına dokununca o tek kelime değil işaretin
   // tamamı açılıyor; kaldırmak isteyen kelime kelime uğraşmasın.
   const isaret = oge.closest("mark[data-tam]");
-  const metin = isaret ? isaret.dataset.tam : oge.textContent;
+  const metin = isaret ? isaret.dataset.tam : sozcuk(oge);
   kutuyuAc(metin, pencere(paragraf, metin), acikKitap);
 }
 
@@ -1550,7 +1620,7 @@ function kartiCiz(k, kelime = "", kademe = 0) {
   // Üst sıra: solda bir kademe geri (üste binmiş kartta), sağda punto.
   const ustSira = yap("div", "", "kart-punto");
   if (kademe > 0) {
-    const geri = yap("button", "‹", "punto-dugme geri");
+    const geri = yap("button", "›", "punto-dugme geri");
     geri.onclick = () => tarayiciGeri();
     ustSira.append(geri);
   }
@@ -1727,7 +1797,7 @@ async function deste() {
     "dolu");
   calis.disabled = !bekleyen.length;
   calis.onclick = () => tekrarEkrani(bekleyen);
-  ekran.append(calis);
+  ekran.append(calis, renkSuzgeciDugmesi());
 
   kelimeler.sort((a, b) => (b.eklendi || 0) - (a.eklendi || 0));
 
@@ -1756,15 +1826,22 @@ async function deste() {
 
   const liste = yap("div", "");
   const satirlar = new Map();
-  const gosterilen = eserler.find(e => e.id === seciliEser).kelimeler;
+  const hepsi = eserler.find(e => e.id === seciliEser).kelimeler;
+  const gosterilen = hepsi.filter(suzgectenGecer);
   gosterilen.forEach(k => {
-    const satir = yap("button", "", "kelime");
-    const nokta = document.createElement("span");
-    nokta.style.cssText = `width:10px;height:10px;border-radius:50%;flex:none;background:var(--${
+    /*
+     * Uzun kayıtlar iki sütuna sığmıyor: cümlenin Türkçesi dar sütunda
+     * aşağı doğru uzayıp satırı devleştiriyordu. Cümlede Arapça kendi
+     * satırında, Türkçesi altında baştan sona.
+     */
+    const uzun = cokKelime(k.kelime);
+    const satir = yap("button", "", uzun ? "kelime uzun" : "kelime");
+    const nokta = yap("span", "", "im");
+    nokta.style.background = `var(--${
       { YELLOW: "sari", BLUE: "mavi", GREEN: "yesil", RED: "kirmizi" }[k.kalem]})`;
     const kelime = yap("b", k.kelime);
     kelime.dir = "auto";
-    const ceviri = yap("span", gecerliCeviri(k));
+    const ceviri = yap("span", gecerliCeviri(k), "karsiligi");
     satirlar.set(k.anahtar, ceviri);
     satir.append(nokta, kelime, ceviri);
     satir.onclick = () => kelimeKutusu(k);
@@ -1773,6 +1850,33 @@ async function deste() {
   ekran.append(liste);
 
   eksikleriDoldur(gosterilen.filter(k => !gecerliCeviri(k)), satirlar);
+}
+
+/*
+ * Renk süzgeci: kırmızı, mavi, ikisi birden.
+ *
+ * Dikey ikiye bölünmüş bir düğme; her basış sıradaki duruma geçiyor.
+ * "İkisi" seçiliyken hiçbir şey elenmiyor — sarı ve yeşil işaretliler de
+ * listede kalıyor, yoksa onlara ulaşacak yol kapanırdı.
+ */
+let renkSuzgeci = "hepsi";
+
+const suzgectenGecer = k => {
+  if (renkSuzgeci === "kirmizi") return k.kalem === "RED";
+  if (renkSuzgeci === "mavi") return k.kalem === "BLUE";
+  return true;
+};
+
+function renkSuzgeciDugmesi() {
+  const sira = ["hepsi", "kirmizi", "mavi"];
+  const dugme = yap("button", "", `suzgec ${renkSuzgeci}`);
+  dugme.setAttribute("aria-label", "Renk süzgeci");
+  dugme.append(yap("span", "", "yari kirmizi"), yap("span", "", "yari mavi"));
+  dugme.onclick = () => {
+    renkSuzgeci = sira[(sira.indexOf(renkSuzgeci) + 1) % sira.length];
+    git("deste");
+  };
+  return dugme;
 }
 
 let doldurma = null;
