@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.SystemClock
 import android.view.View
 
 /** Kenardaki tutamak topu — radyal parlaklıkla, fotoğraftaki gri küre gibi. */
@@ -27,33 +28,114 @@ internal class HandleView(context: Context, private val opacityPercent: Int) : V
 }
 
 /**
- * Ekranda gezen sanal imleç: beyaz nişan halkası + ortada nokta.
- * Fotoğraftaki sol üstteki gösterge.
+ * Ekranda gezen sanal imleç: beyaz nişan halkası, ortada nokta ve
+ * arkasında kuyruklu yıldız gibi mat kırmızı bir iz.
+ *
+ * Görünüm tam ekran bir pencere; imleç küçük bir pencere olsaydı kuyruk
+ * onun dışına taşamazdı. Hareket pencereyi taşımak değil yeniden çizmek,
+ * o da daha ucuz.
+ *
+ * Kuyruk son [TAIL_MS] içinde geçilen noktalardan çiziliyor. Uzunluğu
+ * bilerek zamana bağlı: hızlı giderken aynı sürede daha uzun yol
+ * alındığı için kuyruk uzuyor, yavaşken kısalıyor, durunca noktalar
+ * eskiyip kuyruk sönüyor — elastikiyet buradan geliyor.
  */
 internal class CursorView(context: Context) : View(context) {
 
+    private val density = resources.displayMetrics.density
+
+    // Gölge katmanı yerine halkanın altına koyu bir hale: gölge tam ekran
+    // bir yazılım katmanı istiyor, her karede ekran boyu bitmap demek.
+    private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Color.argb(110, 0, 0, 0)
+        strokeWidth = 5f * density
+    }
     private val outer = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = Color.WHITE
-        strokeWidth = 3f * resources.displayMetrics.density
-        setShadowLayer(4f, 0f, 0f, Color.argb(160, 0, 0, 0))
+        strokeWidth = 3f * density
     }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.WHITE
-        setShadowLayer(4f, 0f, 0f, Color.argb(160, 0, 0, 0))
+    }
+    private val tail = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
     }
 
-    init {
-        // setShadowLayer donanım hızlandırmada bazı sürümlerde sorun çıkarır.
-        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    private class Trace(val x: Float, val y: Float, val at: Long)
+
+    private val trace = ArrayDeque<Trace>()
+    private var x = 0f
+    private var y = 0f
+    private val onScreen = IntArray(2)
+
+    /** İmleç ekran koordinatında buraya geldi. */
+    fun moveTo(nx: Float, ny: Float) {
+        x = nx
+        y = ny
+        trace.addLast(Trace(nx, ny, SystemClock.uptimeMillis()))
+        prune()
+        invalidate()
+    }
+
+    /** İmleç yeni doğdu; eski iz onunla birlikte gelmesin. */
+    fun reset(nx: Float, ny: Float) {
+        trace.clear()
+        moveTo(nx, ny)
+    }
+
+    private fun prune() {
+        val now = SystemClock.uptimeMillis()
+        while (trace.isNotEmpty() && now - trace.first().at > TAIL_MS) trace.removeFirst()
+        // Çok hızlı savrulunca kuyruk ekranı boydan boya kesmesin.
+        var length = 0f
+        var keep = trace.size
+        for (i in trace.size - 1 downTo 1) {
+            length += kotlin.math.hypot(
+                trace[i].x - trace[i - 1].x,
+                trace[i].y - trace[i - 1].y,
+            )
+            if (length > MAX_TAIL_DP * density) { keep = trace.size - i; break }
+        }
+        while (trace.size > keep) trace.removeFirst()
     }
 
     override fun onDraw(canvas: Canvas) {
-        val cx = width / 2f
-        val cy = height / 2f
-        val density = resources.displayMetrics.density
-        canvas.drawCircle(cx, cy, 16f * density, outer)
-        canvas.drawCircle(cx, cy, 3.5f * density, dot)
+        // Pencere ekranın tepesinden başlamıyor olabilir; çizim yine de
+        // ekran koordinatında yapılsın.
+        getLocationOnScreen(onScreen)
+        canvas.translate(-onScreen[0].toFloat(), -onScreen[1].toFloat())
+
+        prune()
+        val now = SystemClock.uptimeMillis()
+        for (i in 1 until trace.size) {
+            val a = trace[i - 1]
+            val b = trace[i]
+            // Her parça kendi tazeliği kadar kalın ve koyu: uçta incelip
+            // soluyor, halkaya yaklaştıkça dolgunlaşıyor.
+            val fresh = (1f - (now - b.at).toFloat() / TAIL_MS).coerceIn(0f, 1f)
+            if (fresh <= 0f) continue
+            tail.strokeWidth = (TAIL_WIDTH_DP * density * fresh).coerceAtLeast(1f)
+            tail.color = Color.argb((TAIL_ALPHA * fresh).toInt(), 214, 72, 62)
+            canvas.drawLine(a.x, a.y, b.x, b.y, tail)
+        }
+
+        canvas.drawCircle(x, y, 16f * density, halo)
+        canvas.drawCircle(x, y, 16f * density, outer)
+        canvas.drawCircle(x, y, 3.5f * density, dot)
+
+        // Parmak dursa da kuyruk kendi kendine sönmeli; nokta kaldıkça
+        // bir sonraki kareyi iste.
+        if (trace.size > 1) postInvalidateOnAnimation()
+    }
+
+    private companion object {
+        const val TAIL_MS = 220L
+        const val TAIL_WIDTH_DP = 7f
+        const val TAIL_ALPHA = 215f
+        const val MAX_TAIL_DP = 280f
     }
 }

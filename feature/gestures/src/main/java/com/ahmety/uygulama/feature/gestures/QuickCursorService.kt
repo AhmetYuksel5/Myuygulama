@@ -32,14 +32,12 @@ class QuickCursorService : AccessibilityService() {
     private var handle: View? = null
     private var cursor: View? = null
     private var handleParams: WindowManager.LayoutParams? = null
-    private var cursorParams: WindowManager.LayoutParams? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var settings: QuickCursorSettings
 
     private var screenW = 0
     private var screenH = 0
-    private var cursorSizePx = 0
 
     // Sürüş durumu
     private var downX = 0f
@@ -108,7 +106,6 @@ class QuickCursorService : AccessibilityService() {
         screenH = metrics.heightPixels
         val density = metrics.density
         val sizePx = (settings.handleSizeDp * density).toInt()
-        cursorSizePx = (44 * density).toInt()
 
         val handleView = HandleView(this, settings.opacityPercent)
         handleView.setOnTouchListener { _, event -> onHandleTouch(event, density) }
@@ -130,10 +127,12 @@ class QuickCursorService : AccessibilityService() {
                 .coerceIn(0, (screenH - sizePx).coerceAtLeast(0))
         }
 
+        // İmleç penceresi tam ekran: kuyruk halkanın dışına taşıyor ve
+        // hareket pencereyi taşımak yerine yeniden çizmekten ibaret.
         val cursorView = CursorView(this)
         val cParams = WindowManager.LayoutParams(
-            cursorSizePx,
-            cursorSizePx,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             // İmleç penceresi hiçbir dokunmayı emmemeli: enjekte ettiğimiz
             // dokunma bu katmana takılırsa tıklama hiç gerçekleşmez.
@@ -153,7 +152,6 @@ class QuickCursorService : AccessibilityService() {
             handle = handleView
             cursor = cursorView
             handleParams = hParams
-            cursorParams = cParams
         }
         // Baştan da bir süre sonra sönükleşsin; dokununca geri gelir.
         scheduleFade()
@@ -238,8 +236,10 @@ class QuickCursorService : AccessibilityService() {
     }
 
     private fun showCursor() {
-        cursor?.visibility = View.VISIBLE
-        updateCursor()
+        cursor?.let { view ->
+            view.reset(cursorX, cursorY)
+            view.visibility = View.VISIBLE
+        }
     }
 
     private fun hideCursor() {
@@ -247,13 +247,7 @@ class QuickCursorService : AccessibilityService() {
     }
 
     private fun updateCursor() {
-        val params = cursorParams ?: return
-        val view = cursor ?: return
-        // view.width ilk gösterimde 0 (GONE eklendiği için hiç ölçülmedi);
-        // bilinen boyutu kullanıyoruz ki imleç kayık doğmasın.
-        params.x = (cursorX - cursorSizePx / 2f).toInt()
-        params.y = (cursorY - cursorSizePx / 2f).toInt()
-        runCatching { windowManager?.updateViewLayout(view, params) }
+        cursor?.moveTo(cursorX, cursorY)
     }
 
     /** Dokununca topu tam görünür yap ve sönükleşme sayacını durdur. */
