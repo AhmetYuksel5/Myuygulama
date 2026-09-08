@@ -30,7 +30,9 @@ class QuickCursorService : AccessibilityService() {
 
     private var windowManager: WindowManager? = null
     private var handle: View? = null
-    private var cursor: View? = null
+    // Tür CursorView: imleç artık yalnız taşınan bir kutu değil, kuyruğunu
+    // kendi çizen bir görünüm; View olarak tutulunca moveTo/reset görünmüyor.
+    private var cursor: CursorView? = null
     private var handleParams: WindowManager.LayoutParams? = null
 
     private val handler = Handler(Looper.getMainLooper())
