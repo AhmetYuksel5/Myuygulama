@@ -1,0 +1,387 @@
+/*
+ * Tasarım dili.
+ *
+ * Bütün renkler, yazı ölçüleri, köşe yarıçapları ve aralıklar burada
+ * tanımlı; ekranlar hiçbir yerde çıplak bir renk ya da piksel yazmıyor.
+ * Sebebi tek: görünümü değiştirmek istediğinde dolaşacağın tek dosya bu
+ * olsun. Android tarafında bu dersi zor öğrendik, renkler on ayrı
+ * dosyaya dağılmıştı.
+ *
+ * Seçilen yön "kartlı": her bölüm kendi kartı ve kendi rengi. Renk süs
+ * değil adres — göz aradığı bölümü okumadan, renginden buluyor.
+ */
+
+:root {
+  /* --- Zemin ve yüzeyler --- */
+  --zemin: #f4f6fb;
+  --yuzey: #ffffff;
+  --yuzey-2: #eef1f8;
+
+  /* --- Yazı --- */
+  --murekkep: #1d2333;
+  --sonuk: #7d8699;
+  --silik: #a3abbd;
+
+  /* --- Çizgi ve vurgu --- */
+  --cizgi: #e6eaf2;
+  --vurgu: #4f46e5;
+  --vurgu-yazi: #ffffff;
+  --vurgu-sis: #e0e7ff;
+
+  /* --- Bölüm renkleri.
+     Her biri bir "koyu" (yazı ve simge) ve bir "sis" (rozet zemini).
+     Dört bölüm dört renk: fazlası kartları karnaval yapıyor. --- */
+  --aliskanlik: #16a34a;
+  --aliskanlik-sis: #dcfce7;
+  --gorev: #c2410c;
+  --gorev-sis: #ffedd5;
+  --kelime: #4338ca;
+  --kelime-sis: #e0e7ff;
+  --pocket: #b91c1c;
+  --pocket-sis: #fee2e2;
+
+  /* --- İşaret kalemleri. Android'dekilerin aynı tonları;
+     iki uygulama aynı kelimeyi aynı renkte göstermeli. --- */
+  --kalem-sari: #ffc93c;
+  --kalem-mavi: #4fa3f7;
+  --kalem-yesil: #5fc46b;
+  --kalem-kirmizi: #f2708a;
+
+  /* --- Biçim --- */
+  --yaricap-kart: 18px;
+  --yaricap-rozet: 9px;
+  --yaricap-hap: 999px;
+  --golge-kart: 0 1px 2px rgba(29, 35, 51, .05), 0 8px 20px rgba(29, 35, 51, .06);
+
+  /* --- Aralık. Dörder dörder gidiyor; ara değer yok ki
+     ekranlar birbirine hizalanmak zorunda kalsın. --- */
+  --ara-1: 4px;
+  --ara-2: 8px;
+  --ara-3: 12px;
+  --ara-4: 16px;
+  --ara-5: 24px;
+  --ara-6: 32px;
+
+  /* --- Yazı ölçeği --- */
+  --yazi: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --punto-dev: 26px;
+  --punto-baslik: 20px;
+  --punto-orta: 16px;
+  --punto-govde: 14.5px;
+  --punto-kucuk: 12.5px;
+  --punto-minik: 11px;
+
+  /* --- Cihazın güvenli alanı: iPhone'da çentik ve alt çizgi --- */
+  --ust: env(safe-area-inset-top);
+  --alt: env(safe-area-inset-bottom);
+
+  color-scheme: light;
+}
+
+/*
+ * Karanlık düzen.
+ *
+ * Renkler ters çevrilmiyor, yeniden seçiliyor: koyu zeminde aynı
+ * kırmızı kanlı, aynı yeşil zehirli çıkıyor. Bölüm renkleri
+ * açıldı, sisleri koyulaştı.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="acik"]) {
+    --zemin: #101319;
+    --yuzey: #171b23;
+    --yuzey-2: #1e232c;
+
+    --murekkep: #e7eaf1;
+    --sonuk: #8f98ab;
+    --silik: #6c748a;
+
+    --cizgi: #262c37;
+    --vurgu: #7c7bf5;
+    --vurgu-yazi: #0d0f14;
+    --vurgu-sis: #241f4d;
+
+    --aliskanlik: #4ade80;
+    --aliskanlik-sis: #12291b;
+    --gorev: #fb923c;
+    --gorev-sis: #2c1a0f;
+    --kelime: #a5a3fb;
+    --kelime-sis: #221f45;
+    --pocket: #f87171;
+    --pocket-sis: #2c1416;
+
+    --golge-kart: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 20px rgba(0, 0, 0, .35);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-tema="koyu"] {
+  --zemin: #101319;
+  --yuzey: #171b23;
+  --yuzey-2: #1e232c;
+
+  --murekkep: #e7eaf1;
+  --sonuk: #8f98ab;
+  --silik: #6c748a;
+
+  --cizgi: #262c37;
+  --vurgu: #7c7bf5;
+  --vurgu-yazi: #0d0f14;
+  --vurgu-sis: #241f4d;
+
+  --aliskanlik: #4ade80;
+  --aliskanlik-sis: #12291b;
+  --gorev: #fb923c;
+  --gorev-sis: #2c1a0f;
+  --kelime: #a5a3fb;
+  --kelime-sis: #221f45;
+  --pocket: #f87171;
+  --pocket-sis: #2c1416;
+
+  --golge-kart: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 20px rgba(0, 0, 0, .35);
+
+  color-scheme: dark;
+}
+
+/* --- Temel --- */
+
+* { box-sizing: border-box; }
+
+html, body, #kok {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--zemin);
+  color: var(--murekkep);
+  font-family: var(--yazi);
+  font-size: var(--punto-govde);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* Sekmeler arası geçerken sayfa yatayda esnemesin. */
+  overscroll-behavior-y: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--vurgu);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* --- Uygulama iskeleti --- */
+
+.uygulama {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.govde {
+  flex: 1;
+  /* Alt çubuk sabit duruyor; son kart onun altında kalmasın. */
+  padding-bottom: calc(78px + var(--alt));
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* --- Ekran başlığı --- */
+
+.tepe {
+  padding: calc(var(--ara-5) + var(--ust)) var(--ara-4) var(--ara-1);
+}
+.tepe .gun {
+  font-size: var(--punto-kucuk);
+  font-weight: 600;
+  color: var(--sonuk);
+}
+.tepe h1 {
+  margin: var(--ara-1) 0 0;
+  font-size: var(--punto-dev);
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+
+/* --- Kart --- */
+
+.kart {
+  margin: var(--ara-3) var(--ara-4) 0;
+  background: var(--yuzey);
+  border-radius: var(--yaricap-kart);
+  padding: 15px var(--ara-4) var(--ara-4);
+  box-shadow: var(--golge-kart);
+}
+
+.kart-baslik {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: var(--punto-govde);
+  font-weight: 700;
+  margin-bottom: 11px;
+}
+
+/* Rozet: bölümün rengini taşıyan küçük kare. Kartın kimliği bu. */
+.rozet {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--yaricap-rozet);
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.rozet svg { width: 15px; height: 15px; }
+
+.sayac {
+  margin-inline-start: auto;
+  font-size: var(--punto-kucuk);
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: var(--yaricap-hap);
+}
+
+/* --- Satır --- */
+
+.satir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: var(--punto-govde);
+  width: 100%;
+  text-align: start;
+}
+.satir .sag {
+  margin-inline-start: auto;
+  font-size: var(--punto-kucuk);
+  font-weight: 600;
+  color: var(--sonuk);
+}
+.satir.bitti { color: var(--silik); }
+.satir.bitti .metin { text-decoration: line-through; }
+
+.kutucuk {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  flex: none;
+  border: 2px solid var(--cizgi);
+  display: grid;
+  place-items: center;
+  transition: background .14s ease, border-color .14s ease;
+}
+.kutucuk svg { width: 11px; height: 11px; color: #fff; opacity: 0; }
+.kutucuk.dolu svg { opacity: 1; }
+
+.nokta {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.karsilik {
+  color: var(--sonuk);
+  font-size: var(--punto-kucuk);
+}
+
+/* --- İlerleme çizgisi --- */
+
+.cizgi {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--yuzey-2);
+  overflow: hidden;
+}
+.cizgi i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--vurgu);
+}
+
+/* --- Boş durum --- */
+
+.bos {
+  margin: var(--ara-5) var(--ara-4);
+  padding: var(--ara-6) var(--ara-5);
+  background: var(--yuzey);
+  border-radius: var(--yaricap-kart);
+  box-shadow: var(--golge-kart);
+  text-align: center;
+  color: var(--sonuk);
+}
+.bos h2 {
+  margin: 0 0 var(--ara-2);
+  font-size: var(--punto-baslik);
+  font-weight: 700;
+  color: var(--murekkep);
+  letter-spacing: -.02em;
+}
+.bos p { margin: 0; font-size: var(--punto-govde); }
+
+/* --- Alt çubuk --- */
+
+.alt-cubuk {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  background: var(--yuzey);
+  border-top: 1px solid var(--cizgi);
+  padding-bottom: var(--alt);
+}
+.alt-cubuk button {
+  flex: 1;
+  padding: 8px 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--sonuk);
+}
+.alt-cubuk .kapsul {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 16px;
+  border-radius: var(--yaricap-hap);
+  transition: background .16s ease, color .16s ease;
+}
+.alt-cubuk .ad {
+  font-size: var(--punto-minik);
+  font-weight: 600;
+}
+.alt-cubuk button[aria-current="page"] {
+  color: var(--vurgu);
+}
+/* Açık sekmenin simgesi renkli bir hapın içinde durur; seçilen yön bu. */
+.alt-cubuk button[aria-current="page"] .kapsul {
+  background: var(--vurgu);
+  color: var(--vurgu-yazi);
+}
+.alt-cubuk svg { width: 22px; height: 22px; display: block; }
+
+/* Örnek içerik uyarısı. Ekranın gerçek veriyle dolduğu gün silinecek. */
+.ornek-not {
+  margin: var(--ara-5) var(--ara-4) 0;
+  font-size: var(--punto-kucuk);
+  color: var(--silik);
+  text-align: center;
+}

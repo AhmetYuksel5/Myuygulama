@@ -90,3 +90,29 @@ için Android derlemesi gereksiz — o gönderimler `[skip ci]` taşımalı.
   menüsüne madde eklenemiyor); işaret anahtarı noktalamasız; yapay zekâ
   cevabında yalnız iki dil (Türkçe + metnin kendi dili); bir kez alınan
   çeviri/kart `sozluk` deposunda kalıyor.
+
+## Merkez'in web sürümü (`web/` → `docs/merkez/`)
+
+Merkez'in tarayıcı sürümü. Kaynak `web/` altında, derlenmiş çıktı
+`docs/merkez/` altına yazılıyor ve depoya konuyor.
+
+- Kaynak: React + TypeScript + Vite. `cd web && npm install` bir kez;
+  sonra `npm run build` çıktıyı `docs/merkez/` içine üretiyor.
+- Adres: `https://ahmetyuksel5.github.io/Myuygulama/merkez/`. Kökteki
+  sayfa Arapça okuyucunun, Merkez onun altında ayrı klasörde.
+- Çıktı neden depoda: GitHub sayfayı `docs/` klasöründen olduğu gibi
+  sunuyor, derleme yapmıyor. Yayınlamayı iş akışına taşısaydık,
+  biriktirme işareti taşıyan bir gönderim siteyi de yayınlamaz olurdu.
+- **Derlemeden gönderme.** `docs/merkez/` elle düzenlenmez; kaynağı
+  değiştirip yeniden derlemek gerekiyor, yoksa sayfa eski kalır.
+- Tasarım dili tek dosyada: `web/src/tasarim.css`. Renk, punto, köşe
+  yarıçapı ve aralık oradan geliyor; ekranlarda çıplak değer yok.
+- Görünüm yönü "kartlı": her bölüm kendi kartı ve kendi rengi, alt
+  çubukta açık sekmenin simgesi renkli bir hapın içinde.
+- Yalnız `web/` ve `docs/` değişen gönderimlerde Android derlemesi
+  gereksiz; o gönderimler iş akışını atlatan işareti taşımalı.
+- Servis işçisi henüz yok. Sebebi bilinçli: kökteki okuyucunun servis
+  işçisi etkinleşirken kendi sürümü dışındaki bütün önbellekleri
+  siliyor ve aynı alan adında olduğumuz için Merkez'inkini de silerdi.
+  Çevrimdışı desteği, o dosya kendi önbelleklerini ayırt eder hâle
+  geldiğinde eklenecek.
