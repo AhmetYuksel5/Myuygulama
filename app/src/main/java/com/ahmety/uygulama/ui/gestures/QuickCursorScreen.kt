@@ -1,6 +1,16 @@
 package com.ahmety.uygulama.ui.gestures
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,6 +48,7 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
     var sensitivityTimes10 by remember { mutableIntStateOf((settings.sensitivity * 10).toInt()) }
     var offset by remember { mutableIntStateOf(settings.bottomOffsetDp) }
     var centerOffset by remember { mutableIntStateOf(settings.centerOffsetDp) }
+    var izRengi by remember { mutableIntStateOf(settings.izRengi) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -98,6 +109,38 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             text = "Alttan yukarı 0 = ekranın tam dibinde. Yatay kayma 0 = ortada, " +
                 "eksi değer sola, artı değer sağa. Çubuğa uzun basıp sürükleyerek de " +
                 "taşıyabilirsin; bıraktığın yer kaydedilir.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text("İzin rengi", style = MaterialTheme.typography.labelLarge)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(vertical = 2.dp),
+        ) {
+            QuickCursorSettings.IZ_RENKLERI.forEach { renk ->
+                val secili = renk == izRengi
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(renk), CircleShape)
+                        .then(
+                            if (secili) {
+                                Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .clickable { izRengi = renk; settings.izRengi = renk },
+                )
+            }
+        }
+        Text(
+            text = "İmleç gezerken ardında bu renkte bir iz bırakıyor. " +
+                "Renkler mat: parlak bir iz altındaki yazıyı okunmaz yapıyor.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

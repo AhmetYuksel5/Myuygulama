@@ -69,6 +69,16 @@ class QuickCursorSettings(context: Context) {
         get() = prefs.getInt(KEY_OPACITY, 55)
         set(value) = prefs.edit().putInt(KEY_OPACITY, value.coerceIn(20, 100)).apply()
 
+    /**
+     * İmlecin ardında bıraktığı izin rengi.
+     *
+     * Saklanan şey saydamlıksız bir renk; izin sönmesi zaten çizerken
+     * hesaplanıyor, ayarda tutulan değere alfa karışırsa ikisi çarpışır.
+     */
+    var izRengi: Int
+        get() = prefs.getInt(KEY_IZ_RENGI, IZ_RENKLERI.first())
+        set(value) = prefs.edit().putInt(KEY_IZ_RENGI, value).apply()
+
     /** İmleç hassasiyeti: parmak hareketinin kaç katı imleç hareketi. */
     var sensitivity: Float
         get() = prefs.getFloat(KEY_SENSITIVITY, 2.2f)
@@ -86,6 +96,25 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_HEIGHT = "handle_height"
         private const val KEY_OPACITY = "opacity"
         private const val KEY_SENSITIVITY = "sensitivity"
+        private const val KEY_IZ_RENGI = "iz_rengi"
+
+        /**
+         * Seçilebilen iz renkleri.
+         *
+         * Hepsi mat: parlak renkler ekranın üstünde neon bir çizgi gibi
+         * duruyor ve altındaki yazıyı okunmaz yapıyor. İlki eskiden beri
+         * kullanılan kırmızı, varsayılan o.
+         */
+        val IZ_RENKLERI = intArrayOf(
+            0xFFD6483E.toInt(), // kırmızı
+            0xFFE08A2C.toInt(), // kehribar
+            0xFF3F9E52.toInt(), // yeşil
+            0xFF2F7FD1.toInt(), // mavi
+            0xFF6B4FC9.toInt(), // mor
+            0xFF2AA6A0.toInt(), // turkuaz
+            0xFFD1477F.toInt(), // pembe
+            0xFFE9E4DC.toInt(), // kirli beyaz
+        )
 
         // Topun bıraktıkları; yalnız bir kez temizlemek için duruyorlar.
         private const val KEY_LEGACY_SIZE = "handle_size"

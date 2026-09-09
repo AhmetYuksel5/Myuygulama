@@ -52,7 +52,7 @@ internal class HandleView(context: Context, private val opacityPercent: Int) : V
  * alındığı için kuyruk uzuyor, yavaşken kısalıyor, durunca noktalar
  * eskiyip kuyruk sönüyor — elastikiyet buradan geliyor.
  */
-internal class CursorView(context: Context) : View(context) {
+internal class CursorView(context: Context, private val izRengi: Int) : View(context) {
 
     private val density = resources.displayMetrics.density
 
@@ -131,7 +131,14 @@ internal class CursorView(context: Context) : View(context) {
             val fresh = (1f - (now - b.at).toFloat() / TAIL_MS).coerceIn(0f, 1f)
             if (fresh <= 0f) continue
             tail.strokeWidth = (TAIL_WIDTH_DP * density * fresh).coerceAtLeast(1f)
-            tail.color = Color.argb((TAIL_ALPHA * fresh).toInt(), 214, 72, 62)
+            // Renk ayardan, saydamlığı tazeliğinden: uçtaki parça
+            // sönük, halkaya yakın olan dolgun.
+            tail.color = Color.argb(
+                (TAIL_ALPHA * fresh).toInt(),
+                Color.red(izRengi),
+                Color.green(izRengi),
+                Color.blue(izRengi),
+            )
             canvas.drawLine(a.x, a.y, b.x, b.y, tail)
         }
 

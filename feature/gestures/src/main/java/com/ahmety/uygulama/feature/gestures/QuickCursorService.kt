@@ -133,7 +133,7 @@ class QuickCursorService : AccessibilityService() {
 
         // İmleç penceresi tam ekran: kuyruk halkanın dışına taşıyor ve
         // hareket pencereyi taşımak yerine yeniden çizmekten ibaret.
-        val cursorView = CursorView(this)
+        val cursorView = CursorView(this, settings.izRengi)
         val cParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
