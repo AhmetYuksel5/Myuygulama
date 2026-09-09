@@ -7,23 +7,35 @@ import android.graphics.Paint
 import android.os.SystemClock
 import android.view.View
 
-/** Kenardaki tutamak topu — radyal parlaklıkla, fotoğraftaki gri küre gibi. */
+/**
+ * Ekranın dibindeki tutamak çubuğu: uçları yuvarlatılmış yatay bir dikdörtgen,
+ * telefonun kendi gezinme çizgisi gibi.
+ *
+ * Eni ve kalınlığı ayardan geliyor; çizim pencerenin tamamını dolduruyor, o
+ * yüzden burada ölçü yok — boyutu pencere veriyor.
+ */
 internal class HandleView(context: Context, private val opacityPercent: Int) : View(context) {
+
+    private val alpha = (255 * opacityPercent / 100).coerceIn(40, 255)
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.argb((255 * opacityPercent / 100).coerceIn(40, 255), 210, 210, 214)
+        color = Color.argb(alpha, 210, 210, 214)
     }
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.argb((255 * opacityPercent / 100).coerceIn(40, 255), 255, 255, 255)
+        color = Color.argb(alpha, 255, 255, 255)
         strokeWidth = 2f * resources.displayMetrics.density
     }
 
     override fun onDraw(canvas: Canvas) {
-        val r = minOf(width, height) / 2f - ring.strokeWidth
-        canvas.drawCircle(width / 2f, height / 2f, r, fill)
-        canvas.drawCircle(width / 2f, height / 2f, r, ring)
+        val inset = ring.strokeWidth / 2f
+        val h = height - ring.strokeWidth
+        // Yarıçap kalınlığın yarısı: çubuk ne kadar inceyse o kadar hap
+        // biçiminde, kalınlaşınca köşeleri yumuşak dikdörtgen kalıyor.
+        val r = h / 2f
+        canvas.drawRoundRect(inset, inset, width - inset, height - inset, r, r, fill)
+        canvas.drawRoundRect(inset, inset, width - inset, height - inset, r, r, ring)
     }
 }
 

@@ -17,14 +17,14 @@ import android.view.accessibility.AccessibilityEvent
 /**
  * Quick Cursor muadili: tek elle ulaşılamayan yerlere basmak için sanal imleç.
  *
- * Kenardaki topa parmağını basınca, imleç topun biraz **üstünde** belirir
+ * Dipteki çubuğa parmağını basınca, imleç çubuğun biraz **üstünde** belirir
  * (böylece başparmağın altında kalmaz). Parmağını gezdirdikçe imleç
  * **trackpad gibi görece** hareket eder (küçük parmak hareketi, hassasiyet
  * kadar büyük imleç hareketi). Parmağını kaldırınca imlecin durduğu yere
  * gerçek bir dokunma gönderilir (`dispatchGesture`).
  *
- * Topun yeri hem dikeyde hem yatayda serbestçe ayarlanabilir; uzun basıp
- * sürükleyerek taşınır. Kullanılmadığında sönükleşir, dokununca geri gelir.
+ * Çubuğun eni, kalınlığı ve yeri ayarlanabilir; uzun basıp sürükleyerek
+ * taşınır. Kullanılmadığında sönükleşir, dokununca geri gelir.
  */
 class QuickCursorService : AccessibilityService() {
 
@@ -69,7 +69,7 @@ class QuickCursorService : AccessibilityService() {
      * hem de ayar ekranından girilen değer anında uygulanıyor.
      */
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "bottom_offset" || key == "side_offset") {
+        if (key == "bottom_offset" || key == "center_offset") {
             handler.post { applyHandlePosition() }
         } else {
             handler.post { rebuild() }
@@ -107,26 +107,28 @@ class QuickCursorService : AccessibilityService() {
         screenW = metrics.widthPixels
         screenH = metrics.heightPixels
         val density = metrics.density
-        val sizePx = (settings.handleSizeDp * density).toInt()
+        val barW = (settings.handleWidthDp * density).toInt()
+        val barH = (settings.handleHeightDp * density).toInt()
 
         val handleView = HandleView(this, settings.opacityPercent)
         handleView.setOnTouchListener { _, event -> onHandleTouch(event, density) }
         val hParams = WindowManager.LayoutParams(
-            sizePx,
-            sizePx,
+            barW,
+            barH,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = (if (settings.onRight) Gravity.END else Gravity.START) or Gravity.BOTTOM
-            // Ayarda çok büyük bir değer kalmışsa top ekran dışında doğar ve
-            // kullanıcı onu bir daha bulamaz; ekrana kırpıyoruz.
-            x = (settings.sideOffsetDp * density).toInt()
-                .coerceIn(0, (screenW - sizePx).coerceAtLeast(0))
+            // Çubuk dipte ve yatayda ortalı; x merkeze göre kayma.
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            // Ayarda çok büyük bir değer kalmışsa çubuk ekran dışında doğar
+            // ve kullanıcı onu bir daha bulamaz; ekrana kırpıyoruz.
+            x = (settings.centerOffsetDp * density).toInt()
+                .coerceIn(-maxSideShift(barW), maxSideShift(barW))
             y = (settings.bottomOffsetDp * density).toInt()
-                .coerceIn(0, (screenH - sizePx).coerceAtLeast(0))
+                .coerceIn(0, (screenH - barH).coerceAtLeast(0))
         }
 
         // İmleç penceresi tam ekran: kuyruk halkanın dışına taşıyor ve
@@ -270,14 +272,17 @@ class QuickCursorService : AccessibilityService() {
         runCatching { view.animate().alpha(target).setDuration(duration).start() }
     }
 
-    /** Topu hem dikeyde hem yatayda taşır. */
+    /** Ortalı çubuğun merkezden en çok ne kadar kayabileceği. */
+    private fun maxSideShift(barWidth: Int): Int =
+        ((screenW - barWidth) / 2).coerceAtLeast(0)
+
+    /** Çubuğu hem dikeyde hem yatayda taşır. */
     private fun moveHandle(dx: Float, dy: Float) {
         val params = handleParams ?: return
         val view = handle ?: return
-        // Kenara hizalı olduğu için x içeri doğru, y yukarı doğru artar.
-        val inward = if (settings.onRight) -dx else dx
-        params.x = (params.x + inward).toInt()
-            .coerceIn(0, (screenW - view.width).coerceAtLeast(0))
+        // Ortalı olduğu için x sağa doğru artar, y yukarı doğru.
+        val limit = maxSideShift(view.width)
+        params.x = (params.x + dx).toInt().coerceIn(-limit, limit)
         params.y = (params.y - dy).toInt()
             .coerceIn(0, (screenH - view.height).coerceAtLeast(0))
         runCatching { windowManager?.updateViewLayout(view, params) }
@@ -288,8 +293,8 @@ class QuickCursorService : AccessibilityService() {
         val params = handleParams ?: return
         val view = handle ?: return
         val density = resources.displayMetrics.density
-        params.x = (settings.sideOffsetDp * density).toInt()
-            .coerceIn(0, (screenW - view.width).coerceAtLeast(0))
+        val limit = maxSideShift(view.width)
+        params.x = (settings.centerOffsetDp * density).toInt().coerceIn(-limit, limit)
         params.y = (settings.bottomOffsetDp * density).toInt()
             .coerceIn(0, (screenH - view.height).coerceAtLeast(0))
         runCatching { windowManager?.updateViewLayout(view, params) }
@@ -300,7 +305,7 @@ class QuickCursorService : AccessibilityService() {
     private fun persistHandlePosition(density: Float) {
         val params = handleParams ?: return
         settings.bottomOffsetDp = (params.y / density).toInt()
-        settings.sideOffsetDp = (params.x / density).toInt()
+        settings.centerOffsetDp = (params.x / density).toInt()
     }
 
     /**

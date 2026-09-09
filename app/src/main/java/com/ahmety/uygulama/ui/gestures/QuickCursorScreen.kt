@@ -2,13 +2,11 @@ package com.ahmety.uygulama.ui.gestures
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.Text
@@ -34,12 +32,12 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
 
     var serviceEnabled by remember { mutableStateOf(QuickCursorSettings.isServiceEnabled(context)) }
     var enabled by remember { mutableStateOf(settings.enabled) }
-    var onRight by remember { mutableStateOf(settings.onRight) }
-    var size by remember { mutableIntStateOf(settings.handleSizeDp) }
+    var barWidth by remember { mutableIntStateOf(settings.handleWidthDp) }
+    var barHeight by remember { mutableIntStateOf(settings.handleHeightDp) }
     var opacity by remember { mutableIntStateOf(settings.opacityPercent) }
     var sensitivityTimes10 by remember { mutableIntStateOf((settings.sensitivity * 10).toInt()) }
     var offset by remember { mutableIntStateOf(settings.bottomOffsetDp) }
-    var sideOffset by remember { mutableIntStateOf(settings.sideOffsetDp) }
+    var centerOffset by remember { mutableIntStateOf(settings.centerOffsetDp) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -61,9 +59,10 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
     ) {
         MerkezTopBar(title = "Tek elle imleç", onBack = onBack)
         Text(
-            text = "Kenardaki topa parmağını basıp gezdir; ekranda bir imleç trackpad " +
-                "gibi dolaşır, parmağını kaldırınca oraya dokunur. Sol üst gibi tek elle " +
-                "ulaşamadığın yerlere basmak için. Topu taşımak için uzun basıp sürükle.",
+            text = "Ekranın dibindeki çubuğa parmağını basıp gezdir; ekranda bir imleç " +
+                "trackpad gibi dolaşır, parmağını kaldırınca oraya dokunur. Sol üst gibi " +
+                "tek elle ulaşamadığın yerlere basmak için. Çubuğu taşımak için uzun " +
+                "basıp sürükle.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -80,28 +79,31 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             settings.enabled = it
         }
 
-        Text("Top hangi kenarda", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !onRight, onClick = { onRight = false; settings.onRight = false }, label = { Text("Sol") })
-            FilterChip(selected = onRight, onClick = { onRight = true; settings.onRight = true }, label = { Text("Sağ") })
+        Text("Çubuğun ölçüsü", style = MaterialTheme.typography.labelLarge)
+        Stepper("En", barWidth, 60..320, step = 10, suffix = "dp") {
+            barWidth = it; settings.handleWidthDp = it
+        }
+        Stepper("Kalınlık", barHeight, 8..56, step = 2, suffix = "dp") {
+            barHeight = it; settings.handleHeightDp = it
         }
 
-        Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
-        Stepper("Top boyutu", size, 36..96, step = 4, suffix = "dp") { size = it; settings.handleSizeDp = it }
-        Stepper("Saydamlık", opacity, 20..100, step = 5, suffix = "%") { opacity = it; settings.opacityPercent = it }
-        Stepper("Alttan konum", offset, 0..1200, step = 20, suffix = "dp") {
+        Text("Çubuğun yeri", style = MaterialTheme.typography.labelLarge)
+        Stepper("Alttan yukarı", offset, 0..1200, step = 10, suffix = "dp") {
             offset = it; settings.bottomOffsetDp = it
         }
-        Stepper("Kenardan içeri", sideOffset, 0..400, step = 10, suffix = "dp") {
-            sideOffset = it; settings.sideOffsetDp = it
+        Stepper("Yatay kayma", centerOffset, -300..300, step = 10, suffix = "dp") {
+            centerOffset = it; settings.centerOffsetDp = it
         }
         Text(
-            text = "Top artık hem dikeyde hem yatayda istediğin yere konabiliyor: " +
-                "0 = seçili kenara tam yapışık, en dipte. Topa uzun basıp sürükleyerek " +
-                "de taşıyabilirsin; bıraktığın yer kaydedilir.",
+            text = "Alttan yukarı 0 = ekranın tam dibinde. Yatay kayma 0 = ortada, " +
+                "eksi değer sola, artı değer sağa. Çubuğa uzun basıp sürükleyerek de " +
+                "taşıyabilirsin; bıraktığın yer kaydedilir.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
+        Stepper("Saydamlık", opacity, 20..100, step = 5, suffix = "%") { opacity = it; settings.opacityPercent = it }
         Stepper("Hassasiyet", sensitivityTimes10, 10..40, step = 2, suffix = "×10") {
             sensitivityTimes10 = it
             settings.sensitivity = it / 10f
