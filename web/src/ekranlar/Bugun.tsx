@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tik } from "../bilesenler/Simgeler";
+import { Cep, Halka, Kart as KartSimgesi, Tik } from "../bilesenler/Simgeler";
 
 /*
  * Bugün ekranı.
@@ -92,7 +92,7 @@ export default function Bugun() {
         renk="var(--kelime)"
         sis="var(--kelime-sis)"
         sayac="7 bekliyor"
-        simge={<KucukKart />}
+        simge={<KartSimgesi />}
       >
         <div className="cizgi" aria-hidden>
           <i style={{ width: "34%" }} />
@@ -112,7 +112,7 @@ export default function Bugun() {
         renk="var(--pocket)"
         sis="var(--pocket-sis)"
         sayac="4"
-        simge={<KucukCep />}
+        simge={<Cep />}
       >
         <div className="satir">
           <span className="metin">Sessizliğin ekonomisi</span>
@@ -188,28 +188,6 @@ function SatirDugmesi({
     </button>
   );
 }
-
-/* Kart rozetlerinin içindeki küçük simgeler. Alt çubuktakilerden ayrı
-   duruyorlar: orada 22 piksel, burada 15; aynı çizim iki boyda da
-   doğru görünmüyor. */
-
-const Halka = () => (
-  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-    <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="3" />
-  </svg>
-);
-
-const KucukKart = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-    <rect x="3" y="5" width="18" height="14" rx="3" />
-  </svg>
-);
-
-const KucukCep = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-    <path d="M5 4h14a1.5 1.5 0 0 1 1.5 1.5V11a8.5 8.5 0 0 1-17 0V5.5A1.5 1.5 0 0 1 5 4Z" />
-  </svg>
-);
 
 /** "9 Eylül, Salı" — cihazın kendi diline değil, uygulamanınkine göre. */
 function bugunYazisi(): string {

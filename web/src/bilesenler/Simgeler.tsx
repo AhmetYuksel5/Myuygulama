@@ -9,8 +9,13 @@
  * sekmenin simgesi renkli bir hapın içinde duruyor, o yüzden simgenin
  * kendisi konturlu değil dolu — hapın içinde kontur kayboluyor.
  *
- * Renk `currentColor`: simge bulunduğu yerin rengini alıyor, her
- * kullanım yerinde ayrıca renk verilmesi gerekmiyor.
+ * Ortak yaşam alanı 24 birimlik kutuda yaklaşık 18×15. Genişlikler
+ * bilerek birebir aynı değil: dolu bir dikdörtgen, aynı kutuyu kaplayan
+ * açık bir kitaptan daha büyük görünüyor, o yüzden kart kitaptan biraz
+ * dar. Ölçü kutu değil mürekkep miktarı — üç ağır simgenin alanı
+ * birbirinden %12'den fazla ayrılmıyor.
+ *
+ * Renk `currentColor`: simge bulunduğu yerin rengini alıyor.
  */
 
 type Ozellik = { className?: string };
@@ -22,19 +27,36 @@ const kutu = {
   "aria-hidden": true,
 } as const;
 
-/** Bugün: güneş. Öteki sekmeler nesne, bu bir zaman; ayrı dursun. */
+/**
+ * Bugün: güneş.
+ *
+ * Öteki sekmeler birer nesne, bu bir zaman; biçimi de onlardan ayrı.
+ * Işınlar hapın içinde durabilsin diye 16,6 birimlik dar bir kutuya
+ * sığdırıldı — yuvarlak bir şekil aynı kutuda köşeliden küçük göründüğü
+ * için ötekilerden bir tık geniş.
+ */
 export const Gunes = ({ className }: Ozellik) => (
   <svg {...kutu} className={className}>
-    <circle cx="12" cy="12" r="4.4" />
-    <path d="M12 2.6a1 1 0 0 1 1 1v1.6a1 1 0 1 1-2 0V3.6a1 1 0 0 1 1-1Zm0 15.2a1 1 0 0 1 1 1v1.6a1 1 0 1 1-2 0v-1.6a1 1 0 0 1 1-1ZM2.6 12a1 1 0 0 1 1-1h1.6a1 1 0 1 1 0 2H3.6a1 1 0 0 1-1-1Zm15.2 0a1 1 0 0 1 1-1h1.6a1 1 0 1 1 0 2h-1.6a1 1 0 0 1-1-1ZM5.3 5.3a1 1 0 0 1 1.4 0l1.2 1.2a1 1 0 0 1-1.4 1.4L5.3 6.7a1 1 0 0 1 0-1.4Zm10.8 10.8a1 1 0 0 1 1.4 0l1.2 1.2a1 1 0 0 1-1.4 1.4l-1.2-1.2a1 1 0 0 1 0-1.4Zm2.6-10.8a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1.4-1.4l1.2-1.2a1 1 0 0 1 1.4 0ZM7.9 16.1a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1.4-1.4l1.2-1.2a1 1 0 0 1 1.4 0Z" />
+    <circle cx="12" cy="12" r="4.2" />
+    {[0, 45, 90, 135, 180, 225, 270, 315].map((aci) => (
+      <rect
+        key={aci}
+        x="17.9"
+        y="11"
+        width="2.4"
+        height="2"
+        rx="1"
+        transform={`rotate(${aci} 12 12)`}
+      />
+    ))}
   </svg>
 );
 
-/** Kitaplık: açık kitap. */
+/** Kitaplık: açık kitap. Sırttaki boşluk bir çizgi kalınlığında. */
 export const Kitap = ({ className }: Ozellik) => (
   <svg {...kutu} className={className}>
-    <path d="M11.1 6.9C9.4 5.5 7 4.9 3.6 5.2v12.3c3.4-.3 5.8.3 7.5 1.6Z" />
-    <path d="M12.9 6.9c1.7-1.4 4.1-2 7.5-1.7v12.3c-3.4-.3-5.8.3-7.5 1.6Z" />
+    <path d="M2.8 4.65C6.3 4.4 9.4 5 11.15 6.35V19.45C9.4 18.1 6.3 17.5 2.8 17.75Z" />
+    <path d="M21.2 4.65C17.7 4.4 14.6 5 12.85 6.35V19.45C14.6 18.1 17.7 17.5 21.2 17.75Z" />
   </svg>
 );
 
@@ -43,7 +65,7 @@ export const Kart = ({ className }: Ozellik) => (
   <svg {...kutu} className={className}>
     <path
       fillRule="evenodd"
-      d="M6.2 5h11.6A3.2 3.2 0 0 1 21 8.2v7.6a3.2 3.2 0 0 1-3.2 3.2H6.2A3.2 3.2 0 0 1 3 15.8V8.2A3.2 3.2 0 0 1 6.2 5Zm1.3 4.4a1 1 0 0 0 0 2h7a1 1 0 0 0 0-2Zm0 3.6a1 1 0 0 0 0 2H12a1 1 0 0 0 0-2Z"
+      d="M6.4 4.8H17.6A3.4 3.4 0 0 1 21 8.2v7.6a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 15.8V8.2A3.4 3.4 0 0 1 6.4 4.8ZM7.2 9.45h7.8a.85.85 0 0 1 0 1.7H7.2a.85.85 0 0 1 0-1.7ZM7.2 12.85h4.6a.85.85 0 0 1 0 1.7H7.2a.85.85 0 0 1 0-1.7Z"
     />
   </svg>
 );
@@ -53,17 +75,33 @@ export const Cep = ({ className }: Ozellik) => (
   <svg {...kutu} className={className}>
     <path
       fillRule="evenodd"
-      d="M6.1 4h11.8a1.6 1.6 0 0 1 1.6 1.6V11a7.5 7.5 0 0 1-15 0V5.6A1.6 1.6 0 0 1 6.1 4Zm2.5 5.5L7.2 10.9l4.8 4.8 4.8-4.8-1.4-1.4L12 12.9Z"
+      d="M6.2 4.7h11.6a2.5 2.5 0 0 1 2.5 2.5V11.4A8.3 8.3 0 0 1 3.7 11.4V7.2a2.5 2.5 0 0 1 2.5-2.5ZM9.5 10.1 12 12.6l2.5-2.5a.85.85 0 0 1 1.2 1.2L12.6 14.4a.85.85 0 0 1-1.2 0L8.3 11.3a.85.85 0 0 1 1.2-1.2Z"
     />
   </svg>
 );
 
-/** Daha: üç nokta. */
+/**
+ * Daha: üç nokta.
+ *
+ * Ötekilerin yanında hafif kalıyor ve bu geometriyle düzelmiyor;
+ * üç noktalı bir işaretin doğasında var. Yapılabilecek kadarı yapıldı:
+ * noktalar birbirine yaklaştırıldı, yarıçapları büyütüldü.
+ */
 export const UcNokta = ({ className }: Ozellik) => (
   <svg {...kutu} className={className}>
-    <circle cx="5.2" cy="12" r="2.1" />
-    <circle cx="12" cy="12" r="2.1" />
-    <circle cx="18.8" cy="12" r="2.1" />
+    <circle cx="6.2" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="17.8" cy="12" r="2" />
+  </svg>
+);
+
+/** Alışkanlıklar rozetinde: halka. Doldurulmuş bir çember, ortası delik. */
+export const Halka = ({ className }: Ozellik) => (
+  <svg {...kutu} className={className}>
+    <path
+      fillRule="evenodd"
+      d="M12 3.4a8.6 8.6 0 1 0 0 17.2 8.6 8.6 0 0 0 0-17.2Zm0 3.4a5.2 5.2 0 1 1 0 10.4 5.2 5.2 0 0 1 0-10.4Z"
+    />
   </svg>
 );
 
