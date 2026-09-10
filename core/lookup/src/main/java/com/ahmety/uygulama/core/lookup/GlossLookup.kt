@@ -82,7 +82,14 @@ class GlossLookup(
     }
 
     /**
-     * Kelimenin kartı: karşılık, tanım, örnekler, kök, aile.
+     * Seçimin kartı: kelimede karşılık/tanım/örnek/kök, cümlede çeviri ve
+     * zorlayan ifadeler.
+     *
+     * Hangisi olduğuna seçimin kendisi karar veriyor: içinde boşluk varsa
+     * cümledir. Bu ayrım yokken bir cümle de kelime kartı gibi soruluyordu
+     * ve model cümlenin kökünü, ailesini, eş anlamlısını uydurmak zorunda
+     * kalıyordu — çıkan kart yanlıştı. Destede kırmızı işaretler zaten bu
+     * ayrımla soruluyor; okurken açılan kart geride kalmıştı.
      *
      * [more] verilirse eldeki karta yeni örnekler ekleniyor — aynı sorgu
      * ikinci kez çalıştırılıp gelenler mevcutlara katılıyor; kart ekranında
@@ -97,12 +104,14 @@ class GlossLookup(
     ) {
         val trimmed = word.trim()
         if (trimmed.isEmpty()) return
-        state.value = WordDetail(trimmed, context, more, busy = true)
+        val passage = trimmed.any { it.isWhitespace() }
+        state.value = WordDetail(trimmed, context, passage, more, busy = true)
         val brief = briefs.get(sourceName).orEmpty()
         when (
             val result = openAi.describeWord(
                 word = trimmed,
                 context = context,
+                passage = passage,
                 sourceName = sourceName,
                 brief = brief,
             )
@@ -112,6 +121,7 @@ class GlossLookup(
                 state.value = WordDetail(
                     word = trimmed,
                     context = context,
+                    passage = passage,
                     info = if (more == null) {
                         fresh
                     } else {
@@ -127,6 +137,7 @@ class GlossLookup(
             is AiResult.Failed -> state.value = WordDetail(
                 word = trimmed,
                 context = context,
+                passage = passage,
                 info = more,
                 error = result.reason,
             )

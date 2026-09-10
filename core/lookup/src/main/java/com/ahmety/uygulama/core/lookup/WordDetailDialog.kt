@@ -27,6 +27,8 @@ data class WordDetail(
     val word: String,
     /** Kelimenin geçtiği cümle; örnek çoğaltırken aynı bağlam gidiyor. */
     val context: String = "",
+    /** Seçim tek kelime değil bir cümleyse: kart da soru da başka. */
+    val passage: Boolean = false,
     val info: WordInfo? = null,
     val busy: Boolean = false,
     val error: String = "",
@@ -67,7 +69,13 @@ fun WordDetailDialog(
                     ) {
                         if (detail.error.isBlank()) {
                             CircularProgressIndicator()
-                            Text("Kelime kartı hazırlanıyor…")
+                            Text(
+                                if (detail.passage) {
+                                    "Cümle çözülüyor…"
+                                } else {
+                                    "Kelime kartı hazırlanıyor…"
+                                },
+                            )
                         } else {
                             Text(
                                 text = detail.error,
@@ -77,7 +85,7 @@ fun WordDetailDialog(
                     }
                 } else {
                     WordCard(
-                        word = info.toVocabWord(detail.context),
+                        word = info.toVocabWord(detail.context, detail.passage),
                         tint = Color.Transparent,
                         interactive = false,
                         revealed = true,
@@ -108,7 +116,7 @@ fun WordDetailDialog(
  * kaydetmeyi şart koşmak yanlış olurdu, o yüzden gelen bilgi geçici bir
  * kelimeye çevriliyor.
  */
-private fun WordInfo.toVocabWord(context: String) = VocabWord(
+private fun WordInfo.toVocabWord(context: String, passage: Boolean) = VocabWord(
     word = word,
     meaning = meaning,
     definition = definition,
@@ -123,4 +131,7 @@ private fun WordInfo.toVocabWord(context: String) = VocabWord(
     collocations = collocations,
     answers = answers,
     context = context,
+    // Kart cümlede başka sıralanıyor: önce kolay İngilizcesi, sonra
+    // Türkçesi, en sonda zor ifadeler.
+    isPassage = passage,
 )
