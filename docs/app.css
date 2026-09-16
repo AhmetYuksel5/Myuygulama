@@ -279,8 +279,27 @@ mark.RED    { background: rgba(242,112,138,.45); }
   border-radius: 3px;
   border: 1px solid var(--cizgi);
 }
-#kutu-soru-alani { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
-#kutu-soru-alani input { flex: 1; min-width: 0; }
+/*
+  Soru Türkçe yazılıyor.
+
+  Sayfanın yönü sağdan sola olduğu için kutu da o yönü almıştı: imleç
+  sağda başlıyor, yazı sağa yaslanıyor, noktalama ters düşüyordu —
+  sanki Arapça bekliyormuş gibi. Satırın kendisi de soldan sağa
+  diziliyor ki "Sor" düğmesi yazının sonunda kalsın.
+*/
+#kutu-soru-alani {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  direction: ltr;
+}
+#kutu-soru-alani input {
+  flex: 1;
+  min-width: 0;
+  direction: ltr;
+  text-align: left;
+}
 #kutu-soru-alani button { flex: none; }
 #kutu-cevap { margin-top: 10px; font-size: 14px; }
 
