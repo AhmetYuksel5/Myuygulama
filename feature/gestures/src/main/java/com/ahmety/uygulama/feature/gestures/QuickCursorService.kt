@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.Configuration
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.os.Handler
@@ -25,6 +26,11 @@ import android.view.accessibility.AccessibilityEvent
  *
  * Çubuğun eni, kalınlığı ve yeri ayarlanabilir; uzun basıp sürükleyerek
  * taşınır. Kullanılmadığında sönükleşir, dokununca geri gelir.
+ *
+ * Ekran yatayken çubuk hiç kurulmuyor: telefon yana çevrildiğinde yapılan
+ * iş video izlemek oluyor ve tek elle uzağa uzanma derdi ortadan kalkıyor;
+ * geriye görüntünün dibinde duran bir kutucuk kalıyordu. Dikey dönünce
+ * kendiliğinden geri geliyor.
  */
 class QuickCursorService : AccessibilityService() {
 
@@ -83,6 +89,15 @@ class QuickCursorService : AccessibilityService() {
         rebuild()
     }
 
+    /**
+     * Dönüşte katman baştan kuruluyor: yatayda kaldırmak, dikeyde geri
+     * getirmek ve ekran ölçülerini tazelemek aynı işin parçaları.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (::settings.isInitialized) handler.post { rebuild() }
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
     override fun onInterrupt() = Unit
 
@@ -100,6 +115,8 @@ class QuickCursorService : AccessibilityService() {
     private fun rebuild() {
         removeViews()
         if (!settings.enabled) return
+        // Yatay ekranda imleç yok: bkz. sınıf açıklaması.
+        if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) return
         val manager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = manager
 

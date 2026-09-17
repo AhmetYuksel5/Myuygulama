@@ -73,7 +73,8 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             text = "Ekranın dibindeki çubuğa parmağını basıp gezdir; ekranda bir imleç " +
                 "trackpad gibi dolaşır, parmağını kaldırınca oraya dokunur. Sol üst gibi " +
                 "tek elle ulaşamadığın yerlere basmak için. Çubuğu taşımak için uzun " +
-                "basıp sürükle.",
+                "basıp sürükle. Ekranı yana çevirince çubuk kayboluyor; video " +
+                "izlerken görüntünün dibinde durmasın diye.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
