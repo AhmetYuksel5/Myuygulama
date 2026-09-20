@@ -86,8 +86,9 @@ fun selectionBands(
     startY: Float,
     endX: Float,
     endY: Float,
+    edges: ClosedFloatingPointRange<Float> = 0.04f..0.96f,
 ): List<PdfBand> {
-    if (lines.isEmpty()) return emptyList()
+    if (lines.isEmpty()) return guessedBands(startX, startY, endX, endY, edges)
     val ordered = lines.sortedWith(compareBy({ it.top }, { it.left }))
     val first = lineIndexAt(ordered, startX, startY)
     val last = lineIndexAt(ordered, endX, endY)
@@ -114,6 +115,58 @@ fun selectionBands(
         add(ordered[to].let { it.copy(right = toX.coerceIn(it.left, it.right)) })
     }
 }
+
+/**
+ * Satır çerçeveleri henüz yokken çizilen tahmini seçim.
+ *
+ * Çerçeveler taranmış sayfada yazı tanımayı bekliyor ve o bir saniye
+ * boyunca hiçbir şey çizilmiyordu: parmak sürüklenirken ne sayfada ne
+ * büyüteçte neyin seçildiği görünüyordu. Tahmin gerçeğin yerine geçmiyor,
+ * çerçeveler gelir gelmez onların yerini alıyor; ama bir şey görmek hiçbir
+ * şey görmemekten iyi.
+ *
+ * Biçim yine metin seçimi biçimi — parmağın dikdörtgeni değil: tek satırda
+ * iki nokta arası, çok satırda ilk satır sağa kadar, aradakiler baştan
+ * sona, son satır soldan bırakılan yere.
+ */
+private fun guessedBands(
+    startX: Float,
+    startY: Float,
+    endX: Float,
+    endY: Float,
+    edges: ClosedFloatingPointRange<Float>,
+): List<PdfBand> {
+    val half = GUESSED_LINE / 2f
+    val downward = startY <= endY
+    val topY = if (downward) startY else endY
+    val bottomY = if (downward) endY else startY
+    val topX = (if (downward) startX else endX).coerceIn(edges)
+    val bottomX = (if (downward) endX else startX).coerceIn(edges)
+
+    if (bottomY - topY <= GUESSED_LINE) {
+        return listOf(
+            PdfBand(
+                left = minOf(topX, bottomX),
+                top = topY - half,
+                right = maxOf(topX, bottomX),
+                bottom = topY + half,
+            ),
+        )
+    }
+    return listOf(
+        PdfBand(topX, topY - half, edges.endInclusive, topY + half),
+        PdfBand(edges.start, topY + half, edges.endInclusive, bottomY - half),
+        PdfBand(edges.start, bottomY - half, bottomX, bottomY + half),
+    ).filter { it.right > it.left && it.bottom > it.top }
+}
+
+/**
+ * Tahmini satır yüksekliği, sayfanın oranı olarak.
+ *
+ * Gövde metninde bir sayfaya kabaca kırk satır düşüyor; şerit satırdan
+ * kalın olursa üsttekini de boyuyormuş gibi görünüyor.
+ */
+private const val GUESSED_LINE = 0.024f
 
 /** Noktanın düştüğü satır; hiçbirinin içinde değilse en yakını. */
 private fun lineIndexAt(ordered: List<PdfBand>, x: Float, y: Float): Int {

@@ -444,7 +444,18 @@ fun PdfReaderRoute(
                 LaunchedEffect(listState, state.sizes.size) {
                     snapshotFlow { listState.firstVisibleItemIndex }
                         .distinctUntilChanged()
-                        .collect { viewModel.rememberPage(it) }
+                        // Satır çerçeveleri de burada, daha parmak
+                        // değmeden hazırlanıyor. Sürükleme başlayınca
+                        // yüklemek geç kalıyordu: taranmış sayfada yazı
+                        // tanıma bir saniye sürüyor ve seçimin ilk saniyesi
+                        // boş geçiyordu. Sayfa değişirse yarıda kalan
+                        // tanıma bırakılıyor.
+                        .collectLatest { page ->
+                            viewModel.rememberPage(page)
+                            val loaded = viewModel.lines(page)
+                            bandPage = page
+                            bands = loaded
+                        }
                 }
 
                 Box(
@@ -764,6 +775,13 @@ private fun PdfPage(
         value = render(index, widthPx, crop)?.asImageBitmap()
     }
 
+    // Satırlar gelmeden çizilen tahmini şerit nereye kadar uzanabilir:
+    // kırpılmış sayfanın kenarından biraz içerisi, kabaca metin sütunu.
+    val textEdges = remember(crop) {
+        val inset = crop.width * 0.04f
+        (crop.left + inset)..(crop.right - inset)
+    }
+
     // Parmağın altındaki nokta, piksel olarak. Büyüteç oraya bakıyor;
     // Unspecified'ken büyüteç hiç görünmüyor.
     var lens by remember(index) { mutableStateOf(Offset.Unspecified) }
@@ -882,15 +900,15 @@ private fun PdfPage(
                     // başından bırakılan yere. Parmağın çizdiği dikdörtgen
                     // değil — metin seçimi kutu değildir.
                     //
-                    // Satırlar henüz gelmediyse hiçbir şey çizilmiyor.
-                    // Parmağın dikdörtgeni bir işe yaramıyor; metin seçimi
-                    // kutu değil.
+                    // Satırlar henüz gelmediyse şeritler parmağa bakılarak
+                    // tahmin ediliyor; gelince tahminin yerini alıyorlar.
                     selectionBands(
                         lines = lines,
                         startX = drag.start.x,
                         startY = drag.start.y,
                         endX = drag.end.x,
                         endY = drag.end.y,
+                        edges = textEdges,
                     ).forEach { band ->
                         val left = (band.left - crop.left) / crop.width * boxWidth
                         val right = (band.right - crop.left) / crop.width * boxWidth
@@ -1007,6 +1025,7 @@ private fun PdfPage(
                             startY = drag.start.y,
                             endX = drag.end.x,
                             endY = drag.end.y,
+                            edges = textEdges,
                         ).forEach { band ->
                             val bandLeft = (band.left - crop.left) / crop.width * boxWidth
                             val bandRight = (band.right - crop.left) / crop.width * boxWidth
@@ -1018,9 +1037,13 @@ private fun PdfPage(
                                     (bandLeft - windowLeft) * MAGNIFIER_ZOOM + left,
                                     (bandTop - windowTop) * MAGNIFIER_ZOOM + top,
                                 ),
+                                // Parmak daha kıpırdamadıysa şerit sıfır
+                                // enli oluyor; camda da bir iz kalsın.
                                 size = Size(
-                                    (bandRight - bandLeft) * MAGNIFIER_ZOOM,
-                                    (bandBottom - bandTop) * MAGNIFIER_ZOOM,
+                                    ((bandRight - bandLeft) * MAGNIFIER_ZOOM)
+                                        .coerceAtLeast(8f),
+                                    ((bandBottom - bandTop) * MAGNIFIER_ZOOM)
+                                        .coerceAtLeast(8f),
                                 ),
                             )
                         }
