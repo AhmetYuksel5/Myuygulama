@@ -16,7 +16,9 @@ import android.view.View
  */
 internal class HandleView(context: Context, private val opacityPercent: Int) : View(context) {
 
-    private val alpha = (255 * opacityPercent / 100).coerceIn(40, 255)
+    // Taban yok: ayarda sıfır seçilmişse çubuk gerçekten görünmez olsun.
+    // Görünmezken de pencere yerinde duruyor, parmak onu buluyor.
+    private val alpha = (255 * opacityPercent / 100).coerceIn(0, 255)
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL

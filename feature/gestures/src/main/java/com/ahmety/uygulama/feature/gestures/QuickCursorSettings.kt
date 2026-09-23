@@ -64,10 +64,17 @@ class QuickCursorSettings(context: Context) {
         get() = prefs.getInt(KEY_HEIGHT, 18)
         set(value) = prefs.edit().putInt(KEY_HEIGHT, value.coerceIn(8, 56)).apply()
 
-    /** Çubuğun saydamlığı: 20–100 arası yüzde. */
+    /**
+     * Çubuğun görünürlüğü: 0 = tamamen saydam (görünmez ama yine
+     * dokunulabilir), 100 = tam opak.
+     *
+     * Taban eskiden 20'ydi. Çubuğun yeri zaten kullanıcının seçtiği yer;
+     * onu görünmez yapıp yalnız dokunarak kullanmak isteyeni engellemenin
+     * bir sebebi yok — kenar şeridi de sıfıra inebiliyor.
+     */
     var opacityPercent: Int
         get() = prefs.getInt(KEY_OPACITY, 55)
-        set(value) = prefs.edit().putInt(KEY_OPACITY, value.coerceIn(20, 100)).apply()
+        set(value) = prefs.edit().putInt(KEY_OPACITY, value.coerceIn(0, 100)).apply()
 
     /**
      * İmlecin ardında bıraktığı izin rengi.

@@ -73,8 +73,9 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             text = "Ekranın dibindeki çubuğa parmağını basıp gezdir; ekranda bir imleç " +
                 "trackpad gibi dolaşır, parmağını kaldırınca oraya dokunur. Sol üst gibi " +
                 "tek elle ulaşamadığın yerlere basmak için. Çubuğu taşımak için uzun " +
-                "basıp sürükle. Ekranı yana çevirince çubuk kayboluyor; video " +
-                "izlerken görüntünün dibinde durmasın diye.",
+                "basıp sürükle. Ekranı yana çevirince ve kilit ekranında çubuk " +
+                "kayboluyor; video izlerken ya da telefonu cebinden çıkarınca " +
+                "görüntünün üstünde durmasın diye.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -147,7 +148,16 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
         )
 
         Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
-        Stepper("Saydamlık", opacity, 20..100, step = 5, suffix = "%") { opacity = it; settings.opacityPercent = it }
+        Stepper("Saydamlık", opacity, 0..100, step = 5, suffix = "%") {
+            opacity = it
+            settings.opacityPercent = it
+        }
+        Text(
+            text = "Saydamlık 0'da çubuk hiç görünmez ama yeri değişmez: " +
+                "parmağını oraya basınca yine çalışır.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Stepper("Hassasiyet", sensitivityTimes10, 10..40, step = 2, suffix = "×10") {
             sensitivityTimes10 = it
             settings.sensitivity = it / 10f

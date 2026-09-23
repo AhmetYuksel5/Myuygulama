@@ -30,7 +30,8 @@ import android.view.accessibility.AccessibilityEvent
  * Ekran yatayken çubuk hiç kurulmuyor: telefon yana çevrildiğinde yapılan
  * iş video izlemek oluyor ve tek elle uzağa uzanma derdi ortadan kalkıyor;
  * geriye görüntünün dibinde duran bir kutucuk kalıyordu. Dikey dönünce
- * kendiliğinden geri geliyor.
+ * kendiliğinden geri geliyor. Kilit ekranında da aynısı: kilitliyken
+ * imleçle dokunulacak bir şey yok.
  */
 class QuickCursorService : AccessibilityService() {
 
@@ -43,6 +44,9 @@ class QuickCursorService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var settings: QuickCursorSettings
+
+    // Kilit ekranında çubuk görünmesin; durum değişince katman baştan kurulur.
+    private val lock = LockWatcher(this) { handler.post { rebuild() } }
 
     private var screenW = 0
     private var screenH = 0
@@ -86,6 +90,7 @@ class QuickCursorService : AccessibilityService() {
         super.onServiceConnected()
         settings = QuickCursorSettings(this)
         settings.prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        lock.start()
         rebuild()
     }
 
@@ -107,6 +112,7 @@ class QuickCursorService : AccessibilityService() {
         if (::settings.isInitialized) {
             settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         }
+        lock.stop()
         handler.removeCallbacksAndMessages(null)
         removeViews()
         super.onDestroy()
@@ -117,6 +123,8 @@ class QuickCursorService : AccessibilityService() {
         if (!settings.enabled) return
         // Yatay ekranda imleç yok: bkz. sınıf açıklaması.
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) return
+        // Kilit ekranında da yok: orada dokunacak bir şey yok.
+        if (lock.locked) return
         val manager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = manager
 

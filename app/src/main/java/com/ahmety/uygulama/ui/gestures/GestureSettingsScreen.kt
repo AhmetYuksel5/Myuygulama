@@ -191,7 +191,8 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
         }
         Text(
             text = "Negatif yukarı, pozitif aşağı taşır. Saydamlık 0'da şerit görünmez " +
-                "olur ama dokunmayı yine alır. Değişiklikler anında uygulanır.",
+                "olur ama dokunmayı yine alır. Kilit ekranında şerit hiç çizilmez. " +
+                "Değişiklikler anında uygulanır.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

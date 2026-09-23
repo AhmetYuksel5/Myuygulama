@@ -39,6 +39,10 @@ class EdgeGestureService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
 
     private lateinit var settings: GestureSettings
+
+    // Kilit ekranında şerit görünmesin; durum değişince katman baştan kurulur.
+    private val lock = LockWatcher(this) { handler.post { rebuild() } }
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         // Herhangi bir ayar değişince en basit ve doğru yol: baştan çiz.
         handler.post { rebuild() }
@@ -48,6 +52,7 @@ class EdgeGestureService : AccessibilityService() {
         super.onServiceConnected()
         settings = GestureSettings(this)
         settings.prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        lock.start()
         rebuild()
     }
 
@@ -63,6 +68,7 @@ class EdgeGestureService : AccessibilityService() {
         if (::settings.isInitialized) {
             settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         }
+        lock.stop()
         handler.removeCallbacksAndMessages(null)
         GestureFeedback.releaseTone()
         removeAll()
@@ -72,6 +78,9 @@ class EdgeGestureService : AccessibilityService() {
     private fun rebuild() {
         removeAll()
         if (!settings.enabled) return
+        // Kilit ekranında şerit yok: orada jestlerin karşılığı yok ve
+        // saatin üstünde duran çubuk göze batıyordu.
+        if (lock.locked) return
         val manager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = manager
         if (settings.showLeft) addEdge(manager, onRight = false)
