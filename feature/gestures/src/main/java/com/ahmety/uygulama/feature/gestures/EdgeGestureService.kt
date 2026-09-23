@@ -43,9 +43,16 @@ class EdgeGestureService : AccessibilityService() {
     // Kilit ekranında şerit görünmesin; durum değişince katman baştan kurulur.
     private val lock = LockWatcher(this) { handler.post { rebuild() } }
 
-    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        // Herhangi bir ayar değişince en basit ve doğru yol: baştan çiz.
-        handler.post { rebuild() }
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        // Saydamlık dışındaki her ayar için en basit ve doğru yol: baştan çiz.
+        // Saydamlık birer birer gidiyor ve düğme basılı tutulunca saniyede
+        // onlarca değer geçiyor; her birinde katmanı kurup yıkmak göz
+        // kırptırıyordu. Onda yalnız şeridin boyası değişiyor.
+        if (key == "opacity") {
+            handler.post { applyOpacity() }
+        } else {
+            handler.post { rebuild() }
+        }
     }
 
     override fun onServiceConnected() {
@@ -93,13 +100,7 @@ class EdgeGestureService : AccessibilityService() {
         val heightPx = (settings.heightDp * density).toInt().coerceAtLeast(48)
 
         val view = EdgeTouchView(this, onRight, density)
-        // Renk RGB'sini koru, alfayı saydamlık ayarından ez (0–100 → 0–255).
-        val alpha = (settings.opacityPercent * 255 / 100).coerceIn(0, 255)
-        val tintedColor = (settings.colorArgb and 0x00FFFFFF) or (alpha shl 24)
-        view.background = GradientDrawable().apply {
-            cornerRadius = widthPx / 2f
-            setColor(tintedColor)
-        }
+        view.background = edgeBackground(widthPx)
 
         val params = WindowManager.LayoutParams(
             widthPx,
@@ -117,6 +118,24 @@ class EdgeGestureService : AccessibilityService() {
         runCatching {
             manager.addView(view, params)
             edgeViews += view
+        }
+    }
+
+    /** Saydamlığı, katmanı yeniden kurmadan şeritlere uygular. */
+    private fun applyOpacity() {
+        if (edgeViews.isEmpty()) return
+        val density = resources.displayMetrics.density
+        val widthPx = (settings.widthDp * density).toInt().coerceAtLeast(4)
+        edgeViews.forEach { view -> view.background = edgeBackground(widthPx) }
+    }
+
+    /** Şeridin boyası: rengin RGB'si ayardan, alfası saydamlıktan. */
+    private fun edgeBackground(widthPx: Int): GradientDrawable {
+        val alpha = (settings.opacityPercent * 255 / 100).coerceIn(0, 255)
+        val tintedColor = (settings.colorArgb and 0x00FFFFFF) or (alpha shl 24)
+        return GradientDrawable().apply {
+            cornerRadius = widthPx / 2f
+            setColor(tintedColor)
         }
     }
 

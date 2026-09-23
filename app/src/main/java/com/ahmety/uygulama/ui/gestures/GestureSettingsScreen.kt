@@ -3,6 +3,8 @@ package com.ahmety.uygulama.ui.gestures
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,15 +36,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.atan2
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -186,7 +195,7 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
         Stepper("Dikey konum", offsetDp, -300..300, step = 20, suffix = "dp") {
             offsetDp = it; settings.verticalOffsetDp = it
         }
-        Stepper("Saydamlık", opacity, 0..100, step = 5, suffix = "%") {
+        Stepper("Saydamlık", opacity, 0..100, step = 1, suffix = "%") {
             opacity = it; settings.opacityPercent = it
         }
         Text(
@@ -456,12 +465,74 @@ internal fun Stepper(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text = label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        TextButton(enabled = value > range.first, onClick = { onChange((value - step).coerceIn(range)) }) {
-            Text("−")
+        StepButton("−", enabled = value > range.first) {
+            onChange((value - step).coerceIn(range))
         }
         Text("$value $suffix", style = MaterialTheme.typography.bodyLarge)
-        TextButton(enabled = value < range.last, onClick = { onChange((value + step).coerceIn(range)) }) {
-            Text("+")
+        StepButton("+", enabled = value < range.last) {
+            onChange((value + step).coerceIn(range))
         }
     }
 }
+
+/**
+ * Artırma/azaltma düğmesi: dokunuşta bir adım, basılı tutunca hızlanarak
+ * devam.
+ *
+ * Saydamlık birer birer gidiyor; uçtan uca yüz dokunuş demek olurdu.
+ * Basılı tutmak o yüzden var, adım aralığını büyütmek yerine.
+ *
+ * Dokunuşu kendi jest tanıyıcısı karşılıyor: hazır düğmenin tıklaması
+ * dokunuşu yutuyor ve basılı tutma hiç görünmüyordu.
+ */
+@Composable
+private fun StepButton(sign: String, enabled: Boolean, onStep: () -> Unit) {
+    val step by rememberUpdatedState(onStep)
+    val color = if (enabled) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures(
+                    onPress = {
+                        step()
+                        // Basılı tutuldu mu: bırakılmasını bekliyoruz, süre
+                        // dolarsa tutuluyor demektir.
+                        val released = withTimeoutOrNull(HOLD_START_MS) { tryAwaitRelease() }
+                        if (released == null) {
+                            coroutineScope {
+                                val repeat = launch {
+                                    var period = HOLD_PERIOD_MS
+                                    while (isActive) {
+                                        delay(period)
+                                        step()
+                                        // Tuttukça hızlanıyor: uzak bir
+                                        // değere gitmek dakika sürmesin.
+                                        period = (period - 6).coerceAtLeast(HOLD_FASTEST_MS)
+                                    }
+                                }
+                                tryAwaitRelease()
+                                repeat.cancel()
+                            }
+                        }
+                    },
+                )
+            },
+    ) {
+        Text(text = sign, style = MaterialTheme.typography.titleMedium, color = color)
+    }
+}
+
+/** Basılı tutmanın tekrara dönmesi için geçmesi gereken süre. */
+private const val HOLD_START_MS = 380L
+
+/** Tekrarın başlangıç ve en hızlı aralığı. */
+private const val HOLD_PERIOD_MS = 110L
+private const val HOLD_FASTEST_MS = 30L

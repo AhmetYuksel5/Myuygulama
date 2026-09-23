@@ -14,19 +14,22 @@ import android.view.View
  * Eni ve kalınlığı ayardan geliyor; çizim pencerenin tamamını dolduruyor, o
  * yüzden burada ölçü yok — boyutu pencere veriyor.
  */
-internal class HandleView(context: Context, private val opacityPercent: Int) : View(context) {
+internal class HandleView(context: Context) : View(context) {
 
-    // Taban yok: ayarda sıfır seçilmişse çubuk gerçekten görünmez olsun.
-    // Görünmezken de pencere yerinde duruyor, parmak onu buluyor.
-    private val alpha = (255 * opacityPercent / 100).coerceIn(0, 255)
-
+    // Boya tam opak; saydamlığı görünümün kendi alfası taşıyor.
+    //
+    // Eskiden saydamlık hem boyaya hem görünümün alfasına giriyordu ve
+    // ikisi çarpılıyordu: sönükleşme %35'i dayattığı için %100 seçmek bile
+    // yarı saydam bir çubuk veriyor, %20 ile %60 arasındaki fark küçücük
+    // bir çubukta seçilemiyordu. Ayar tek yerde durunca "ne seçtiysen onu
+    // görüyorsun" oluyor.
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.argb(alpha, 210, 210, 214)
+        color = Color.argb(255, 210, 210, 214)
     }
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.argb(alpha, 255, 255, 255)
+        color = Color.argb(255, 255, 255, 255)
         strokeWidth = 2f * resources.displayMetrics.density
     }
 

@@ -148,13 +148,18 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
         )
 
         Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
-        Stepper("Saydamlık", opacity, 0..100, step = 5, suffix = "%") {
+        // Birer birer: kenar şeridinde beşer beşer gitmek yetiyordu ama
+        // burada çubuk küçük, iki komşu değer arasındaki fark önemli.
+        // Uzak bir değere gitmek için düğmeyi basılı tutmak var.
+        Stepper("Saydamlık", opacity, 0..100, step = 1, suffix = "%") {
             opacity = it
             settings.opacityPercent = it
         }
         Text(
-            text = "Saydamlık 0'da çubuk hiç görünmez ama yeri değişmez: " +
-                "parmağını oraya basınca yine çalışır.",
+            text = "Saydamlık, parmağını çekince çubuğun göründüğü hâl; " +
+                "dokunduğun sürece biraz daha belirgin oluyor. 0'da çubuk hiç " +
+                "görünmez ama yeri değişmez, oraya basınca yine çalışır. " +
+                "Düğmeyi basılı tutarsan hızlanarak ilerler.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

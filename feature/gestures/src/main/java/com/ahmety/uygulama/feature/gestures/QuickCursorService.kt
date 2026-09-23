@@ -79,10 +79,13 @@ class QuickCursorService : AccessibilityService() {
      * hem de ayar ekranından girilen değer anında uygulanıyor.
      */
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "bottom_offset" || key == "center_offset") {
-            handler.post { applyHandlePosition() }
-        } else {
-            handler.post { rebuild() }
+        when (key) {
+            // Konum ve saydamlık pencereyi yerinde değiştiriyor; birer birer
+            // giden bir ayarda her adımda katmanı kurup yıkmak hem göz
+            // kırpıyor hem gereksiz.
+            "bottom_offset", "center_offset" -> handler.post { applyHandlePosition() }
+            "opacity" -> handler.post { applyHandleOpacity() }
+            else -> handler.post { rebuild() }
         }
     }
 
@@ -135,7 +138,10 @@ class QuickCursorService : AccessibilityService() {
         val barW = (settings.handleWidthDp * density).toInt()
         val barH = (settings.handleHeightDp * density).toInt()
 
-        val handleView = HandleView(this, settings.opacityPercent)
+        val handleView = HandleView(this)
+        // Kurulurken dokunulmuş gibi görünsün; üç saniye sonra ayarın
+        // kendi değerine iniyor.
+        handleView.alpha = wakeAlpha()
         handleView.setOnTouchListener { _, event -> onHandleTouch(event, density) }
         val hParams = WindowManager.LayoutParams(
             barW,
@@ -292,9 +298,35 @@ class QuickCursorService : AccessibilityService() {
 
     private fun fadeHandle(idle: Boolean) {
         val view = handle ?: return
-        val target = if (idle) IDLE_ALPHA else 1f
+        val target = if (idle) restAlpha() else wakeAlpha()
         val duration = if (idle) FADE_OUT_MS else FADE_IN_MS
         runCatching { view.animate().alpha(target).setDuration(duration).start() }
+    }
+
+    /**
+     * Parmak değmezken çubuğun görünürlüğü: doğrudan ayardaki değer.
+     *
+     * Ayarın anlamı bu — çubuğa günün yüzde doksan dokuzunda böyle
+     * bakılıyor.
+     */
+    private fun restAlpha(): Float = settings.opacityPercent / 100f
+
+    /**
+     * Dokunulduğu andaki görünürlük: ayarın biraz üstü, tuttuğun şey
+     * görünsün diye. Ayar sıfırsa dokununca da görünmüyor; sıfırı seçen
+     * çubuğu hiç görmek istemiyor demektir.
+     */
+    private fun wakeAlpha(): Float {
+        val rest = restAlpha()
+        return if (rest <= 0f) 0f else (rest + WAKE_BOOST).coerceAtMost(1f)
+    }
+
+    /** Saydamlık ayarını katmanı yeniden kurmadan uygular. */
+    private fun applyHandleOpacity() {
+        val view = handle ?: return
+        runCatching { view.animate().cancel() }
+        view.alpha = wakeAlpha()
+        scheduleFade()
     }
 
     /** Ortalı çubuğun merkezden en çok ne kadar kayabileceği. */
@@ -380,9 +412,11 @@ class QuickCursorService : AccessibilityService() {
         private const val FADE_IN_MS = 140L
 
         /**
-         * Boya alfası zaten saydam olduğu için bu değer onunla çarpılıyor;
-         * 0.12'de top pratikte görünmez oluyordu.
+         * Dokunulduğunda ayarın üstüne eklenen görünürlük.
+         *
+         * Sabit bir "sönük" değer değil: eskiden öyleydi ve ayarın kendisini
+         * anlamsızlaştırıyordu.
          */
-        private const val IDLE_ALPHA = 0.35f
+        private const val WAKE_BOOST = 0.3f
     }
 }
