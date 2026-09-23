@@ -106,7 +106,19 @@ class QuickCursorService : AccessibilityService() {
         if (::settings.isInitialized) handler.post { rebuild() }
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    /**
+     * Pencere değişimleri bir nabız olarak kullanılıyor.
+     *
+     * Çubuk, olmaması gereken bir anda kaybolduysa (bir yayın kaçtı, kilit
+     * durumu yanlış okundu) ekranda bir şey değişir değişmez geri geliyor.
+     * Kurulmaması gereken durumlarda [rebuild] zaten ilk satırlarda çıkıyor,
+     * o yüzden bu kontrol ucuz.
+     */
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (!::settings.isInitialized) return
+        if (handle == null && settings.enabled) rebuild()
+    }
+
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {

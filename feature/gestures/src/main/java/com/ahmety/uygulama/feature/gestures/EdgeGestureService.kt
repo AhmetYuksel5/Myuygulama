@@ -63,8 +63,17 @@ class EdgeGestureService : AccessibilityService() {
         rebuild()
     }
 
+    /**
+     * Pencere içeriğini okumuyoruz; bu olay yalnız bir nabız olarak
+     * kullanılıyor.
+     *
+     * Şerit, olmaması gereken bir anda kaybolduysa (bir yayın kaçtı, kilit
+     * durumu yanlış okundu) ekranda herhangi bir pencere değişince geri
+     * geliyor. Kurulması gerekmiyorsa [rebuild] zaten hemen çıkıyor.
+     */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Pencere içeriğini okumuyoruz; bu geri çağrı bilerek boş.
+        if (!::settings.isInitialized) return
+        if (edgeViews.isEmpty() && settings.enabled && !lock.locked) rebuild()
     }
 
     override fun onInterrupt() = Unit
@@ -140,8 +149,16 @@ class EdgeGestureService : AccessibilityService() {
     }
 
     private fun removeAll() {
-        handler.removeCallbacksAndMessages(null)
-        edgeViews.forEach { view -> runCatching { windowManager?.removeView(view) } }
+        // Yalnız şeritlerin kendi bekleyen işleri iptal ediliyor.
+        //
+        // Eskiden buradan `removeCallbacksAndMessages(null)` çağrılıyordu ve
+        // bu, sıradaki **yeniden kurma** isteğini de siliyordu: kilit açılma
+        // ile ekran açılma yayınları peş peşe geldiğinde ilki çalışırken
+        // ikincisini siliyor, şerit bir daha görünmüyordu.
+        edgeViews.forEach { view ->
+            (view as? EdgeTouchView)?.cancelPending()
+            runCatching { windowManager?.removeView(view) }
+        }
         edgeViews.clear()
     }
 
@@ -158,6 +175,12 @@ class EdgeGestureService : AccessibilityService() {
 
         /** Son "kısa dokunuş" anı; ikincisi yeterince hızlı gelirse çift dokunuş. */
         private var lastTapAt = 0L
+
+        /** Şerit kaldırılırken bekleyen uzun basış çalışmasın. */
+        fun cancelPending() {
+            handler.removeCallbacks(longPressRunnable)
+        }
+
         private val longPressRunnable = Runnable {
             longPressFired = true
             perform(settings.longPressAction, GestureSettings.GESTURE_LONG)

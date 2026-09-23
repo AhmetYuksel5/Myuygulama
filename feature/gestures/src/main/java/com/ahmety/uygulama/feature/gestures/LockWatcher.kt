@@ -6,6 +6,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 
 /**
@@ -19,6 +21,14 @@ import androidx.core.content.ContextCompat
  * Yoklama yok, yayın dinleniyor: ekran kapandı, ekran açıldı, kilit açıldı.
  * Üçünde de [onChange] çağrılıyor ve servis katmanını baştan kuruyor;
  * [locked] o sırada gerçek durumu söylüyor.
+ *
+ * **Kilit açıldı yayını sisteme sorulandan daha doğru.** İlk sürümde
+ * durumu yalnız `isKeyguardLocked` söylüyordu ve kilit açılma yayını
+ * geldiğinde bu değer hâlâ "kilitli" dönebiliyordu (kilit ekranı kayarak
+ * kapanırken). Katman o an kurulmuyor, kuracak başka bir olay da
+ * gelmediği için telefon kullanılırken çubuk bir daha görünmüyordu.
+ * Onun için kilit açılma yayını kendi başına yeterli sayılıyor ve
+ * ayrıca olaydan kısa süre sonra bir kez daha bakılıyor.
  */
 internal class LockWatcher(
     private val service: Service,
@@ -34,12 +44,32 @@ internal class LockWatcher(
         service.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
     }
 
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Kilidin açıldığını yayından biliyoruz; sisteme sormaya gerek yok. */
+    private var unlockedByBroadcast = false
+
     private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) = onChange()
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_USER_PRESENT -> unlockedByBroadcast = true
+                // Ekran kapandı: bir sonraki açılışta yeniden kilitli
+                // sayılıyor, karar yine sisteme bırakılıyor.
+                Intent.ACTION_SCREEN_OFF -> unlockedByBroadcast = false
+            }
+            onChange()
+            // Kilit ekranı kapanırken durum bir süre "kilitli" görünebiliyor;
+            // biraz sonra bir daha bakılıyor. Katmanı kurmak ucuz, bir daha
+            // kurulması da zararsız.
+            RECHECK_MS.forEach { delay ->
+                handler.postDelayed({ onChange() }, delay)
+            }
+        }
     }
 
     /** Kilit ekranı şu anda önde mi. */
-    val locked: Boolean get() = keyguard?.isKeyguardLocked == true
+    val locked: Boolean
+        get() = !unlockedByBroadcast && keyguard?.isKeyguardLocked == true
 
     fun start() {
         val filter = IntentFilter().apply {
@@ -60,6 +90,11 @@ internal class LockWatcher(
     }
 
     fun stop() {
+        handler.removeCallbacksAndMessages(null)
         runCatching { service.unregisterReceiver(receiver) }
+    }
+
+    private companion object {
+        val RECHECK_MS = longArrayOf(400L, 1_500L)
     }
 }
