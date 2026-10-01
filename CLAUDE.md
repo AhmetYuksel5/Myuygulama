@@ -116,3 +116,28 @@ Merkez'in tarayıcı sürümü. Kaynak `web/` altında, derlenmiş çıktı
   siliyor ve aynı alan adında olduğumuz için Merkez'inkini de silerdi.
   Çevrimdışı desteği, o dosya kendi önbelleklerini ayırt eder hâle
   geldiğinde eklenecek.
+
+## TRT Arabi planlama sitesi (`trt/` → `docs/trt/`)
+
+TRT Arabi haber merkezi için planlama merkezli iş akışı sitesi. Kaynak
+`trt/` altında, derlenmiş çıktı `docs/trt/` altında ve depoda; Merkez'in
+web sürümüyle aynı düzen ve aynı sebepler.
+
+- Kaynak: React + TypeScript + Vite. `cd trt && npm install` bir kez;
+  `npm run build` çıktıyı `docs/trt/` içine üretiyor. Derlemeden gönderme.
+- Adres: `https://ahmetyuksel5.github.io/Myuygulama/trt/`.
+- Dayanağı iki belge: Next Day çalışma akışı (on adım) ve haftalık plan
+  akışı (Cumartesi–Cuma, üç kola ayrılan paketler). Paket adımları ve
+  hafta şeridi oradan geliyor; `src/veri.ts` başındaki yorum eşlemeyi
+  anlatıyor.
+- Dil: arayüz üç dilli olacak (Türkçe, Arapça, İngilizce). Bütün metinler
+  `src/dil.ts` içinde tek tabloda; şimdilik yalnız Türkçe dolu, boş dil
+  Türkçeye düşüyor. Ekranlara çıplak metin yazılmaz.
+- Veri bu sürümde tarayıcıda (`localStorage`) ve örnek kayıtla açılıyor;
+  sunucu katmanı geldiğinde yalnız `src/veri.ts` içindeki yükle/kaydet
+  değişecek.
+- Rol üst çubuktan seçiliyor; giriş sistemi yerine geçici çözüm.
+- Tasarım dili `src/tasarim.css`: beş ana başlığın her birinin kendi
+  rengi var, kalan her şey tek vurgu rengi.
+- Yalnız `trt/` ve `docs/` değişen gönderimlerde Android derlemesi
+  gereksiz; o gönderimler iş akışını atlatan işareti taşımalı.
