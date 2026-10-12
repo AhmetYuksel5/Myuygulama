@@ -74,7 +74,8 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             text = "Ekranın dibindeki çubuğa parmağını basıp gezdir; ekranda bir imleç " +
                 "trackpad gibi dolaşır, parmağını kaldırınca oraya dokunur. Sol üst gibi " +
                 "tek elle ulaşamadığın yerlere basmak için. Çubuğu taşımak için uzun " +
-                "basıp sürükle. Ekranı yana çevirince ve kilit ekranında çubuk " +
+                "basıp sürükle; hızlıca iki kez dokununca kısayol çubuğu açılır. " +
+                "Ekranı yana çevirince ve kilit ekranında çubuk " +
                 "kayboluyor; video izlerken ya da telefonu cebinden çıkarınca " +
                 "görüntünün üstünde durmasın diye.",
             style = MaterialTheme.typography.bodyMedium,
@@ -161,6 +162,8 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        ShortcutsSection()
 
         Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
         // Birer birer: kenar şeridinde beşer beşer gitmek yetiyordu ama

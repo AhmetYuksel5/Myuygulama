@@ -48,6 +48,13 @@ class QuickCursorService : AccessibilityService() {
     // Kilit ekranında çubuk görünmesin; durum değişince katman baştan kurulur.
     private val lock = LockWatcher(this) { handler.post { rebuild() } }
 
+    // Kısayol çubuğu: tutamağa çift dokununca açılıyor. Gecikmeli, çünkü
+    // alanlar servisin bağlamı bağlanmadan önce kuruluyor.
+    private val shortcuts by lazy { ShortcutPanel(this) }
+
+    /** Son hareketsiz dokunuşun anı; ikincisi yeterince hızlı gelirse çift. */
+    private var lastHandleTap = 0L
+
     private var screenW = 0
     private var screenH = 0
 
@@ -87,6 +94,9 @@ class QuickCursorService : AccessibilityService() {
             // kırpıyor hem gereksiz.
             "bottom_offset", "center_offset" -> handler.post { applyHandlePosition() }
             "opacity" -> handler.post { applyHandleOpacity() }
+            // Kısayol listesi katmanı ilgilendirmiyor; panel açılırken
+            // zaten yeniden okunuyor.
+            ShortcutStore.KEY -> Unit
             else -> handler.post { rebuild() }
         }
     }
@@ -130,6 +140,7 @@ class QuickCursorService : AccessibilityService() {
             settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         }
         lock.stop()
+        shortcuts.hide()
         handler.removeCallbacksAndMessages(null)
         removeViews()
         super.onDestroy()
@@ -141,7 +152,10 @@ class QuickCursorService : AccessibilityService() {
         // Yatay ekranda imleç yok: bkz. sınıf açıklaması.
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) return
         // Kilit ekranında da yok: orada dokunacak bir şey yok.
-        if (lock.locked) return
+        if (lock.locked) {
+            shortcuts.hide()
+            return
+        }
         val manager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = manager
 
@@ -277,6 +291,7 @@ class QuickCursorService : AccessibilityService() {
                     leaving == CursorView.ZONE_LEFT -> shade(GLOBAL_ACTION_NOTIFICATIONS)
                     leaving == CursorView.ZONE_RIGHT -> shade(GLOBAL_ACTION_QUICK_SETTINGS)
                     moving -> tapAt(cursorX, cursorY)
+                    else -> countTap(event.eventTime)
                 }
                 moving = false
                 scheduleFade()
@@ -337,6 +352,24 @@ class QuickCursorService : AccessibilityService() {
             val ok = runCatching { performGlobalAction(action) }.getOrDefault(false)
             GestureFeedback.vibrateOnce(this, if (ok) 15L else 8L)
         }, TAP_DELAY_MS)
+    }
+
+    /**
+     * Hareketsiz dokunuşları sayar: ikincisi yeterince hızlı gelirse
+     * kısayol çubuğu açılıyor.
+     *
+     * Tek dokunuşun bir karşılığı yok — parmağını basıp çekmek imleci
+     * doğurup kapatmaktan ibaret — o yüzden birinciyi bekletmeye gerek
+     * kalmıyor, çift dokunuş anında çalışıyor.
+     */
+    private fun countTap(now: Long) {
+        if (now - lastHandleTap in 1..DOUBLE_TAP_MS) {
+            lastHandleTap = 0L
+            GestureFeedback.vibrateOnce(this, 20L)
+            shortcuts.toggle()
+        } else {
+            lastHandleTap = now
+        }
     }
 
     private fun showCursor() {
@@ -472,6 +505,9 @@ class QuickCursorService : AccessibilityService() {
 
     companion object {
         private const val LONG_PRESS_MS = 350L
+
+        /** İki dokunuş arasındaki en uzun süre; sistemin varsayılanıyla aynı. */
+        private const val DOUBLE_TAP_MS = 300L
         private const val SLOP_DP = 6f
         private const val TAP_DURATION_MS = 55L
         private const val TAP_DELAY_MS = 60L
