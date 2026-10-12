@@ -1,7 +1,9 @@
 package com.ahmety.uygulama.feature.gestures
 
+import android.content.ComponentName
 import android.content.Context
 import android.os.SystemClock
+import android.view.inputmethod.InputMethodManager
 
 /**
  * Hangi uygulamanın ne zaman önde olduğunun kaydı.
@@ -24,9 +26,10 @@ internal object AppHistory {
     private val recent = ArrayList<String>()
     private var loaded = false
 
-    // Açılabilir mi sorusu paket yöneticisine gidiyor; her pencere
-    // değişiminde sormamak için cevabı saklanıyor.
+    // Paket yöneticisine giden sorular; her pencere değişiminde yeniden
+    // sormamak için cevapları saklanıyor.
     private val launchable = HashMap<String, Boolean>()
+    private val activities = HashMap<String, Boolean>()
 
     private var chainAt = 0L
     private var depth = 0
@@ -45,10 +48,20 @@ internal object AppHistory {
     fun record(context: Context, packageName: String?, className: String?) {
         load(context)
         val name = packageName?.takeIf { it.isNotBlank() } ?: return
-        if (name == context.packageName && className?.endsWith(".MainActivity") != true) return
-        // Yüzü olmayanlar (sistem arayüzü, klavye, bildirim perdesi)
-        // listeye girmiyor: aralarında geçiş yapmanın karşılığı yok ve
-        // gerçek uygulamaları listeden atarlardı.
+        val window = className?.takeIf { it.isNotBlank() } ?: return
+        // Yalnız gerçek bir ekran öne geldiğinde sayılıyor.
+        //
+        // Pencere değişimi klavyede, açılır menüde, diyalogda da geliyor.
+        // İlk sürüm "açılabilir mi" diye bakıyordu ve Gboard'un ayarlar
+        // simgesi olduğu için klavye bu testi geçiyordu: yazı yazılan her
+        // uygulamadan sonra listeye Gboard giriyor, geçiş onun ayarlarını
+        // açıyordu. Pencerenin sınıfı o paketin bir etkinliği mi diye
+        // sormak bunların hepsini bir seferde eliyor.
+        if (!isActivity(context, name, window)) return
+        if (name in keyboards(context)) return
+        // Merkez'in kendi pencerelerinden yalnız ana ekran sayılıyor; seçim
+        // penceresi başka bir uygulamanın üstünde açılıyor, ona geçilmez.
+        if (name == context.packageName && !window.endsWith(".MainActivity")) return
         if (!isLaunchable(context, name)) return
         if (recent.firstOrNull() == name) return
         recent.remove(name)
@@ -79,6 +92,34 @@ internal object AppHistory {
         return frozen.getOrNull(depth)
     }
 
+    private fun isActivity(context: Context, name: String, window: String): Boolean =
+        activities.getOrPut("$name/$window") {
+            runCatching {
+                context.packageManager.getActivityInfo(ComponentName(name, window), 0)
+                true
+            }.getOrDefault(false)
+        }
+
+    /**
+     * Telefondaki klavyeler.
+     *
+     * Etkinlik testi klavye penceresini zaten eliyor; bu ikinci kat, eski
+     * sürümün diske yazdığı listeden Gboard'u temizlemek için de lazım.
+     */
+    private fun keyboards(context: Context): Set<String> {
+        keyboardCache?.let { return it }
+        val found = runCatching {
+            val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            manager.inputMethodList.map { it.packageName }.toSet()
+        }.getOrDefault(emptySet())
+        keyboardCache = found
+        return found
+    }
+
+    // Klavye listesi süreç boyunca bir kez soruluyor; her pencere
+    // değişiminde sisteme gitmeye değmez, yeni klavye nadiren kurulur.
+    private var keyboardCache: Set<String>? = null
+
     private fun isLaunchable(context: Context, name: String): Boolean =
         launchable.getOrPut(name) {
             runCatching {
@@ -94,9 +135,10 @@ internal object AppHistory {
     private fun load(context: Context) {
         if (loaded) return
         loaded = true
+        val skip = keyboards(context)
         prefs(context).getString(KEY, "").orEmpty()
             .split('\n')
-            .filter { it.isNotBlank() }
+            .filter { it.isNotBlank() && it !in skip }
             .forEach { if (it !in recent) recent.add(it) }
     }
 
