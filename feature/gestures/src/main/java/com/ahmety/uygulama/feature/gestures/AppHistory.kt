@@ -2,7 +2,6 @@ package com.ahmety.uygulama.feature.gestures
 
 import android.content.ComponentName
 import android.content.Context
-import android.os.SystemClock
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -31,9 +30,6 @@ internal object AppHistory {
     private val launchable = HashMap<String, Boolean>()
     private val activities = HashMap<String, Boolean>()
 
-    private var chainAt = 0L
-    private var depth = 0
-    private var frozen: List<String> = emptyList()
 
     /**
      * Öne gelen pencere.
@@ -73,23 +69,25 @@ internal object AppHistory {
     /**
      * Geçilecek uygulama; yoksa null.
      *
-     * Tek seferde bir öncekine geçiyor. Kısa sürede tekrarlanırsa listede
-     * bir adım daha geriye gidiyor — alt-tab'ı basılı tutmak gibi. Sıra o
-     * sırada donduruluyor: geçiş yapılan uygulama listenin başına geçtiği
-     * için, dondurulmasa insan iki uygulama arasında gidip gelirdi.
+     * Her zaman bir önceki: iki uygulama arasında gidip geliniyor.
+     *
+     * İlk sürüm kısa sürede tekrarlanan geçişte listede bir adım daha
+     * geriye gidiyordu (alt-tab'ı basılı tutmak gibi). Pratikte hızlı
+     * basınca üçüncü uygulamaya düşülüyor, geri dönmek için beklemek
+     * gerekiyordu; istenen bu değildi.
+     *
+     * Geçilen uygulama burada hemen listenin başına alınıyor. Sistemin
+     * "öne geldi" haberini beklemek, hemen ardından basılan ikinci geçişin
+     * eski sırayı görmesi demekti.
      */
     @Synchronized
     fun switchTarget(context: Context): String? {
         load(context)
-        val now = SystemClock.uptimeMillis()
-        if (now - chainAt > CHAIN_MS || frozen.size < 2) {
-            frozen = recent.toList()
-            depth = 0
-        }
-        chainAt = now
-        if (frozen.size < 2) return null
-        depth = (depth + 1).coerceAtMost(frozen.size - 1)
-        return frozen.getOrNull(depth)
+        val target = recent.getOrNull(1) ?: return null
+        recent.remove(target)
+        recent.add(0, target)
+        save(context)
+        return target
     }
 
     private fun isActivity(context: Context, name: String, window: String): Boolean =
@@ -148,8 +146,6 @@ internal object AppHistory {
 
     private const val MAX = 12
 
-    /** Bu süre içinde tekrarlanan geçiş, aynı zincirin devamı sayılıyor. */
-    private const val CHAIN_MS = 1_800L
 
     private const val PREFS = "merkez_app_history"
     private const val KEY = "recent"
