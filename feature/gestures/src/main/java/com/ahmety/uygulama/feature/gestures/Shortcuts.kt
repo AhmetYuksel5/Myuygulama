@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -160,7 +161,17 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
  * görevi öne getiriyor, kaldığın yerden devam ediyorsun.
  */
 internal fun switchToLastApp(service: AccessibilityService): Boolean {
-    val target = AppHistory.switchTarget() ?: return false
+    val target = AppHistory.switchTarget(service)
+    if (target == null) {
+        // Sessizce hiçbir şey olmaması, bozuk sanılıyordu. Liste ancak
+        // uygulamalar arasında gezindikçe doluyor; bunu söylemek yetiyor.
+        Toast.makeText(
+            service,
+            "Henüz geçilecek bir önceki uygulama yok; iki uygulama arasında geçince dolacak.",
+            Toast.LENGTH_SHORT,
+        ).show()
+        return false
+    }
     val intent = service.packageManager.getLaunchIntentForPackage(target) ?: return false
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return runCatching { service.startActivity(intent) }.isSuccess
