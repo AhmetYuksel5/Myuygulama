@@ -86,6 +86,17 @@ class QuickCursorSettings(context: Context) {
         get() = prefs.getInt(KEY_IZ_RENGI, IZ_RENKLERI.first())
         set(value) = prefs.edit().putInt(KEY_IZ_RENGI, value).apply()
 
+    /**
+     * İmleci ekranın üst köşelerine götürünce perde açılsın mı.
+     *
+     * Sol yarı bildirimler, sağ yarı hızlı ayarlar. Açık geliyor: tek elle
+     * en zor ulaşılan yer tepesi ve imleci oraya götürüp dokunmanın zaten
+     * bir karşılığı yok, perde orayı kaplıyor.
+     */
+    var edgeActions: Boolean
+        get() = prefs.getBoolean(KEY_EDGE_ACTIONS, true)
+        set(value) = prefs.edit().putBoolean(KEY_EDGE_ACTIONS, value).apply()
+
     /** İmleç hassasiyeti: parmak hareketinin kaç katı imleç hareketi. */
     var sensitivity: Float
         get() = prefs.getFloat(KEY_SENSITIVITY, 2.2f)
@@ -104,6 +115,7 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_OPACITY = "opacity"
         private const val KEY_SENSITIVITY = "sensitivity"
         private const val KEY_IZ_RENGI = "iz_rengi"
+        private const val KEY_EDGE_ACTIONS = "edge_actions"
 
         /**
          * Seçilebilen iz renkleri.

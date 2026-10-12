@@ -102,6 +102,18 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
     private var edgeX = 0f
     private var edgeY = 0f
 
+    // Üst köşe bölgesi: imleç oraya girdiğinde bırakınca ne olacağını
+    // söyleyen şerit. Yazı olmadan hangi yarının ne yaptığı akılda
+    // kalmıyordu.
+    private var zone = ZONE_NONE
+    private val zoneFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val zoneText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+        textSize = 14f * resources.displayMetrics.density
+        isFakeBoldText = true
+    }
+
     private class Trace(val x: Float, val y: Float, val at: Long)
 
     private val trace = ArrayDeque<Trace>()
@@ -115,6 +127,13 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
         y = ny
         trace.addLast(Trace(nx, ny, SystemClock.uptimeMillis()))
         prune()
+        invalidate()
+    }
+
+    /** İmleç üst köşe bölgesine girdi ya da çıktı. */
+    fun setZone(next: Int) {
+        if (zone == next) return
+        zone = next
         invalidate()
     }
 
@@ -147,6 +166,7 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
         canvas.translate(-onScreen[0].toFloat(), -onScreen[1].toFloat())
 
         prune()
+        drawZone(canvas)
         drawTail(canvas)
 
         canvas.drawCircle(x, y, 16f * density, halo)
@@ -156,6 +176,32 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
         // Parmak dursa da kuyruk kendi kendine sönmeli; nokta kaldıkça
         // bir sonraki kareyi iste.
         if (trace.size > 1) postInvalidateOnAnimation()
+    }
+
+    /**
+     * Üst köşedeki şerit: imleç orada bırakılırsa ne olacağını söylüyor.
+     *
+     * Şerit yalnız imleç o bölgedeyken görünüyor; sürekli duran bir çubuk
+     * ekranın tepesini sahiplenirdi.
+     */
+    private fun drawZone(canvas: Canvas) {
+        if (zone == ZONE_NONE) return
+        val half = width / 2f
+        val left = if (zone == ZONE_LEFT) 0f else half
+        val bottom = ZONE_HEIGHT_DP * density
+        zoneFill.color = Color.argb(
+            150,
+            Color.red(izRengi),
+            Color.green(izRengi),
+            Color.blue(izRengi),
+        )
+        canvas.drawRect(left, 0f, left + half, bottom, zoneFill)
+        canvas.drawText(
+            if (zone == ZONE_LEFT) "Bildirimler" else "Hızlı ayarlar",
+            left + half / 2f,
+            bottom - 14f * density,
+            zoneText,
+        )
     }
 
     /**
@@ -294,7 +340,14 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
         edgeY = py + dx * half * side
     }
 
-    private companion object {
+    internal companion object {
+        const val ZONE_NONE = 0
+        const val ZONE_LEFT = 1
+        const val ZONE_RIGHT = 2
+
+        /** Şeridin kalınlığı; servisteki bölge sınırıyla aynı. */
+        const val ZONE_HEIGHT_DP = 64f
+
         const val TAIL_MS = 220L
         const val TAIL_WIDTH_DP = 7f
         const val TAIL_ALPHA = 215f

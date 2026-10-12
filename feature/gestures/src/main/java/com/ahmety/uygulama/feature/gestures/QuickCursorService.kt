@@ -60,6 +60,8 @@ class QuickCursorService : AccessibilityService() {
     private var cursorY = 0f
     private var moving = false
     private var draggingHandle = false
+    // İmlecin o an hangi üst köşe bölgesinde olduğu; 0 = hiçbiri.
+    private var zone = CursorView.ZONE_NONE
     private var longPressFired = false
     private val longPress = Runnable {
         longPressFired = true
@@ -251,6 +253,7 @@ class QuickCursorService : AccessibilityService() {
                     cursorX = (cursorX + dx * s).coerceIn(0f, screenW.toFloat())
                     cursorY = (cursorY + dy * s).coerceIn(0f, screenH.toFloat())
                     updateCursor()
+                    updateZone(density)
                 }
                 return true
             }
@@ -264,7 +267,17 @@ class QuickCursorService : AccessibilityService() {
                     return true
                 }
                 hideCursor()
-                if (moving) tapAt(cursorX, cursorY)
+                // Üst köşede bırakmak dokunmak değil: solda bildirimler,
+                // sağda hızlı ayarlar açılıyor. Oraya kadar gidip oraya
+                // basmak zaten istenen şey değil — perde zaten orayı
+                // kapatıyor.
+                val leaving = zone
+                setZone(CursorView.ZONE_NONE)
+                when {
+                    leaving == CursorView.ZONE_LEFT -> shade(GLOBAL_ACTION_NOTIFICATIONS)
+                    leaving == CursorView.ZONE_RIGHT -> shade(GLOBAL_ACTION_QUICK_SETTINGS)
+                    moving -> tapAt(cursorX, cursorY)
+                }
                 moving = false
                 scheduleFade()
                 return true
@@ -273,6 +286,7 @@ class QuickCursorService : AccessibilityService() {
             MotionEvent.ACTION_CANCEL -> {
                 handler.removeCallbacks(longPress)
                 hideCursor()
+                setZone(CursorView.ZONE_NONE)
                 moving = false
                 draggingHandle = false
                 scheduleFade()
@@ -280,6 +294,49 @@ class QuickCursorService : AccessibilityService() {
             }
         }
         return true
+    }
+
+    /**
+     * İmleç üst köşelerden birine girdi mi.
+     *
+     * Quick Cursor'da imleci bildirim çubuğuna götürmek perdeyi açıyordu;
+     * burada ekranın üst şeridi ikiye bölündü: sol yarı bildirimler, sağ
+     * yarı hızlı ayarlar. Tek elle en zor ulaşılan yer orası olduğu için
+     * en çok işe yarayan kısayol da bu.
+     */
+    private fun updateZone(density: Float) {
+        if (!settings.edgeActions) return
+        val top = cursorY <= CursorView.ZONE_HEIGHT_DP * density
+        val next = when {
+            !top -> CursorView.ZONE_NONE
+            cursorX < screenW / 2f -> CursorView.ZONE_LEFT
+            else -> CursorView.ZONE_RIGHT
+        }
+        if (next != zone) {
+            setZone(next)
+            // Bölgeye girerken kısa bir titreşim: parmağın altında
+            // olmadığı için göz oraya bakmıyor olabilir.
+            if (next != CursorView.ZONE_NONE) GestureFeedback.vibrateOnce(this, 18L)
+        }
+    }
+
+    private fun setZone(next: Int) {
+        zone = next
+        cursor?.setZone(next)
+    }
+
+    /**
+     * Perdeyi açar.
+     *
+     * Parmak daha yeni kalktı; dokunma enjekte ederken olduğu gibi burada
+     * da kısa bir gecikme gerekiyor, yoksa açılan perde aynı karede gelen
+     * olaylarla kapanabiliyor.
+     */
+    private fun shade(action: Int) {
+        handler.postDelayed({
+            val ok = runCatching { performGlobalAction(action) }.getOrDefault(false)
+            GestureFeedback.vibrateOnce(this, if (ok) 15L else 8L)
+        }, TAP_DELAY_MS)
     }
 
     private fun showCursor() {
@@ -419,6 +476,7 @@ class QuickCursorService : AccessibilityService() {
         private const val TAP_DURATION_MS = 55L
         private const val TAP_DELAY_MS = 60L
         private const val SPAWN_ABOVE_DP = 130f
+
         private const val FADE_DELAY_MS = 3_000L
         private const val FADE_OUT_MS = 450L
         private const val FADE_IN_MS = 140L

@@ -49,6 +49,7 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
     var offset by remember { mutableIntStateOf(settings.bottomOffsetDp) }
     var centerOffset by remember { mutableIntStateOf(settings.centerOffsetDp) }
     var izRengi by remember { mutableIntStateOf(settings.izRengi) }
+    var edgeActions by remember { mutableStateOf(settings.edgeActions) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -143,6 +144,20 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
         Text(
             text = "İmleç gezerken ardında bu renkte bir iz bırakıyor. " +
                 "Renkler mat: parlak bir iz altındaki yazıyı okunmaz yapıyor.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text("Üst köşeler", style = MaterialTheme.typography.labelLarge)
+        Toggle("Tepeye götürünce perde açılsın", edgeActions) {
+            edgeActions = it
+            settings.edgeActions = it
+        }
+        Text(
+            text = "İmleci ekranın tepesine götür: sol yarıda bırakırsan bildirimler, " +
+                "sağ yarıda bırakırsan hızlı ayarlar açılır. Bölgeye girince şerit " +
+                "görünür ve telefon kısa bir titrer; istemiyorsan parmağını aşağı " +
+                "çekip bırak.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
