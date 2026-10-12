@@ -127,6 +127,9 @@ class QuickCursorService : AccessibilityService() {
      * o yüzden bu kontrol ucuz.
      */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Öne gelen uygulama buradan öğreniliyor; "önceki uygulamaya geç"
+        // bu sıraya bakıyor.
+        AppHistory.record(this, event?.packageName?.toString())
         if (!::settings.isInitialized) return
         if (handle == null && settings.enabled) rebuild()
     }

@@ -84,6 +84,7 @@ class ShortcutStore(context: Context) {
 
         /** Sistem kısayolları: saklanan ad → ekranda görünen ad. */
         val SYSTEM: Map<String, String> = linkedMapOf(
+            "last_app" to "Önceki uygulama",
             "notifications" to "Bildirimler",
             "quick_settings" to "Hızlı ayarlar",
             "recents" to "Son uygulamalar",
@@ -132,7 +133,11 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
         ),
     )
 
-    ShortcutKind.SYSTEM -> {
+    // Önceki uygulama bir sistem eylemi değil, bizim tuttuğumuz sıradan
+    // geliyor; o yüzden ötekilerden ayrı duruyor.
+    ShortcutKind.SYSTEM -> if (item.value == "last_app") {
+        switchToLastApp(service)
+    } else {
         val action = when (item.value) {
             "notifications" -> AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
             "quick_settings" -> AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
@@ -146,6 +151,19 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
         }
         action != null && runCatching { service.performGlobalAction(action) }.getOrDefault(false)
     }
+}
+
+/**
+ * Bir önceki uygulamaya geçer.
+ *
+ * Açılış niyeti uygulamanın kendi simgesine dokunmakla aynı: varsa duran
+ * görevi öne getiriyor, kaldığın yerden devam ediyorsun.
+ */
+internal fun switchToLastApp(service: AccessibilityService): Boolean {
+    val target = AppHistory.switchTarget() ?: return false
+    val intent = service.packageManager.getLaunchIntentForPackage(target) ?: return false
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    return runCatching { service.startActivity(intent) }.isSuccess
 }
 
 private fun start(service: AccessibilityService, intent: Intent): Boolean {

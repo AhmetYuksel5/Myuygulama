@@ -72,6 +72,9 @@ class EdgeGestureService : AccessibilityService() {
      * geliyor. Kurulması gerekmiyorsa [rebuild] zaten hemen çıkıyor.
      */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Öne gelen uygulama buradan öğreniliyor; "önceki uygulamaya geç"
+        // bu sıraya bakıyor.
+        AppHistory.record(this, event?.packageName?.toString())
         if (!::settings.isInitialized) return
         if (edgeViews.isEmpty() && settings.enabled && !lock.locked) rebuild()
     }
@@ -285,6 +288,7 @@ class EdgeGestureService : AccessibilityService() {
             GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
             GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
             GestureAction.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            GestureAction.LAST_APP -> switchToLastApp(this)
             GestureAction.NOTIFICATIONS -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
             GestureAction.QUICK_SETTINGS -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
             GestureAction.LOCK_SCREEN -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)

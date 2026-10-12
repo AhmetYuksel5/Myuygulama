@@ -11,6 +11,7 @@ enum class GestureAction(val label: String) {
     BACK("Geri"),
     HOME("Ana ekran"),
     RECENTS("Son uygulamalar"),
+    LAST_APP("Önceki uygulama"),
     NOTIFICATIONS("Bildirimler"),
     QUICK_SETTINGS("Hızlı ayarlar"),
     LOCK_SCREEN("Ekranı kilitle"),
