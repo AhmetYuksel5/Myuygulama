@@ -3,6 +3,11 @@ name: Derle ve yayınla
 on:
   push:
     branches: ["claude/**", "main"]
+    # Windows görüntüleyicisinin kendi iş akışı var; yalnız onu değiştiren
+    # bir gönderim telefona yeni APK çıkarmasın.
+    paths-ignore:
+      - "foto-goruntuleyici/**"
+      - ".github/workflows/foto.yml"
   workflow_dispatch:
 
 permissions:
