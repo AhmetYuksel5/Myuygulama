@@ -1,0 +1,43 @@
+name: Fotoğraf görüntüleyici (Windows)
+
+on:
+  push:
+    branches: ["claude/**", "main"]
+    paths:
+      - "foto-goruntuleyici/**"
+      - ".github/workflows/foto.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  derle:
+    name: Derle ve exe yayınla
+    runs-on: windows-latest
+
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      # Kullanıcının kendi bilgisayarında derle.bat'ın çağırdığı derleyicinin
+      # aynısı: her Windows'ta hazır gelen .NET Framework 4. Burada geçen kod
+      # orada da geçiyor; ayrıca çıkan exe ek bir çalışma ortamı istemiyor.
+      - name: Derle
+        shell: cmd
+        run: |
+          cd foto-goruntuleyici
+          %WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /codepage:65001 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:FotoGoruntuleyici.exe Program.cs
+
+      - name: Yayınla
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: foto-v0.${{ github.run_number }}
+          name: Fotoğraf Görüntüleyici 0.${{ github.run_number }}
+          body: |
+            ${{ github.event.head_commit.message }}
+          files: foto-goruntuleyici/FotoGoruntuleyici.exe
+          fail_on_unmatched_files: true
+          # Telefondaki Merkez güncellemeyi "en son sürüm"den okuyor; bu exe
+          # oraya düşerse telefon onu kendi güncellemesi sanar.
+          make_latest: false
