@@ -57,6 +57,20 @@ internal object AppCarousel {
         restartTimer()
     }
 
+    /**
+     * Sıradaki uygulama: dolaşılan kümede aktif olanın bir sağındaki,
+     * sondaysa baştaki. Küme ayardaki sayı kadar (2–4); ikide bu, iki
+     * uygulama arasında gidip gelmek demek.
+     */
+    fun nextTarget(service: AccessibilityService): String? {
+        val count = QuickCursorSettings(service).carouselCount
+        val recent = AppHistory.snapshot(service, count)
+        if (recent.size < 2) return null
+        if (!(order.size == recent.size && order.toSet() == recent.toSet())) order = recent
+        val index = order.indexOf(recent.first())
+        return order[(index + 1) % order.size]
+    }
+
     private fun build(service: AccessibilityService, active: String) {
         val manager = service.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         val density = service.resources.displayMetrics.density
@@ -76,7 +90,9 @@ internal object AppCarousel {
                 setColor(Color.argb(80, 255, 255, 255))
             }
         }
-        frame.addView(marker, FrameLayout.LayoutParams(cellWidth, ViewGroup.LayoutParams.MATCH_PARENT))
+        // Yükseklik sabit: "ebeveyn kadar" verilince kaydırılabilir pencere
+        // tam ekran boyu açılıyor, şerit ekranı boydan boya kaplıyordu.
+        frame.addView(marker, FrameLayout.LayoutParams(cellWidth, dp(CELL_HEIGHT_DP)))
 
         val row = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
         val packages = service.packageManager
@@ -113,7 +129,7 @@ internal object AppCarousel {
                     setPadding(0, dp(4), 0, 0)
                 },
             )
-            row.addView(cell, LinearLayout.LayoutParams(cellWidth, ViewGroup.LayoutParams.WRAP_CONTENT))
+            row.addView(cell, LinearLayout.LayoutParams(cellWidth, dp(CELL_HEIGHT_DP)))
         }
         frame.addView(row)
 
@@ -171,5 +187,6 @@ internal object AppCarousel {
     }
 
     private const val CELL_DP = 80
+    private const val CELL_HEIGHT_DP = 88
     private const val VISIBLE_MS = 1_500L
 }

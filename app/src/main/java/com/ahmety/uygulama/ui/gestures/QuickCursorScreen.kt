@@ -165,13 +165,13 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
         )
 
         ShortcutsSection()
-        Stepper("Geçişte gösterilen uygulama", carousel, 2..4, step = 1, suffix = "") {
+        Stepper("Kaç uygulama arasında dolaşılsın", carousel, 2..4, step = 1, suffix = "") {
             carousel = it
             settings.carouselCount = it
         }
         Text(
-            text = "Önceki uygulamaya geçince ekranın ortasında son uygulamalar " +
-                "kısa bir süre görünür; başka birine dokunursan oraya geçer.",
+            text = "Önceki uygulama her basışta son bu kadar uygulama arasında " +
+                "sırayla döner; ortadaki şeritte görünürler, birine dokunursan oraya geçer.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

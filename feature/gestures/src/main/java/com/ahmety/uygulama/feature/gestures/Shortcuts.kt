@@ -161,7 +161,7 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
  * görevi öne getiriyor, kaldığın yerden devam ediyorsun.
  */
 internal fun switchToLastApp(service: AccessibilityService): Boolean {
-    val target = AppHistory.switchTarget(service)
+    val target = AppCarousel.nextTarget(service)
     if (target == null) {
         // Sessizce hiçbir şey olmaması, bozuk sanılıyordu. Liste ancak
         // uygulamalar arasında gezindikçe doluyor; bunu söylemek yetiyor.
@@ -173,6 +173,7 @@ internal fun switchToLastApp(service: AccessibilityService): Boolean {
         return false
     }
     val ok = launchPackage(service, target)
+    if (ok) AppHistory.promote(service, target)
     // Geçiş anında yapılıyor, şerit arkasından geliyor: hangi uygulamaya
     // geçildiğini ve öncekileri gösteriyor, istenirse başka birine
     // dokunulabiliyor. Beklemeden geçmek ilkesi bozulmasın diye şerit

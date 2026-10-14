@@ -73,6 +73,8 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
     var heightDp by remember { mutableIntStateOf(settings.heightDp) }
     var offsetDp by remember { mutableIntStateOf(settings.verticalOffsetDp) }
     var opacity by remember { mutableIntStateOf(settings.opacityPercent) }
+    val cursorSettings = remember { com.ahmety.uygulama.feature.gestures.QuickCursorSettings(context) }
+    var cycle by remember { mutableIntStateOf(cursorSettings.carouselCount) }
     var vibrate by remember { mutableStateOf(settings.vibrateEnabled) }
     var sound by remember { mutableStateOf(settings.soundEnabled) }
     var soundVolume by remember { mutableIntStateOf(settings.soundVolume) }
@@ -205,6 +207,12 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // "Önceki uygulama" eylemi buradan da atanabildiği için ayarı burada da var.
+        Stepper("Önceki uygulama: kaç uygulama arasında", cycle, 2..4, step = 1, suffix = "") {
+            cycle = it
+            cursorSettings.carouselCount = it
+        }
 
         Toggle("Titreşim", vibrate) {
             vibrate = it
