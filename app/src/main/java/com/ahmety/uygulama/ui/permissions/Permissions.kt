@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import com.ahmety.uygulama.feature.gestures.EdgeGestureService
 import com.ahmety.uygulama.feature.gestures.QuickCursorService
 import android.os.Environment
 import android.os.PowerManager
@@ -121,24 +120,13 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
     // Erişilebilirlik servisleri. Sistem bunları kendiliğinden kapatabiliyor
     // (üreticinin pil temizleyicisi, uzun süre kullanılmayan uygulama), o
     // yüzden durumlarını burada görüp tek dokunuşla geri açabilmek gerekiyor.
-    add(
-        PermissionSpec(
-            id = "edge_gestures",
-            title = "Kenar hareketleri",
-            rationale = "Ekranın kenarından kaydırarak son uygulamalar ve bildirim " +
-                "paneli. Erişilebilirlik servisi olarak çalışıyor.",
-            kind = PermissionKind.SPECIAL,
-            isGranted = { it.isAccessibilityServiceOn(EdgeGestureService::class.java.name) },
-            settingsIntent = { Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS) },
-        ),
-    )
-
+    // Kenar hareketleri ve imleç tek serviste: izin listesinde tek satır.
     add(
         PermissionSpec(
             id = "quick_cursor",
-            title = "Tek elle imleç",
-            rationale = "Ulaşılamayan köşelere basmak için sanal imleç. " +
-                "Erişilebilirlik servisi olarak çalışıyor.",
+            title = "Myuygulama (kenar hareketleri ve imleç)",
+            rationale = "Kenardan kaydırma, tek elle imleç ve kısayol çubuğu. " +
+                "Tek erişilebilirlik servisi olarak çalışıyor.",
             kind = PermissionKind.SPECIAL,
             isGranted = { it.isAccessibilityServiceOn(QuickCursorService::class.java.name) },
             settingsIntent = { Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS) },

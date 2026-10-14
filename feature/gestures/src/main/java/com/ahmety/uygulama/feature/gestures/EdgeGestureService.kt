@@ -32,7 +32,13 @@ import kotlin.math.hypot
  * canlı uygulanıyor — kalınlık/uzunluk/konum değişince katman anında yeniden
  * çiziliyor, servisi kapatıp açmaya gerek kalmıyor.
  */
-class EdgeGestureService : AccessibilityService() {
+/*
+ * Artık kendi başına bir servis değil, imleç servisinin üst sınıfı.
+ * İki ayrı erişilebilirlik izni istemek kafa karıştırıyordu; tek servis
+ * hem kenar şeridini hem imleci taşıyor. Her biri kendi ayarıyla açılıp
+ * kapanmaya devam ediyor.
+ */
+open class EdgeGestureService : AccessibilityService() {
 
     private var windowManager: WindowManager? = null
     private val edgeViews = mutableListOf<View>()

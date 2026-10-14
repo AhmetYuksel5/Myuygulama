@@ -171,7 +171,8 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
         }
         Text(
             text = "Önceki uygulama her basışta son bu kadar uygulama arasında " +
-                "sırayla döner; ortadaki şeritte görünürler, birine dokunursan oraya geçer.",
+                "sırayla döner; ortadaki şeritte görünürler, birine dokunursan oraya geçer. " +
+                "Kapattığın bir uygulamayı listeden çıkarmak için şeritte simgesine uzun bas.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

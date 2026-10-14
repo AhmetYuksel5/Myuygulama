@@ -33,7 +33,7 @@ import android.view.accessibility.AccessibilityEvent
  * kendiliğinden geri geliyor. Kilit ekranında da aynısı: kilitliyken
  * imleçle dokunulacak bir şey yok.
  */
-class QuickCursorService : AccessibilityService() {
+class QuickCursorService : EdgeGestureService() {
 
     private var windowManager: WindowManager? = null
     private var handle: View? = null
@@ -127,6 +127,7 @@ class QuickCursorService : AccessibilityService() {
      * o yüzden bu kontrol ucuz.
      */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        super.onAccessibilityEvent(event)
         // Öne gelen uygulama buradan öğreniliyor; "önceki uygulamaya geç"
         // bu sıraya bakıyor.
         AppHistory.record(this, event?.packageName?.toString(), event?.className?.toString())

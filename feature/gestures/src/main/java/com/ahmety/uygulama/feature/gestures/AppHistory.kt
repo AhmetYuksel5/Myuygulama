@@ -101,6 +101,19 @@ internal object AppHistory {
         return recent.take(count)
     }
 
+    /**
+     * Uygulamayı listeden çıkarır.
+     *
+     * Bir uygulamanın son uygulamalardan kaydırılıp kapatıldığını Android
+     * başka uygulamalara söylemiyor; kapatılanı kendiliğinden bilmenin yolu
+     * yok. Şeritte uzun basınca buraya geliniyor.
+     */
+    @Synchronized
+    fun forget(context: Context, name: String) {
+        load(context)
+        if (recent.remove(name)) save(context)
+    }
+
     /** Seçilen uygulamayı listenin başına alır; şeritten seçilince. */
     @Synchronized
     fun promote(context: Context, name: String) {

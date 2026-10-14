@@ -173,7 +173,7 @@ class GestureSettings(context: Context) {
         private const val DEFAULT_OPACITY = 40
 
         fun isServiceEnabled(context: Context): Boolean {
-            val expected = "${context.packageName}/${EdgeGestureService::class.java.name}"
+            val expected = "${context.packageName}/${QuickCursorService::class.java.name}"
             val enabledServices = Settings.Secure.getString(
                 context.contentResolver,
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,

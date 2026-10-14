@@ -109,6 +109,17 @@ internal object AppCarousel {
                     }
                     restartTimer()
                 }
+                // Uzun basış: kapatılmış uygulamayı listeden çıkar. Şerit
+                // yeni listeyle baştan çiziliyor.
+                setOnLongClickListener {
+                    AppHistory.forget(service, name)
+                    GestureFeedback.vibrateOnce(service, 25L)
+                    order = emptyList()
+                    val now = AppHistory.snapshot(service, 1).firstOrNull()
+                    hide()
+                    if (now != null) show(service)
+                    true
+                }
             }
             cell.addView(
                 ImageView(service).apply {
