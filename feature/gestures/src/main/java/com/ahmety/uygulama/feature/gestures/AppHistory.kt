@@ -94,6 +94,22 @@ internal object AppHistory {
         return target
     }
 
+    /** Son [count] uygulama, en yenisi başta. */
+    @Synchronized
+    fun snapshot(context: Context, count: Int): List<String> {
+        load(context)
+        return recent.take(count)
+    }
+
+    /** Seçilen uygulamayı listenin başına alır; şeritten seçilince. */
+    @Synchronized
+    fun promote(context: Context, name: String) {
+        load(context)
+        recent.remove(name)
+        recent.add(0, name)
+        save(context)
+    }
+
     private fun isActivity(context: Context, name: String, window: String): Boolean =
         activities.getOrPut("$name/$window") {
             runCatching {

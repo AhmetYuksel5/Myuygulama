@@ -97,6 +97,11 @@ class QuickCursorSettings(context: Context) {
         get() = prefs.getBoolean(KEY_EDGE_ACTIONS, true)
         set(value) = prefs.edit().putBoolean(KEY_EDGE_ACTIONS, value).apply()
 
+    /** Uygulama geçişinde ortada görünen şeritte kaç uygulama olsun (2–4). */
+    var carouselCount: Int
+        get() = prefs.getInt(KEY_CAROUSEL, 3)
+        set(value) = prefs.edit().putInt(KEY_CAROUSEL, value.coerceIn(2, 4)).apply()
+
     /** İmleç hassasiyeti: parmak hareketinin kaç katı imleç hareketi. */
     var sensitivity: Float
         get() = prefs.getFloat(KEY_SENSITIVITY, 2.2f)
@@ -116,6 +121,7 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_SENSITIVITY = "sensitivity"
         private const val KEY_IZ_RENGI = "iz_rengi"
         private const val KEY_EDGE_ACTIONS = "edge_actions"
+        private const val KEY_CAROUSEL = "carousel_count"
 
         /**
          * Seçilebilen iz renkleri.

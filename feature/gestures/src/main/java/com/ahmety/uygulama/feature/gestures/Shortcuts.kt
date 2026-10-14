@@ -172,7 +172,17 @@ internal fun switchToLastApp(service: AccessibilityService): Boolean {
         ).show()
         return false
     }
-    val intent = service.packageManager.getLaunchIntentForPackage(target) ?: return false
+    val ok = launchPackage(service, target)
+    // Geçiş anında yapılıyor, şerit arkasından geliyor: hangi uygulamaya
+    // geçildiğini ve öncekileri gösteriyor, istenirse başka birine
+    // dokunulabiliyor. Beklemeden geçmek ilkesi bozulmasın diye şerit
+    // seçimi beklemiyor.
+    if (ok) AppCarousel.show(service)
+    return ok
+}
+
+internal fun launchPackage(service: AccessibilityService, name: String): Boolean {
+    val intent = service.packageManager.getLaunchIntentForPackage(name) ?: return false
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return runCatching { service.startActivity(intent) }.isSuccess
 }

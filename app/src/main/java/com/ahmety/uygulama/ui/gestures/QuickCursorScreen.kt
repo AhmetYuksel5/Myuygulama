@@ -50,6 +50,7 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
     var centerOffset by remember { mutableIntStateOf(settings.centerOffsetDp) }
     var izRengi by remember { mutableIntStateOf(settings.izRengi) }
     var edgeActions by remember { mutableStateOf(settings.edgeActions) }
+    var carousel by remember { mutableIntStateOf(settings.carouselCount) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -164,6 +165,16 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
         )
 
         ShortcutsSection()
+        Stepper("Geçişte gösterilen uygulama", carousel, 2..4, step = 1, suffix = "") {
+            carousel = it
+            settings.carouselCount = it
+        }
+        Text(
+            text = "Önceki uygulamaya geçince ekranın ortasında son uygulamalar " +
+                "kısa bir süre görünür; başka birine dokunursan oraya geçer.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
         // Birer birer: kenar şeridinde beşer beşer gitmek yetiyordu ama
