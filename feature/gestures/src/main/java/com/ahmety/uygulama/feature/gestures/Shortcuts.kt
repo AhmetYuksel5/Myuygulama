@@ -110,13 +110,14 @@ class ShortcutStore(context: Context) {
  */
 internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean = when (item.kind) {
     ShortcutKind.APP -> {
-        val intent = service.packageManager.getLaunchIntentForPackage(item.value)
-        if (intent == null) {
-            false
-        } else {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            runCatching { service.startActivity(intent) }.isSuccess
-        }
+        val ok = launchPackage(service, item.value)
+        // Kısayoldan açılan uygulama "önceki uygulama" listesine doğrudan
+        // yazılıyor. Liste sistemin pencere haberlerinden kuruluyor; bazı
+        // uygulamalar (bankalar) pencerelerini olağan dışı açtığı için o
+        // haber gerçek bir ekran sayılmıyor, uygulama listeye hiç girmiyordu.
+        // Açan biziz, açıldığını biliyoruz.
+        if (ok) AppHistory.promote(service, item.value)
+        ok
     }
 
     ShortcutKind.CALL -> start(
