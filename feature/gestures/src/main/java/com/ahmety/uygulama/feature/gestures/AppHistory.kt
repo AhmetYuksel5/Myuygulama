@@ -2,6 +2,7 @@ package com.ahmety.uygulama.feature.gestures
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -55,6 +56,9 @@ internal object AppHistory {
         // sormak bunların hepsini bir seferde eliyor.
         if (!isActivity(context, name, window)) return
         if (name in keyboards(context)) return
+        // Ana ekran uygulaması (Smart Launcher vb.) sayılmıyor: sayılınca
+        // geçiş, bulunduğun uygulamayla ana ekran arasında gidip geliyordu.
+        if (name in launchers(context)) return
         // Merkez'in kendi pencerelerinden yalnız ana ekran sayılıyor; seçim
         // penceresi başka bir uygulamanın üstünde açılıyor, ona geçilmez.
         if (name == context.packageName && !window.endsWith(".MainActivity")) return
@@ -118,6 +122,20 @@ internal object AppHistory {
     // değişiminde sisteme gitmeye değmez, yeni klavye nadiren kurulur.
     private var keyboardCache: Set<String>? = null
 
+    private fun launchers(context: Context): Set<String> {
+        launcherCache?.let { return it }
+        val found = runCatching {
+            val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            context.packageManager.queryIntentActivities(home, 0)
+                .mapNotNull { it.activityInfo?.packageName }
+                .toSet()
+        }.getOrDefault(emptySet())
+        launcherCache = found
+        return found
+    }
+
+    private var launcherCache: Set<String>? = null
+
     private fun isLaunchable(context: Context, name: String): Boolean =
         launchable.getOrPut(name) {
             runCatching {
@@ -133,7 +151,7 @@ internal object AppHistory {
     private fun load(context: Context) {
         if (loaded) return
         loaded = true
-        val skip = keyboards(context)
+        val skip = keyboards(context) + launchers(context)
         prefs(context).getString(KEY, "").orEmpty()
             .split('\n')
             .filter { it.isNotBlank() && it !in skip }
