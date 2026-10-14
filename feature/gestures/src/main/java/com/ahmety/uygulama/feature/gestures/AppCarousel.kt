@@ -11,6 +11,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -18,62 +20,84 @@ import android.widget.TextView
 /**
  * Uygulama geçişinden sonra ekranın ortasında beliren yarı saydam şerit.
  *
- * Son birkaç uygulamanın simgesi yan yana; şu an önde olan (geçilen)
- * vurgulu. Başka birine dokunulursa oraya geçiliyor. Dokunulmazsa kısa
- * süre sonra kendiliğinden kayboluyor.
+ * Simgeler yerinde duruyor, yalnız vurgu kutusu aktif uygulamanın üstüne
+ * kayıyor. İlk sürüm her geçişte sırayı yeniden diziyordu (en yenisi
+ * başta); iki uygulama arasında gidip gelirken simgeler yer değiştiriyor,
+ * göz neyin nerede olduğunu kaybediyordu. Artık uygulama kümesi aynı
+ * kaldıkça sıra da aynı kalıyor.
  *
- * Pencere yalnız şerit kadar: dışına dokunmak arkadaki uygulamaya gidiyor,
- * şerit hiçbir şeyi engellemiyor.
+ * Pencere yalnız şerit kadar: dışına dokunmak arkadaki uygulamaya gidiyor.
  */
 internal object AppCarousel {
 
     private var root: View? = null
+    private var highlight: View? = null
+    private var order: List<String> = emptyList()
     private val handler = Handler(Looper.getMainLooper())
     private val close = Runnable { hide() }
 
     fun show(service: AccessibilityService) {
-        hide()
         val count = QuickCursorSettings(service).carouselCount
-        val apps = AppHistory.snapshot(service, count)
-        if (apps.size < 2) return
+        val recent = AppHistory.snapshot(service, count)
+        if (recent.size < 2) return
+        val active = recent.first()
+
+        // Aynı uygulamalar arasında dolaşılıyorsa sıra korunuyor.
+        val sameSet = order.size == recent.size && order.toSet() == recent.toSet()
+        if (!sameSet) order = recent
+
+        val shown = root
+        if (sameSet && shown != null) {
+            moveHighlight(order.indexOf(active), animate = true)
+            restartTimer()
+            return
+        }
+        hide()
+        build(service, active)
+        restartTimer()
+    }
+
+    private fun build(service: AccessibilityService, active: String) {
         val manager = service.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         val density = service.resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
+        val cellWidth = dp(CELL_DP)
 
-        val row = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
+        val frame = FrameLayout(service).apply {
             background = GradientDrawable().apply {
                 cornerRadius = 24f * density
                 setColor(Color.argb(170, 20, 20, 24))
             }
             setPadding(dp(10), dp(10), dp(10), dp(10))
         }
+        val marker = View(service).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = 16f * density
+                setColor(Color.argb(80, 255, 255, 255))
+            }
+        }
+        frame.addView(marker, FrameLayout.LayoutParams(cellWidth, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        val row = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
         val packages = service.packageManager
-        apps.forEachIndexed { index, name ->
-            val current = index == 0
+        order.forEach { name ->
             val cell = LinearLayout(service).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 setPadding(dp(8), dp(8), dp(8), dp(6))
-                if (current) {
-                    background = GradientDrawable().apply {
-                        cornerRadius = 16f * density
-                        setColor(Color.argb(70, 255, 255, 255))
-                    }
-                }
                 setOnClickListener {
-                    hide()
-                    if (!current && launchPackage(service, name)) {
+                    val now = AppHistory.snapshot(service, 1).firstOrNull()
+                    if (name != now && launchPackage(service, name)) {
                         AppHistory.promote(service, name)
+                        moveHighlight(order.indexOf(name), animate = true)
                     }
+                    restartTimer()
                 }
             }
             cell.addView(
                 ImageView(service).apply {
                     runCatching { setImageDrawable(packages.getApplicationIcon(name)) }
                     layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
-                    alpha = if (current) 1f else 0.75f
                 },
             )
             cell.addView(
@@ -89,8 +113,9 @@ internal object AppCarousel {
                     setPadding(0, dp(4), 0, 0)
                 },
             )
-            row.addView(cell, LinearLayout.LayoutParams(dp(80), ViewGroup.LayoutParams.WRAP_CONTENT))
+            row.addView(cell, LinearLayout.LayoutParams(cellWidth, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+        frame.addView(row)
 
         val params = WindowManager.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -102,11 +127,37 @@ internal object AppCarousel {
         ).apply { gravity = Gravity.CENTER }
 
         runCatching {
-            manager.addView(row, params)
-            root = row
-            row.alpha = 0f
-            row.animate().alpha(1f).setDuration(120).start()
+            manager.addView(frame, params)
+            root = frame
+            highlight = marker
+            // İlk açılışta vurgu, geçilmeden önceki uygulamanın üstünden
+            // yeni uygulamaya kayarak geliyor: geçişin yönü görülsün.
+            val from = order.indexOf(active).let { if (it == 0) 1 else 0 }
+            moveHighlight(from, animate = false)
+            moveHighlight(order.indexOf(active), animate = true)
+            frame.alpha = 0f
+            frame.animate().alpha(1f).setDuration(120).start()
         }
+    }
+
+    private fun moveHighlight(index: Int, animate: Boolean) {
+        val marker = highlight ?: return
+        if (index < 0) return
+        val x = index * CELL_DP * marker.resources.displayMetrics.density
+        if (animate) {
+            marker.animate()
+                .translationX(x)
+                .setDuration(220)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+        } else {
+            marker.animate().cancel()
+            marker.translationX = x
+        }
+    }
+
+    private fun restartTimer() {
+        handler.removeCallbacks(close)
         handler.postDelayed(close, VISIBLE_MS)
     }
 
@@ -114,9 +165,11 @@ internal object AppCarousel {
         handler.removeCallbacks(close)
         val view = root ?: return
         root = null
+        highlight = null
         val manager = view.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
         runCatching { manager?.removeView(view) }
     }
 
+    private const val CELL_DP = 80
     private const val VISIBLE_MS = 1_500L
 }
