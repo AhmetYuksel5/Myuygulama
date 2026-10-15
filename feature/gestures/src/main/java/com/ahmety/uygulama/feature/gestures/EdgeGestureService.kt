@@ -80,7 +80,12 @@ open class EdgeGestureService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Öne gelen uygulama buradan öğreniliyor; "önceki uygulamaya geç"
         // bu sıraya bakıyor.
-        AppHistory.record(this, event?.packageName?.toString(), event?.className?.toString())
+        AppHistory.record(
+            this,
+            event?.packageName?.toString(),
+            event?.className?.toString(),
+            event?.text?.joinToString(" ").orEmpty(),
+        )
         if (!::settings.isInitialized) return
         if (edgeViews.isEmpty() && settings.enabled && !lock.locked) rebuild()
     }

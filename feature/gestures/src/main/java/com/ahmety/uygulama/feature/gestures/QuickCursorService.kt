@@ -130,7 +130,12 @@ class QuickCursorService : EdgeGestureService() {
         super.onAccessibilityEvent(event)
         // Öne gelen uygulama buradan öğreniliyor; "önceki uygulamaya geç"
         // bu sıraya bakıyor.
-        AppHistory.record(this, event?.packageName?.toString(), event?.className?.toString())
+        AppHistory.record(
+            this,
+            event?.packageName?.toString(),
+            event?.className?.toString(),
+            event?.text?.joinToString(" ").orEmpty(),
+        )
         if (!::settings.isInitialized) return
         if (handle == null && settings.enabled) rebuild()
     }

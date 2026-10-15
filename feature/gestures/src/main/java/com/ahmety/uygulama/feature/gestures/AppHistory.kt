@@ -43,10 +43,20 @@ internal object AppHistory {
      * geçince listede tek uygulama kalıyor, "önceki" bulunamıyordu.
      */
     @Synchronized
-    fun record(context: Context, packageName: String?, className: String?) {
+    fun record(context: Context, packageName: String?, className: String?, title: String = "") {
         load(context)
-        val name = packageName?.takeIf { it.isNotBlank() } ?: return
+        val raw = packageName?.takeIf { it.isNotBlank() } ?: return
         val window = className?.takeIf { it.isNotBlank() } ?: return
+        // Chrome'dan ana ekrana eklenen uygulama (Yeşil Temizlik gibi) ayrı
+        // bir paket olarak kuruluyor ama penceresi Chrome'un. Liste ona
+        // "Chrome" yazıyordu; burada kurulu web uygulamasının kendisi
+        // bulunup o yazılıyor, geçiş de onu açıyor.
+        if (".webapps." in window) {
+            val webApp = webApkFor(context, title) ?: return
+            pushFront(context, webApp)
+            return
+        }
+        val name = raw
         // Yalnız gerçek bir ekran öne geldiğinde sayılıyor.
         //
         // Pencere değişimi klavyede, açılır menüde, diyalogda da geliyor.
@@ -64,12 +74,37 @@ internal object AppHistory {
         // penceresi başka bir uygulamanın üstünde açılıyor, ona geçilmez.
         if (name == context.packageName && !window.endsWith(".MainActivity")) return
         if (!isLaunchable(context, name)) return
+        pushFront(context, name)
+    }
+
+    private fun pushFront(context: Context, name: String) {
         if (recent.firstOrNull() == name) return
         recent.remove(name)
         recent.add(0, name)
         while (recent.size > MAX) recent.removeAt(recent.size - 1)
         save(context)
     }
+
+    /**
+     * Chrome penceresinin hangi kurulu web uygulamasına ait olduğu.
+     *
+     * Kurulu web uygulamaları "org.chromium.webapk." ile başlayan paketler.
+     * Tek tane varsa o; birden fazlaysa pencere başlığı uygulamanın adıyla
+     * eşleşen. Bulunamazsa kayıt yapılmıyor — yanlış uygulamayı yazmaktan iyi.
+     */
+    private fun webApkFor(context: Context, title: String): String? = runCatching {
+        val packages = context.packageManager
+        val apps = packages.getInstalledApplications(0)
+            .filter { it.packageName.startsWith("org.chromium.webapk.") }
+            .filter { isLaunchable(context, it.packageName) }
+        if (apps.size == 1) return@runCatching apps.first().packageName
+        val wanted = title.trim().lowercase()
+        if (wanted.isEmpty()) return@runCatching null
+        apps.firstOrNull {
+            val label = packages.getApplicationLabel(it).toString().trim().lowercase()
+            label.isNotEmpty() && (wanted.contains(label) || label.contains(wanted))
+        }?.packageName
+    }.getOrNull()
 
     /**
      * Geçilecek uygulama; yoksa null.
