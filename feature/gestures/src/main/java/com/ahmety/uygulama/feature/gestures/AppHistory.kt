@@ -3,6 +3,7 @@ package com.ahmety.uygulama.feature.gestures
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -123,13 +124,36 @@ internal object AppHistory {
         save(context)
     }
 
+    /**
+     * Pencere o uygulamanın tam ekran bir ekranı mı.
+     *
+     * Etkinlik olması yetmiyor: widget'tan açılan "hızlı ekle" kutuları
+     * (Microsoft To Do gibi) de birer etkinlik. Onlar uygulamayı açmıyor,
+     * ama listeye girip geçişte uygulamayı boş yere getiriyorlardı.
+     * İkisinden biri onları ayırıyor: son uygulamalarda görünmemeyi
+     * isteyenler ve ekranın üstünde yüzen kutu olarak açılanlar.
+     */
     private fun isActivity(context: Context, name: String, window: String): Boolean =
         activities.getOrPut("$name/$window") {
             runCatching {
-                context.packageManager.getActivityInfo(ComponentName(name, window), 0)
-                true
+                val info = context.packageManager.getActivityInfo(ComponentName(name, window), 0)
+                if (info.flags and ActivityInfo.FLAG_EXCLUDE_FROM_RECENTS != 0) return@runCatching false
+                !isFloating(context, name, info)
             }.getOrDefault(false)
         }
+
+    private fun isFloating(context: Context, name: String, info: ActivityInfo): Boolean = runCatching {
+        val theme = info.themeResource.takeIf { it != 0 } ?: info.applicationInfo.theme
+        if (theme == 0) return@runCatching false
+        val other = context.createPackageContext(name, 0)
+        val attrs = other.theme.apply { applyStyle(theme, true) }
+            .obtainStyledAttributes(intArrayOf(android.R.attr.windowIsFloating))
+        try {
+            attrs.getBoolean(0, false)
+        } finally {
+            attrs.recycle()
+        }
+    }.getOrDefault(false)
 
     /**
      * Telefondaki klavyeler.
