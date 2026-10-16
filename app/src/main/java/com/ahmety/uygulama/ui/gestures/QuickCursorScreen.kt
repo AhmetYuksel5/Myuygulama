@@ -182,9 +182,9 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             settings.systemQuickSwitch = it
         }
         Text(
-            text = "Açıkken uygulama tam bıraktığın yerden gelir (PDF, sohbet). " +
-                "Son uygulamalar ekranı bir an görünüp kaybolursa ya da geçiş " +
-                "olmazsa kapat.",
+            text = "Deneysel. Açıkken Drive'daki PDF gibi uygulama içi pencereler " +
+                "de bıraktığın yerden gelir; ama bazı telefonlarda arada siyah " +
+                "ekran kalıyor. Öyle olursa kapalı tut.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

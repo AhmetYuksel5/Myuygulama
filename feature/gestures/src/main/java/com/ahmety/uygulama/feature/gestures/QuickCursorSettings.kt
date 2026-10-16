@@ -104,11 +104,14 @@ class QuickCursorSettings(context: Context) {
 
     /**
      * Bir önceki uygulamaya dönerken sistemin hızlı geçişi (son uygulamalar
-     * iki kez) kullanılsın mı. Pencereyi bırakıldığı hâliyle getiriyor;
-     * üreticinin son uygulamalar ekranı bunu desteklemiyorsa kapatılabilir.
+     * iki kez) kullanılsın mı. Pencereyi bırakıldığı hâliyle getiriyor.
+     *
+     * Kapalı başlıyor: Realme'nin son uygulamalar ekranı iki komutu art
+     * arda kaldıramıyor, arada siyah bir ekranda kalınıyordu. Anahtar da
+     * yeni; ilk sürümde açık kaydedilen değer devreye girmesin diye.
      */
     var systemQuickSwitch: Boolean
-        get() = prefs.getBoolean(KEY_QUICK_SWITCH, true)
+        get() = prefs.getBoolean(KEY_QUICK_SWITCH, false)
         set(value) = prefs.edit().putBoolean(KEY_QUICK_SWITCH, value).apply()
 
     /** İmleç hassasiyeti: parmak hareketinin kaç katı imleç hareketi. */
@@ -131,7 +134,7 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_IZ_RENGI = "iz_rengi"
         private const val KEY_EDGE_ACTIONS = "edge_actions"
         private const val KEY_CAROUSEL = "carousel_count"
-        private const val KEY_QUICK_SWITCH = "quick_switch"
+        private const val KEY_QUICK_SWITCH = "quick_switch_v2"
 
         /**
          * Seçilebilen iz renkleri.
