@@ -56,6 +56,11 @@ internal object AppHistory {
             pushFront(context, webApp)
             return
         }
+        // Chrome'un tarayıcı penceresi dışındaki pencereleri (web uygulaması
+        // açıkken araya giren iç ekranlar, özel sekmeler) sayılmıyor: ilk
+        // sürüm web uygulamasını doğru yazıyor, hemen ardından gelen bu
+        // haberler listenin başına yine "Chrome" koyuyordu.
+        if (window.startsWith("org.chromium.") && !window.endsWith("ChromeTabbedActivity")) return
         val name = raw
         // Yalnız gerçek bir ekran öne geldiğinde sayılıyor.
         //
