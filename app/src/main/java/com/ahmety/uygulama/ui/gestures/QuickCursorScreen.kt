@@ -51,6 +51,7 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
     var izRengi by remember { mutableIntStateOf(settings.izRengi) }
     var edgeActions by remember { mutableStateOf(settings.edgeActions) }
     var carousel by remember { mutableIntStateOf(settings.carouselCount) }
+    var quickSwitch by remember { mutableStateOf(settings.systemQuickSwitch) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -173,6 +174,17 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             text = "Önceki uygulama her basışta son bu kadar uygulama arasında " +
                 "sırayla döner; ortadaki şeritte görünürler, birine dokunursan oraya geçer. " +
                 "Kapattığın bir uygulamayı listeden çıkarmak için şeritte simgesine uzun bas.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Toggle("Bir öncekine sistemin hızlı geçişiyle dön", quickSwitch) {
+            quickSwitch = it
+            settings.systemQuickSwitch = it
+        }
+        Text(
+            text = "Açıkken uygulama tam bıraktığın yerden gelir (PDF, sohbet). " +
+                "Son uygulamalar ekranı bir an görünüp kaybolursa ya da geçiş " +
+                "olmazsa kapat.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

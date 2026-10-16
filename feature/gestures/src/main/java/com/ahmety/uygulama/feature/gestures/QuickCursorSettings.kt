@@ -102,6 +102,15 @@ class QuickCursorSettings(context: Context) {
         get() = prefs.getInt(KEY_CAROUSEL, 3)
         set(value) = prefs.edit().putInt(KEY_CAROUSEL, value.coerceIn(2, 4)).apply()
 
+    /**
+     * Bir önceki uygulamaya dönerken sistemin hızlı geçişi (son uygulamalar
+     * iki kez) kullanılsın mı. Pencereyi bırakıldığı hâliyle getiriyor;
+     * üreticinin son uygulamalar ekranı bunu desteklemiyorsa kapatılabilir.
+     */
+    var systemQuickSwitch: Boolean
+        get() = prefs.getBoolean(KEY_QUICK_SWITCH, true)
+        set(value) = prefs.edit().putBoolean(KEY_QUICK_SWITCH, value).apply()
+
     /** İmleç hassasiyeti: parmak hareketinin kaç katı imleç hareketi. */
     var sensitivity: Float
         get() = prefs.getFloat(KEY_SENSITIVITY, 2.2f)
@@ -122,6 +131,7 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_IZ_RENGI = "iz_rengi"
         private const val KEY_EDGE_ACTIONS = "edge_actions"
         private const val KEY_CAROUSEL = "carousel_count"
+        private const val KEY_QUICK_SWITCH = "quick_switch"
 
         /**
          * Seçilebilen iz renkleri.

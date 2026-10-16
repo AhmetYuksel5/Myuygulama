@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
@@ -173,7 +175,17 @@ internal fun switchToLastApp(service: AccessibilityService): Boolean {
         ).show()
         return false
     }
-    val ok = launchPackage(service, target)
+    // Hemen bir önceki uygulamaya dönülüyorsa sistemin kendi hızlı geçişi
+    // kullanılıyor: son uygulamalar iki kez. Sistem görevi bırakıldığı
+    // hâliyle öne getiriyor — Drive'ın PDF okuyucusu gibi uygulamanın
+    // içinde ayrı açılan pencereler de dahil. Paket adıyla açmak o
+    // pencereyi değil uygulamanın ana ekranını getiriyordu.
+    val previous = AppHistory.snapshot(service, 2).getOrNull(1)
+    val ok = if (target == previous && QuickCursorSettings(service).systemQuickSwitch) {
+        quickSwitch(service)
+    } else {
+        launchPackage(service, target)
+    }
     if (ok) AppHistory.promote(service, target)
     // Geçiş anında yapılıyor, şerit arkasından geliyor: hangi uygulamaya
     // geçildiğini ve öncekileri gösteriyor, istenirse başka birine
@@ -183,11 +195,41 @@ internal fun switchToLastApp(service: AccessibilityService): Boolean {
     return ok
 }
 
+/**
+ * Uygulamayı ana ekrandaki simgesine dokunulmuş gibi açar.
+ *
+ * Paket yöneticisinin verdiği açılış niyetinde paket adı da yazılı ve bu,
+ * niyeti uygulamanın açık görevini başlatan niyetten farklı kılıyor.
+ * Android ikisini aynı saymayınca görevi öne getirmek yerine giriş ekranını
+ * görevin üstüne yeniden açıyordu: WhatsApp'ta sohbetten ana listeye
+ * düşülmesi bundandı. Simgenin gönderdiği niyetle birebir aynı olunca
+ * görev olduğu gibi öne geliyor.
+ */
 internal fun launchPackage(service: AccessibilityService, name: String): Boolean {
-    val intent = service.packageManager.getLaunchIntentForPackage(name) ?: return false
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val component = service.packageManager.getLaunchIntentForPackage(name)?.component
+        ?: return false
+    val intent = Intent(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_LAUNCHER)
+        .setComponent(component)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
     return runCatching { service.startActivity(intent) }.isSuccess
 }
+
+/** Son uygulamalar tuşuna hızlıca iki kez basmak: sistemin önceki uygulamaya geçişi. */
+private fun quickSwitch(service: AccessibilityService): Boolean {
+    val opened = runCatching {
+        service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+    }.getOrDefault(false)
+    if (!opened) return false
+    // Ekran açılmadan ikinci basış gelirse sistem onu ilkinin parçası
+    // sayıp kapatıyor; kısa bir bekleme gerekiyor.
+    Handler(Looper.getMainLooper()).postDelayed({
+        runCatching { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) }
+    }, QUICK_SWITCH_DELAY_MS)
+    return true
+}
+
+private const val QUICK_SWITCH_DELAY_MS = 280L
 
 private fun start(service: AccessibilityService, intent: Intent): Boolean {
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
