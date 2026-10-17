@@ -169,25 +169,35 @@ internal object AppHistory {
      *
      * Etkinlik olması yetmiyor: widget'tan açılan "hızlı ekle" kutuları
      * (Microsoft To Do gibi) de birer etkinlik. Onlar uygulamayı açmıyor,
-     * ama listeye girip geçişte uygulamayı boş yere getiriyorlardı.
-     * İkisinden biri onları ayırıyor: son uygulamalarda görünmemeyi
-     * isteyenler ve ekranın üstünde yüzen kutu olarak açılanlar.
+     * ama listeye girip geçişte uygulamayı boş yere getiriyorlardı. Onları
+     * ayıran şey ekranın üstünde yüzmeleri ya da arkayı göstermeleri.
+     *
+     * Önceki sürüm "son uygulamalarda görünmesin" diyen her ekranı da
+     * eliyordu. Banka uygulamaları (Ziraat Katılım) güvenlik için tam
+     * bunu istiyor; banka hiç sayılmıyordu. Artık o işaret tek başına
+     * yetmiyor, yanında saydam/yüzen pencere de olmalı.
+     *
+     * Sınıfı paket yöneticisinde bulunamayan pencere de sayılıyor: bazı
+     * uygulamalar ekran adını gizliyor ya da pencere bir iç görünüm adıyla
+     * geliyor. Klavye ve ana ekran zaten ayrıca eleniyor.
      */
     private fun isActivity(context: Context, name: String, window: String): Boolean =
         activities.getOrPut("$name/$window") {
-            runCatching {
-                val info = context.packageManager.getActivityInfo(ComponentName(name, window), 0)
-                if (info.flags and ActivityInfo.FLAG_EXCLUDE_FROM_RECENTS != 0) return@runCatching false
-                !isFloating(context, name, info)
-            }.getOrDefault(false)
+            val info = runCatching {
+                context.packageManager.getActivityInfo(ComponentName(name, window), 0)
+            }.getOrNull() ?: return@getOrPut true
+            val overlay = windowFlag(context, name, info, android.R.attr.windowIsFloating)
+            if (overlay) return@getOrPut false
+            if (info.flags and ActivityInfo.FLAG_EXCLUDE_FROM_RECENTS == 0) return@getOrPut true
+            !windowFlag(context, name, info, android.R.attr.windowIsTranslucent)
         }
 
-    private fun isFloating(context: Context, name: String, info: ActivityInfo): Boolean = runCatching {
+    private fun windowFlag(context: Context, name: String, info: ActivityInfo, attr: Int): Boolean = runCatching {
         val theme = info.themeResource.takeIf { it != 0 } ?: info.applicationInfo.theme
         if (theme == 0) return@runCatching false
         val other = context.createPackageContext(name, 0)
         val attrs = other.theme.apply { applyStyle(theme, true) }
-            .obtainStyledAttributes(intArrayOf(android.R.attr.windowIsFloating))
+            .obtainStyledAttributes(intArrayOf(attr))
         try {
             attrs.getBoolean(0, false)
         } finally {
