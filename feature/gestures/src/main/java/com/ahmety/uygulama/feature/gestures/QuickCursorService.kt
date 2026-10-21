@@ -70,6 +70,9 @@ class QuickCursorService : EdgeGestureService() {
     // İmlecin o an hangi üst köşe bölgesinde olduğu; 0 = hiçbiri.
     private var zone = CursorView.ZONE_NONE
     private var longPressFired = false
+    // Perde bölgeye girer girmez açıldıysa bu dokunuşun geri kalanı yutulur;
+    // yoksa bırakınca imlecin altına bir de dokunma giderdi.
+    private var consumed = false
     private val longPress = Runnable {
         longPressFired = true
         draggingHandle = true
@@ -240,6 +243,7 @@ class QuickCursorService : EdgeGestureService() {
                 moving = false
                 draggingHandle = false
                 longPressFired = false
+                consumed = false
                 handler.postDelayed(longPress, LONG_PRESS_MS)
                 // İmleci topun biraz ÜSTÜNDE başlat; başparmağın altında kalmasın.
                 cursorX = event.rawX.coerceIn(0f, screenW.toFloat())
@@ -258,6 +262,7 @@ class QuickCursorService : EdgeGestureService() {
                     moveHandle(dx, dy)
                     return true
                 }
+                if (consumed) return true
 
                 // Eşik, kare-başına değil BASTIĞIN NOKTAYA göre ölçülmeli:
                 // yavaş ve dikkatli hareket ettiğinde her karedeki delta küçük
@@ -274,7 +279,11 @@ class QuickCursorService : EdgeGestureService() {
                 if (moving) {
                     val s = settings.sensitivity
                     cursorX = (cursorX + dx * s).coerceIn(0f, screenW.toFloat())
-                    cursorY = (cursorY + dy * s).coerceIn(0f, screenH.toFloat())
+                    // Tepede ekranın biraz dışına taşabiliyor: perde ancak
+                    // imleç kenara dayanıp biraz daha itilince açılıyor,
+                    // tepeye değmek tek başına yetmiyor.
+                    cursorY = (cursorY + dy * s)
+                        .coerceIn(-OVERSHOOT_DP * density, screenH.toFloat())
                     updateCursor()
                     updateZone(density)
                 }
@@ -290,6 +299,12 @@ class QuickCursorService : EdgeGestureService() {
                     return true
                 }
                 hideCursor()
+                if (consumed) {
+                    consumed = false
+                    moving = false
+                    scheduleFade()
+                    return true
+                }
                 // Üst köşede bırakmak dokunmak değil: solda bildirimler,
                 // sağda hızlı ayarlar açılıyor. Oraya kadar gidip oraya
                 // basmak zaten istenen şey değil — perde zaten orayı
@@ -330,7 +345,7 @@ class QuickCursorService : EdgeGestureService() {
      */
     private fun updateZone(density: Float) {
         if (!settings.edgeActions) return
-        val top = cursorY <= CursorView.ZONE_HEIGHT_DP * density
+        val top = cursorY <= -OVERSHOOT_DP * density + 0.5f
         val next = when {
             !top -> CursorView.ZONE_NONE
             cursorX < screenW / 2f -> CursorView.ZONE_LEFT
@@ -341,6 +356,15 @@ class QuickCursorService : EdgeGestureService() {
             // Bölgeye girerken kısa bir titreşim: parmağın altında
             // olmadığı için göz oraya bakmıyor olabilir.
             if (next != CursorView.ZONE_NONE) GestureFeedback.vibrateOnce(this, 18L)
+            if (next != CursorView.ZONE_NONE && !settings.edgeOnRelease) {
+                consumed = true
+                hideCursor()
+                setZone(CursorView.ZONE_NONE)
+                shade(
+                    if (next == CursorView.ZONE_LEFT) GLOBAL_ACTION_NOTIFICATIONS
+                    else GLOBAL_ACTION_QUICK_SETTINGS,
+                )
+            }
         }
     }
 
@@ -393,7 +417,8 @@ class QuickCursorService : EdgeGestureService() {
     }
 
     private fun updateCursor() {
-        cursor?.moveTo(cursorX, cursorY)
+        // Ekranın dışına taşan kısım çizilmiyor; imleç kenarda bekliyor.
+        cursor?.moveTo(cursorX, cursorY.coerceAtLeast(0f))
     }
 
     /** Dokununca topu tam görünür yap ve sönükleşme sayacını durdur. */
@@ -521,6 +546,9 @@ class QuickCursorService : EdgeGestureService() {
         private const val TAP_DURATION_MS = 55L
         private const val TAP_DELAY_MS = 60L
         private const val SPAWN_ABOVE_DP = 130f
+
+        /** Perdenin açılması için imlecin tepeden ne kadar dışarı itilmesi gerekiyor. */
+        private const val OVERSHOOT_DP = 24f
 
         private const val FADE_DELAY_MS = 3_000L
         private const val FADE_OUT_MS = 450L

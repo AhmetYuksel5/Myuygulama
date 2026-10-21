@@ -97,6 +97,17 @@ class QuickCursorSettings(context: Context) {
         get() = prefs.getBoolean(KEY_EDGE_ACTIONS, true)
         set(value) = prefs.edit().putBoolean(KEY_EDGE_ACTIONS, value).apply()
 
+    /**
+     * Perde bırakınca mı açılsın, bölgeye girer girmez mi.
+     *
+     * Açık geliyor: eski davranış buydu ve yanlışlıkla tepeye kaçan imleçten
+     * parmağı aşağı çekerek dönülebiliyor. Kapalıyken hız kazanılıyor ama
+     * vazgeçme payı kalmıyor.
+     */
+    var edgeOnRelease: Boolean
+        get() = prefs.getBoolean(KEY_EDGE_ON_RELEASE, true)
+        set(value) = prefs.edit().putBoolean(KEY_EDGE_ON_RELEASE, value).apply()
+
     /** Uygulama geçişinde ortada görünen şeritte kaç uygulama olsun (2–4). */
     var carouselCount: Int
         get() = prefs.getInt(KEY_CAROUSEL, 3)
@@ -133,6 +144,7 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_SENSITIVITY = "sensitivity"
         private const val KEY_IZ_RENGI = "iz_rengi"
         private const val KEY_EDGE_ACTIONS = "edge_actions"
+        private const val KEY_EDGE_ON_RELEASE = "edge_on_release"
         private const val KEY_CAROUSEL = "carousel_count"
         private const val KEY_QUICK_SWITCH = "quick_switch_v2"
 

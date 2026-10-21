@@ -102,17 +102,9 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
     private var edgeX = 0f
     private var edgeY = 0f
 
-    // Üst köşe bölgesi: imleç oraya girdiğinde bırakınca ne olacağını
-    // söyleyen şerit. Yazı olmadan hangi yarının ne yaptığı akılda
-    // kalmıyordu.
+    // Üst köşe bölgesi: imlecin hangi yarıda olduğunu gösteren ince çizgi.
     private var zone = ZONE_NONE
     private val zoneFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val zoneText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textAlign = Paint.Align.CENTER
-        textSize = 14f * resources.displayMetrics.density
-        isFakeBoldText = true
-    }
 
     private class Trace(val x: Float, val y: Float, val at: Long)
 
@@ -190,18 +182,12 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
         val left = if (zone == ZONE_LEFT) 0f else half
         val bottom = ZONE_HEIGHT_DP * density
         zoneFill.color = Color.argb(
-            150,
+            200,
             Color.red(izRengi),
             Color.green(izRengi),
             Color.blue(izRengi),
         )
         canvas.drawRect(left, 0f, left + half, bottom, zoneFill)
-        canvas.drawText(
-            if (zone == ZONE_LEFT) "Bildirimler" else "Hızlı ayarlar",
-            left + half / 2f,
-            bottom - 14f * density,
-            zoneText,
-        )
     }
 
     /**
@@ -345,8 +331,11 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
         const val ZONE_LEFT = 1
         const val ZONE_RIGHT = 2
 
-        /** Şeridin kalınlığı; servisteki bölge sınırıyla aynı. */
-        const val ZONE_HEIGHT_DP = 64f
+        /**
+         * Şeridin kalınlığı. İnce tutuluyor: kalın ve yazılı şerit ekranın
+         * tepesini kaplıyordu; titreşim zaten bölgeye girildiğini söylüyor.
+         */
+        const val ZONE_HEIGHT_DP = 3f
 
         const val TAIL_MS = 220L
         const val TAIL_WIDTH_DP = 7f

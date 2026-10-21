@@ -50,6 +50,7 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
     var centerOffset by remember { mutableIntStateOf(settings.centerOffsetDp) }
     var izRengi by remember { mutableIntStateOf(settings.izRengi) }
     var edgeActions by remember { mutableStateOf(settings.edgeActions) }
+    var edgeOnRelease by remember { mutableStateOf(settings.edgeOnRelease) }
     var carousel by remember { mutableIntStateOf(settings.carouselCount) }
     var quickSwitch by remember { mutableStateOf(settings.systemQuickSwitch) }
 
@@ -157,13 +158,27 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             settings.edgeActions = it
         }
         Text(
-            text = "İmleci ekranın tepesine götür: sol yarıda bırakırsan bildirimler, " +
-                "sağ yarıda bırakırsan hızlı ayarlar açılır. Bölgeye girince şerit " +
-                "görünür ve telefon kısa bir titrer; istemiyorsan parmağını aşağı " +
-                "çekip bırak.",
+            text = "İmleci ekranın tepesinden biraz dışarı it: sol yarıda bildirimler, " +
+                "sağ yarıda hızlı ayarlar açılır. Bölgeye girince tepede ince bir çizgi " +
+                "belirir ve telefon kısa bir titrer.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (edgeActions) {
+            Toggle("Parmağı bırakınca açılsın", edgeOnRelease) {
+                edgeOnRelease = it
+                settings.edgeOnRelease = it
+            }
+            Text(
+                text = if (edgeOnRelease) {
+                    "Bölgede parmağını bırakınca açılır; vazgeçersen aşağı çekip bırak."
+                } else {
+                    "Bölgeye değer değmez açılır, bırakmayı beklemez."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         ShortcutsSection()
         Stepper("Kaç uygulama arasında dolaşılsın", carousel, 2..4, step = 1, suffix = "") {
