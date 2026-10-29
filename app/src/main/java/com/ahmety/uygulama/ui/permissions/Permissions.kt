@@ -3,6 +3,7 @@ package com.ahmety.uygulama.ui.permissions
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
+import android.app.AppOpsManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -12,6 +13,7 @@ import android.os.Build
 import com.ahmety.uygulama.feature.gestures.QuickCursorService
 import android.os.Environment
 import android.os.PowerManager
+import android.os.Process
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 
@@ -130,6 +132,32 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
             kind = PermissionKind.SPECIAL,
             isGranted = { it.isAccessibilityServiceOn(QuickCursorService::class.java.name) },
             settingsIntent = { Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS) },
+        ),
+    )
+
+    add(
+        PermissionSpec(
+            id = "usage_access",
+            title = "Kullanım erişimi",
+            rationale = "\"Önceki uygulama\" geçişinin hangi uygulamanın önde " +
+                "olduğunu doğru bilmesi için. Bankalar (Enpara gibi) ekranlarını " +
+                "erişilebilirlikten gizliyor; bu izin olmadan listede görünmüyorlar.",
+            kind = PermissionKind.SPECIAL,
+            isGranted = { context ->
+                runCatching {
+                    context.getSystemService(AppOpsManager::class.java).unsafeCheckOpNoThrow(
+                        AppOpsManager.OPSTR_GET_USAGE_STATS,
+                        Process.myUid(),
+                        context.packageName,
+                    ) == AppOpsManager.MODE_ALLOWED
+                }.getOrDefault(false)
+            },
+            settingsIntent = { context ->
+                Intent(
+                    Settings.ACTION_USAGE_ACCESS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                )
+            },
         ),
     )
 

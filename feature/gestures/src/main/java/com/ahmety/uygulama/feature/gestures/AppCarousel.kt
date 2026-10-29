@@ -58,18 +58,14 @@ internal object AppCarousel {
     }
 
     /**
-     * Sıradaki uygulama: dolaşılan kümede aktif olanın bir sağındaki,
-     * sondaysa baştaki. Küme ayardaki sayı kadar (2–4); ikide bu, iki
-     * uygulama arasında gidip gelmek demek.
+     * Geçilecek uygulama: her zaman bir önceki.
+     *
+     * Önceki sürüm şeritteki sabit sıranın bir sağındakine gidiyordu; üç
+     * uygulamada bu, bir öncekine değil sırayla üçüncüsüne düşmek demekti.
+     * Şerit sırası yalnız gösterim için sabit; hedef kullanım sırasından.
      */
-    fun nextTarget(service: AccessibilityService): String? {
-        val count = QuickCursorSettings(service).carouselCount
-        val recent = AppHistory.snapshot(service, count)
-        if (recent.size < 2) return null
-        if (!(order.size == recent.size && order.toSet() == recent.toSet())) order = recent
-        val index = order.indexOf(recent.first())
-        return order[(index + 1) % order.size]
-    }
+    fun nextTarget(service: AccessibilityService): String? =
+        AppHistory.snapshot(service, 2).getOrNull(1)
 
     private fun build(service: AccessibilityService, active: String) {
         val manager = service.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return

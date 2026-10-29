@@ -1,9 +1,13 @@
 package com.ahmety.uygulama.feature.gestures
 
+import android.app.AppOpsManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.os.Process
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -45,22 +49,25 @@ internal object AppHistory {
     @Synchronized
     fun record(context: Context, packageName: String?, className: String?, title: String = "") {
         load(context)
-        val raw = packageName?.takeIf { it.isNotBlank() } ?: return
-        val window = className?.takeIf { it.isNotBlank() } ?: return
+        accept(context, packageName, className, title)?.let { pushFront(context, it) }
+    }
+
+    /** Pencere listeye girecekse girecek paketin adı, girmeyecekse null. */
+    private fun accept(context: Context, packageName: String?, className: String?, title: String): String? {
+        val raw = packageName?.takeIf { it.isNotBlank() } ?: return null
+        val window = className?.takeIf { it.isNotBlank() } ?: return null
         // Chrome'dan ana ekrana eklenen uygulama (Yeşil Temizlik gibi) ayrı
         // bir paket olarak kuruluyor ama penceresi Chrome'un. Liste ona
         // "Chrome" yazıyordu; burada kurulu web uygulamasının kendisi
         // bulunup o yazılıyor, geçiş de onu açıyor.
         if (".webapps." in window) {
-            val webApp = webApkFor(context, title) ?: return
-            pushFront(context, webApp)
-            return
+            return webApkFor(context, title)
         }
         // Chrome'un tarayıcı penceresi dışındaki pencereleri (web uygulaması
         // açıkken araya giren iç ekranlar, özel sekmeler) sayılmıyor: ilk
         // sürüm web uygulamasını doğru yazıyor, hemen ardından gelen bu
         // haberler listenin başına yine "Chrome" koyuyordu.
-        if (window.startsWith("org.chromium.") && !window.endsWith("ChromeTabbedActivity")) return
+        if (window.startsWith("org.chromium.") && !window.endsWith("ChromeTabbedActivity")) return null
         val name = raw
         // Yalnız gerçek bir ekran öne geldiğinde sayılıyor.
         //
@@ -70,17 +77,74 @@ internal object AppHistory {
         // uygulamadan sonra listeye Gboard giriyor, geçiş onun ayarlarını
         // açıyordu. Pencerenin sınıfı o paketin bir etkinliği mi diye
         // sormak bunların hepsini bir seferde eliyor.
-        if (!isActivity(context, name, window)) return
-        if (name in keyboards(context)) return
+        if (!isActivity(context, name, window)) return null
+        if (name in keyboards(context)) return null
         // Ana ekran uygulaması (Smart Launcher vb.) sayılmıyor: sayılınca
         // geçiş, bulunduğun uygulamayla ana ekran arasında gidip geliyordu.
-        if (name in launchers(context)) return
+        if (name in launchers(context)) return null
         // Merkez'in kendi pencerelerinden yalnız ana ekran sayılıyor; seçim
         // penceresi başka bir uygulamanın üstünde açılıyor, ona geçilmez.
-        if (name == context.packageName && !window.endsWith(".MainActivity")) return
-        if (!isLaunchable(context, name)) return
-        pushFront(context, name)
+        if (name == context.packageName && !window.endsWith(".MainActivity")) return null
+        if (!isLaunchable(context, name)) return null
+        return name
     }
+
+    /**
+     * Sistemin kullanım kaydından gelen öne geçişleri listeye işler.
+     *
+     * Erişilebilirlik haberi her uygulamadan gelmiyor: Android 14'ten beri
+     * bankalar (Enpara) ekranlarını erişilebilirlik servislerinden
+     * gizleyebiliyor, o uygulama hiç açılmamış gibi görünüyordu. Haber
+     * kaçınca listenin başında artık önde olmayan bir uygulama kalıyor,
+     * geçiş de bazen şu an açık olan uygulamayı yeniden açıp hiçbir şey
+     * yapmamış gibi duruyordu.
+     *
+     * Kullanım kaydı ise her öne gelişi saati saatine tutuyor ve bankalar
+     * onu gizleyemiyor. "Kullanım erişimi" izni verildiyse son kayıttan bu
+     * yana olanlar sırasıyla yeniden oynatılıyor; sonuçta listenin başı
+     * gerçekten öndeki uygulama oluyor. İzin yoksa erişilebilirlik
+     * haberleri tek başına çalışmaya devam ediyor.
+     */
+    private fun syncUsage(context: Context) {
+        if (!hasUsageAccess(context)) return
+        val manager = context.getSystemService(UsageStatsManager::class.java) ?: return
+        val now = System.currentTimeMillis()
+        val from = usageSince.takeIf { it > 0L } ?: (now - FIRST_LOOK_MS)
+        val events = runCatching { manager.queryEvents(from, now) }.getOrNull() ?: return
+        val event = UsageEvents.Event()
+        var last = 0L
+        var changed = false
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.eventType != UsageEvents.Event.ACTIVITY_RESUMED) continue
+            last = event.timeStamp
+            val name = accept(context, event.packageName, event.className, "") ?: continue
+            if (recent.firstOrNull() == name) continue
+            recent.remove(name)
+            recent.add(0, name)
+            changed = true
+        }
+        // Sınır "şimdi" değil son görülen kaydın hemen sonrası: kayıt
+        // birkaç milisaniye geç yazılabiliyor, "şimdi"den başlasak
+        // tam o anda öne gelen uygulama kaybolurdu.
+        if (last > 0L) usageSince = last + 1
+        else if (usageSince == 0L) usageSince = from
+        if (changed) {
+            while (recent.size > MAX) recent.removeAt(recent.size - 1)
+            save(context)
+        }
+    }
+
+    private var usageSince = 0L
+
+    fun hasUsageAccess(context: Context): Boolean = runCatching {
+        val ops = context.getSystemService(AppOpsManager::class.java)
+        ops.unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            Process.myUid(),
+            context.packageName,
+        ) == AppOpsManager.MODE_ALLOWED
+    }.getOrDefault(false)
 
     private fun pushFront(context: Context, name: String) {
         if (recent.firstOrNull() == name) return
@@ -128,6 +192,7 @@ internal object AppHistory {
     @Synchronized
     fun switchTarget(context: Context): String? {
         load(context)
+        syncUsage(context)
         val target = recent.getOrNull(1) ?: return null
         recent.remove(target)
         recent.add(0, target)
@@ -139,6 +204,7 @@ internal object AppHistory {
     @Synchronized
     fun snapshot(context: Context, count: Int): List<String> {
         load(context)
+        syncUsage(context)
         return recent.take(count)
     }
 
@@ -152,6 +218,7 @@ internal object AppHistory {
     @Synchronized
     fun forget(context: Context, name: String) {
         load(context)
+        syncUsage(context)
         if (recent.remove(name)) save(context)
     }
 
@@ -159,6 +226,9 @@ internal object AppHistory {
     @Synchronized
     fun promote(context: Context, name: String) {
         load(context)
+        // Önce kayıt işleniyor: sonradan işlenseydi geçişten önceki eski
+        // öne gelişler, az önce başa alınan uygulamanın önüne geçerdi.
+        syncUsage(context)
         recent.remove(name)
         recent.add(0, name)
         save(context)
@@ -266,6 +336,9 @@ internal object AppHistory {
     }
 
     private const val MAX = 12
+
+    // Servis yeniden başlayınca kullanım kaydına ne kadar geriye bakılacağı.
+    private const val FIRST_LOOK_MS = 6L * 60 * 60 * 1000
 
 
     private const val PREFS = "merkez_app_history"
