@@ -223,7 +223,7 @@ open class EdgeGestureService : AccessibilityService() {
                     downX = event.rawX
                     downY = event.rawY
                     longPressFired = false
-                    handler.postDelayed(longPressRunnable, LONG_PRESS_MS)
+                    handler.postDelayed(longPressRunnable, settings.longPressMs.toLong())
                     return true
                 }
 
@@ -327,7 +327,6 @@ open class EdgeGestureService : AccessibilityService() {
 
     companion object {
         private const val SWIPE_THRESHOLD_DP = 24f
-        private const val LONG_PRESS_MS = 350L
 
         /** İki dokunuş arasındaki en uzun süre; sistemin varsayılanıyla aynı. */
         private const val DOUBLE_TAP_MS = 300L

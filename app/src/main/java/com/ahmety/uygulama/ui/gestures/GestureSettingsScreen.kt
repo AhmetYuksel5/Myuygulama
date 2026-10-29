@@ -84,6 +84,7 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
     var down by remember { mutableStateOf(settings.swipeDownAction) }
     var inward by remember { mutableStateOf(settings.swipeInAction) }
     var longPress by remember { mutableStateOf(settings.longPressAction) }
+    var longPressMs by remember { mutableIntStateOf(settings.longPressMs) }
     var doubleTap by remember { mutableStateOf(settings.doubleTapAction) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -175,6 +176,9 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
         }
         ActionPicker("Uzun bas", longPress, GestureSettings.GESTURE_LONG, settings) {
             longPress = it; settings.longPressAction = it
+        }
+        Stepper("Uzun basma süresi", longPressMs, 100..800, step = 10, suffix = "ms") {
+            longPressMs = it; settings.longPressMs = it
         }
         ActionPicker("Çift dokun", doubleTap, GestureSettings.GESTURE_DOUBLE, settings) {
             doubleTap = it; settings.doubleTapAction = it

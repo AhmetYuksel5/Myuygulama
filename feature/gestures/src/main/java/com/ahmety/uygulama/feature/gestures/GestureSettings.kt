@@ -116,6 +116,17 @@ class GestureSettings(context: Context) {
         get() = actionOf(KEY_ACTION_LONG, GestureAction.HOME)
         set(value) = prefs.edit().putString(KEY_ACTION_LONG, value.name).apply()
 
+    /**
+     * Uzun basmanın sayılması için parmağın ne kadar durması gerektiği, ms.
+     *
+     * Sabit 350 ms'ydi; hızlı kullanımda eylem geç geliyormuş gibi
+     * hissettiriyordu. Çok kısa değerde kaydırmaya başlamadan uzun basma
+     * tetiklenebilir, o yüzden alt sınır 100.
+     */
+    var longPressMs: Int
+        get() = prefs.getInt(KEY_LONG_MS, 350).coerceIn(100, 800)
+        set(value) = prefs.edit().putInt(KEY_LONG_MS, value.coerceIn(100, 800)).apply()
+
     /** Şeride arka arkaya iki dokunuş. Varsayılan olarak kapalı. */
     var doubleTapAction: GestureAction
         get() = actionOf(KEY_ACTION_DOUBLE, GestureAction.NONE)
@@ -157,6 +168,7 @@ class GestureSettings(context: Context) {
         private const val KEY_ACTION_IN = "action_in"
         private const val KEY_ACTION_LONG = "action_long"
         private const val KEY_ACTION_DOUBLE = "action_double"
+        private const val KEY_LONG_MS = "long_press_ms"
         private const val KEY_APP_PREFIX = "app_for_"
 
         // Jest adları: hangi jeste hangi uygulamanın atandığını ayırmak için.
