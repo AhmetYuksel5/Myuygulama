@@ -61,13 +61,20 @@ internal object AppHistory {
         // "Chrome" yazıyordu; burada kurulu web uygulamasının kendisi
         // bulunup o yazılıyor, geçiş de onu açıyor.
         if (".webapps." in window) {
-            return webApkFor(context, title)
+            return webApkFor(context, title)?.also { lastWebApk = it }
         }
         // Chrome'un tarayıcı penceresi dışındaki pencereleri (web uygulaması
         // açıkken araya giren iç ekranlar, özel sekmeler) sayılmıyor: ilk
         // sürüm web uygulamasını doğru yazıyor, hemen ardından gelen bu
         // haberler listenin başına yine "Chrome" koyuyordu.
-        if (window.startsWith("org.chromium.") && !window.endsWith("ChromeTabbedActivity")) return null
+        //
+        // Pencere adına değil pakete bakılıyor: web uygulamasının içinden
+        // "android.widget..." gibi adsız pencereler de geliyor. Adı
+        // bulunamayan pencereler sayılmaya başlayınca bunlar Chrome olarak
+        // yazılıp Yeşil Temizlik'i listeden itiyordu.
+        if ((window.startsWith("org.chromium.") || isChrome(raw)) &&
+            !window.endsWith("ChromeTabbedActivity")
+        ) return null
         val name = raw
         // Yalnız gerçek bir ekran öne geldiğinde sayılıyor.
         //
@@ -196,6 +203,10 @@ internal object AppHistory {
     // pencere değişiminde yeniden çekmek takılmaya yol açıyordu. Yeni web
     // uygulaması nadiren kuruluyor, servis yeniden başlayınca liste tazeleniyor.
     private var webApks: List<android.content.pm.ApplicationInfo>? = null
+    private var lastWebApk: String? = null
+
+    private fun isChrome(name: String) =
+        name == "com.android.chrome" || name.startsWith("com.chrome.") || name.startsWith("org.chromium.chrome")
 
     private fun webApkFor(context: Context, title: String): String? = runCatching {
         val packages = context.packageManager
@@ -205,7 +216,10 @@ internal object AppHistory {
             .also { webApks = it }
         if (apps.size == 1) return@runCatching apps.first().packageName
         val wanted = title.trim().lowercase()
-        if (wanted.isEmpty()) return@runCatching null
+        // Kullanım kaydında pencere başlığı yok; birden fazla web uygulaması
+        // kuruluysa en son başlığından tanınan web uygulaması alınıyor.
+        // Önceden burada kayıt düşüyordu.
+        if (wanted.isEmpty()) return@runCatching lastWebApk?.takeIf { last -> apps.any { it.packageName == last } }
         apps.firstOrNull {
             val label = packages.getApplicationLabel(it).toString().trim().lowercase()
             label.isNotEmpty() && (wanted.contains(label) || label.contains(wanted))
