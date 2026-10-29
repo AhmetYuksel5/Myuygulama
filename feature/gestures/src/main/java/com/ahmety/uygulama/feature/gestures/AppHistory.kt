@@ -81,7 +81,10 @@ internal object AppHistory {
         if (name in keyboards(context)) return null
         // Ana ekran uygulaması (Smart Launcher vb.) sayılmıyor: sayılınca
         // geçiş, bulunduğun uygulamayla ana ekran arasında gidip geliyordu.
-        if (name in launchers(context)) return null
+        if (name in launchers(context)) {
+            atHome = true
+            return null
+        }
         // Merkez'in kendi pencerelerinden yalnız ana ekran sayılıyor; seçim
         // penceresi başka bir uygulamanın üstünde açılıyor, ona geçilmez.
         if (name == context.packageName && !window.endsWith(".MainActivity")) return null
@@ -119,6 +122,7 @@ internal object AppHistory {
             if (event.eventType != UsageEvents.Event.ACTIVITY_RESUMED) continue
             last = event.timeStamp
             val name = accept(context, event.packageName, event.className, "") ?: continue
+            atHome = false
             if (recent.firstOrNull() == name) continue
             recent.remove(name)
             recent.add(0, name)
@@ -137,6 +141,25 @@ internal object AppHistory {
 
     private var usageSince = 0L
 
+    /**
+     * Şu an ana ekranda mıyız.
+     *
+     * Ana ekran listeye girmiyor (girince geçiş uygulamayla ana ekran
+     * arasında gidip geliyordu). Ama o zaman ana ekrandayken listenin başı
+     * az önce çıkılan uygulama kalıyor ve "önceki" ondan da öncekine
+     * götürüyordu; yanlışlıkla ana ekrana düşüp geri dönmek istenen
+     * uygulamaya değil. Ana ekrandayken önceki, listenin başı.
+     */
+    private var atHome = false
+
+    /** Geçilecek uygulama: ana ekrandaysak az önce çıkılan, değilsek ondan önceki. */
+    @Synchronized
+    fun previous(context: Context): String? {
+        load(context)
+        syncUsage(context)
+        return recent.getOrNull(if (atHome) 0 else 1)
+    }
+
     fun hasUsageAccess(context: Context): Boolean = runCatching {
         val ops = context.getSystemService(AppOpsManager::class.java)
         ops.unsafeCheckOpNoThrow(
@@ -147,6 +170,7 @@ internal object AppHistory {
     }.getOrDefault(false)
 
     private fun pushFront(context: Context, name: String) {
+        atHome = false
         if (recent.firstOrNull() == name) return
         recent.remove(name)
         recent.add(0, name)
@@ -229,6 +253,7 @@ internal object AppHistory {
         // Önce kayıt işleniyor: sonradan işlenseydi geçişten önceki eski
         // öne gelişler, az önce başa alınan uygulamanın önüne geçerdi.
         syncUsage(context)
+        atHome = false
         recent.remove(name)
         recent.add(0, name)
         save(context)

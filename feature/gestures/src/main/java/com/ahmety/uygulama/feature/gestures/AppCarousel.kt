@@ -64,8 +64,7 @@ internal object AppCarousel {
      * uygulamada bu, bir öncekine değil sırayla üçüncüsüne düşmek demekti.
      * Şerit sırası yalnız gösterim için sabit; hedef kullanım sırasından.
      */
-    fun nextTarget(service: AccessibilityService): String? =
-        AppHistory.snapshot(service, 2).getOrNull(1)
+    fun nextTarget(service: AccessibilityService): String? = AppHistory.previous(service)
 
     private fun build(service: AccessibilityService, active: String) {
         val manager = service.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
