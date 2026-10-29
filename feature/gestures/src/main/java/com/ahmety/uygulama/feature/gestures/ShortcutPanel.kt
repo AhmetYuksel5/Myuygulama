@@ -132,13 +132,7 @@ internal class ShortcutPanel(private val service: AccessibilityService) {
         }
 
         val size = (48 * density).toInt()
-        val icon = service.packageManager.let { packages ->
-            if (item.kind == ShortcutKind.APP) {
-                runCatching { packages.getApplicationIcon(item.value) }.getOrNull()
-            } else {
-                null
-            }
-        }
+        val icon = if (item.kind == ShortcutKind.APP) AppIcons.get(service, item.value) else null
         if (icon != null) {
             cell.addView(
                 ImageView(service).apply {

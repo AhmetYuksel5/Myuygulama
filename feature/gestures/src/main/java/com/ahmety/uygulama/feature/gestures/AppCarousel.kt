@@ -118,7 +118,7 @@ internal object AppCarousel {
             }
             cell.addView(
                 ImageView(service).apply {
-                    runCatching { setImageDrawable(packages.getApplicationIcon(name)) }
+                    setImageDrawable(AppIcons.get(service, name))
                     layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
                 },
             )

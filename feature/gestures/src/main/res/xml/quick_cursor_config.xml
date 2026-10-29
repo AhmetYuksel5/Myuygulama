@@ -10,4 +10,4 @@
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="false"
     android:description="@string/quick_cursor_description"
-    android:notificationTimeout="100" />
+    android:notificationTimeout="0" />

@@ -109,9 +109,15 @@ internal object AppHistory {
      * haberleri tek başına çalışmaya devam ediyor.
      */
     private fun syncUsage(context: Context) {
+        val now = System.currentTimeMillis()
+        // Bir geçiş bu listeyi art arda birkaç kez soruyor (hedef, şerit,
+        // başa alma); her biri sisteme gidip kaydı okuyunca dokunuş ile
+        // geçiş arasında takılma hissediliyordu. Yarım saniye içinde
+        // kayıtta işe yarar bir değişiklik olmuyor.
+        if (now - lastSync < SYNC_GAP_MS) return
+        lastSync = now
         if (!hasUsageAccess(context)) return
         val manager = context.getSystemService(UsageStatsManager::class.java) ?: return
-        val now = System.currentTimeMillis()
         val from = usageSince.takeIf { it > 0L } ?: (now - FIRST_LOOK_MS)
         val events = runCatching { manager.queryEvents(from, now) }.getOrNull() ?: return
         val event = UsageEvents.Event()
@@ -140,6 +146,7 @@ internal object AppHistory {
     }
 
     private var usageSince = 0L
+    private var lastSync = 0L
 
     /**
      * Şu an ana ekranda mıyız.
@@ -185,11 +192,17 @@ internal object AppHistory {
      * Tek tane varsa o; birden fazlaysa pencere başlığı uygulamanın adıyla
      * eşleşen. Bulunamazsa kayıt yapılmıyor — yanlış uygulamayı yazmaktan iyi.
      */
+    // Bütün kurulu uygulamaları çekmek ağır; web uygulaması açıkken her
+    // pencere değişiminde yeniden çekmek takılmaya yol açıyordu. Yeni web
+    // uygulaması nadiren kuruluyor, servis yeniden başlayınca liste tazeleniyor.
+    private var webApks: List<android.content.pm.ApplicationInfo>? = null
+
     private fun webApkFor(context: Context, title: String): String? = runCatching {
         val packages = context.packageManager
-        val apps = packages.getInstalledApplications(0)
+        val apps = webApks ?: packages.getInstalledApplications(0)
             .filter { it.packageName.startsWith("org.chromium.webapk.") }
             .filter { isLaunchable(context, it.packageName) }
+            .also { webApks = it }
         if (apps.size == 1) return@runCatching apps.first().packageName
         val wanted = title.trim().lowercase()
         if (wanted.isEmpty()) return@runCatching null
@@ -363,7 +376,10 @@ internal object AppHistory {
     private const val MAX = 12
 
     // Servis yeniden başlayınca kullanım kaydına ne kadar geriye bakılacağı.
-    private const val FIRST_LOOK_MS = 6L * 60 * 60 * 1000
+    // Altı saat ilk geçişte binlerce kaydı taramak demekti; liste zaten
+    // diskte duruyor, yalnız aradaki boşluğu doldurmak yetiyor.
+    private const val FIRST_LOOK_MS = 30L * 60 * 1000
+    private const val SYNC_GAP_MS = 500L
 
 
     private const val PREFS = "merkez_app_history"

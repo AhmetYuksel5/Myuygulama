@@ -130,15 +130,9 @@ class QuickCursorService : EdgeGestureService() {
      * o yüzden bu kontrol ucuz.
      */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Uygulama sırası üst sınıfta kaydediliyor; burada bir daha
+        // kaydetmek her pencere değişiminde aynı işi iki kez yapıyordu.
         super.onAccessibilityEvent(event)
-        // Öne gelen uygulama buradan öğreniliyor; "önceki uygulamaya geç"
-        // bu sıraya bakıyor.
-        AppHistory.record(
-            this,
-            event?.packageName?.toString(),
-            event?.className?.toString(),
-            event?.text?.joinToString(" ").orEmpty(),
-        )
         if (!::settings.isInitialized) return
         if (handle == null && settings.enabled) rebuild()
     }
