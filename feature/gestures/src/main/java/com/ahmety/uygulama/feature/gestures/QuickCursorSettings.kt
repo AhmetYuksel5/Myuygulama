@@ -82,6 +82,11 @@ class QuickCursorSettings(context: Context) {
      * Saklanan şey saydamlıksız bir renk; izin sönmesi zaten çizerken
      * hesaplanıyor, ayarda tutulan değere alfa karışırsa ikisi çarpışır.
      */
+    /** İmlecin başının biçimi; [CursorMarker] sabitlerinden biri. */
+    var marker: Int
+        get() = prefs.getInt(KEY_MARKER, CursorMarker.RING).coerceIn(0, CursorMarker.NAMES.size - 1)
+        set(value) = prefs.edit().putInt(KEY_MARKER, value).apply()
+
     var izRengi: Int
         get() = prefs.getInt(KEY_IZ_RENGI, IZ_RENKLERI.first())
         set(value) = prefs.edit().putInt(KEY_IZ_RENGI, value).apply()
@@ -143,6 +148,7 @@ class QuickCursorSettings(context: Context) {
         private const val KEY_OPACITY = "opacity"
         private const val KEY_SENSITIVITY = "sensitivity"
         private const val KEY_IZ_RENGI = "iz_rengi"
+        private const val KEY_MARKER = "marker"
         private const val KEY_EDGE_ACTIONS = "edge_actions"
         private const val KEY_EDGE_ON_RELEASE = "edge_on_release"
         private const val KEY_CAROUSEL = "carousel_count"

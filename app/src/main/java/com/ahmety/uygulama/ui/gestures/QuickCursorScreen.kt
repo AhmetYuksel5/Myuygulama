@@ -34,6 +34,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ahmety.uygulama.feature.gestures.QuickCursorSettings
+import com.ahmety.uygulama.feature.gestures.CursorMarker
+import com.ahmety.uygulama.feature.gestures.CursorMarkerPreview
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifier) {
@@ -49,6 +53,7 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
     var offset by remember { mutableIntStateOf(settings.bottomOffsetDp) }
     var centerOffset by remember { mutableIntStateOf(settings.centerOffsetDp) }
     var izRengi by remember { mutableIntStateOf(settings.izRengi) }
+    var marker by remember { mutableIntStateOf(settings.marker) }
     var edgeActions by remember { mutableStateOf(settings.edgeActions) }
     var edgeOnRelease by remember { mutableStateOf(settings.edgeOnRelease) }
     var carousel by remember { mutableIntStateOf(settings.carouselCount) }
@@ -119,6 +124,49 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Text("İmlecin biçimi", style = MaterialTheme.typography.labelLarge)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(vertical = 2.dp),
+        ) {
+            CursorMarker.NAMES.forEachIndexed { index, name ->
+                val secili = index == marker
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { marker = index; settings.marker = index },
+                ) {
+                    // Önizleme koyu zeminde: imleç beyaz, açık zeminde
+                    // seçilmiyor; gerçekte de çoğunlukla bir içeriğin üstünde.
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(Color(0xFF2B2F36), RoundedCornerShape(14.dp))
+                            .then(
+                                if (secili) {
+                                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp))
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    ) {
+                        AndroidView(
+                            factory = { CursorMarkerPreview(it) },
+                            update = { it.style = index; it.accent = izRengi },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (secili) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
 
         Text("İzin rengi", style = MaterialTheme.typography.labelLarge)
         Row(

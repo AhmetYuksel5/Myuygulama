@@ -62,26 +62,14 @@ internal class HandleView(context: Context) : View(context) {
  * alındığı için kuyruk uzuyor, yavaşken kısalıyor, durunca noktalar
  * eskiyip kuyruk sönüyor — elastikiyet buradan geliyor.
  */
-internal class CursorView(context: Context, private val izRengi: Int) : View(context) {
+internal class CursorView(
+    context: Context,
+    private val izRengi: Int,
+    private val marker: Int = CursorMarker.RING,
+) : View(context) {
 
     private val density = resources.displayMetrics.density
 
-    // Gölge katmanı yerine halkanın altına koyu bir hale: gölge tam ekran
-    // bir yazılım katmanı istiyor, her karede ekran boyu bitmap demek.
-    private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        color = Color.argb(110, 0, 0, 0)
-        strokeWidth = 5f * density
-    }
-    private val outer = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        color = Color.WHITE
-        strokeWidth = 3f * density
-    }
-    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = Color.WHITE
-    }
     /**
      * Kuyruk tek bir dolu şekil.
      *
@@ -161,9 +149,7 @@ internal class CursorView(context: Context, private val izRengi: Int) : View(con
         drawZone(canvas)
         drawTail(canvas)
 
-        canvas.drawCircle(x, y, 16f * density, halo)
-        canvas.drawCircle(x, y, 16f * density, outer)
-        canvas.drawCircle(x, y, 3.5f * density, dot)
+        CursorMarker.draw(canvas, marker, x, y, density, izRengi)
 
         // Parmak dursa da kuyruk kendi kendine sönmeli; nokta kaldıkça
         // bir sonraki kareyi iste.
