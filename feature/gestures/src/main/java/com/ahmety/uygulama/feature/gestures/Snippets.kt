@@ -210,11 +210,11 @@ internal class SnippetBar(
 }
 
 /** Yuvarlak düğme, içinde üç kısa satır: "hazır yazı" diye okunuyor. */
-private class SnippetButton(context: Context, color: Int) : View(context) {
+private class SnippetButton(context: Context, tint: Int) : View(context) {
     private val d = resources.displayMetrics.density
     // Mikrofonla aynı renk: ikisi yan yana tek bir araç çubuğu gibi dursun.
     private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = Color.argb(235, Color.red(color), Color.green(color), Color.blue(color))
+        color = Color.argb(235, Color.red(tint), Color.green(tint), Color.blue(tint))
     }
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
