@@ -32,6 +32,10 @@ data class VocabSchedule(
     val lapseCount: Int = 0,
     val postponeCount: Int = 0,
     val revealCount: Int = 0,
+    /** FSRS dayanıklılığı, gün. null: kelime FSRS'ye henüz geçmedi. */
+    val stability: Double? = null,
+    /** FSRS zorluğu, 1 (kolay) – 10 (zor). */
+    val difficulty: Double? = null,
 )
 
 /**
@@ -98,29 +102,66 @@ fun nextSchedule(
                     box = if (demoted) 1 else maxOf(current.box, 1),
                     postponeCount = if (demoted) 0 else count,
                     lapseCount = current.lapseCount + if (demoted) 1 else 0,
+                    // Düşürülen kelimenin hafızası da sıfırdan sayılıyor.
+                    stability = if (demoted) 1.0 else current.stability,
                     dueAt = dayStart + DAY_MILLIS,
                 )
             }
         }
 
         VocabDecision.STUDIED -> {
-            val box = if (revealed) {
-                maxOf(current.box, 1)
-            } else {
-                minOf(current.box + 1, VOCAB_LADDER.size)
-            }
+            // Anlamı açtıysan hatırlayamadın: FSRS'de "unuttum". Açmadan
+            // geçtiysen "iyi". Ayrı bir zor/kolay düğmesi yok; kartın
+            // hareketleri bu ikisini zaten söylüyor.
+            val grade = if (revealed) Fsrs.AGAIN else Fsrs.GOOD
+            val (stability, difficulty) = fsrsAfter(current, grade, now)
+            val days = Fsrs.intervalDays(stability)
             current.copy(
                 status = VocabStatus.LEARNING,
-                box = box,
+                box = boxFor(days),
                 postponeCount = 0,
                 reviewCount = current.reviewCount + 1,
                 revealCount = current.revealCount + if (revealed) 1 else 0,
                 lastReviewedAt = now,
-                dueAt = dayStart + fuzzedDays(VOCAB_LADDER[box - 1], current.word) * DAY_MILLIS,
+                stability = stability,
+                difficulty = difficulty,
+                dueAt = dayStart + fuzzedDays(days, current.word) * DAY_MILLIS,
             )
         }
     }
     return next.copy(introducedAt = current.introducedAt ?: now)
+}
+
+/**
+ * Tekrardan sonraki FSRS dayanıklılığı ve zorluğu.
+ *
+ * Merdivenden gelen kelimenin FSRS sayıları yok. Onu sıfırdan başlatmak
+ * aylardır bilinen kelimeyi ertesi güne çekerdi; bunun yerine bulunduğu
+ * basamağın aralığı dayanıklılık, anlamını kaç kez açtığına göre de bir
+ * zorluk varsayılıyor.
+ */
+private fun fsrsAfter(current: VocabSchedule, grade: Int, now: Long): Pair<Double, Double> {
+    val last = current.lastReviewedAt
+    if (last == null) {
+        return Fsrs.initialStability(grade) to Fsrs.initialDifficulty(grade)
+    }
+    val stability = current.stability
+        ?: VOCAB_LADDER[(current.box - 1).coerceIn(0, VOCAB_LADDER.size - 1)].toDouble()
+    val difficulty = current.difficulty
+        ?: (5.0 + current.revealCount * 0.5 + current.lapseCount).coerceIn(1.0, 10.0)
+    val elapsed = (now - last).coerceAtLeast(0L).toDouble() / DAY_MILLIS
+    return Fsrs.nextStability(difficulty, stability, elapsed, grade) to
+        Fsrs.nextDifficulty(difficulty, grade)
+}
+
+/**
+ * Aralığa en yakın merdiven basamağı. Kademe ekranlarda "ne kadar
+ * oturdu" diye gösteriliyor; FSRS'de de anlamlı kalsın diye aralıktan
+ * türetiliyor.
+ */
+private fun boxFor(days: Int): Int {
+    val index = VOCAB_LADDER.indexOfFirst { it >= days }
+    return if (index < 0) VOCAB_LADDER.size else index + 1
 }
 
 /**

@@ -145,6 +145,10 @@ class ChangeApplier @Inject constructor(
                 dueAt = maxOfNullable(incoming.dueAt, local.dueAt),
                 lastReviewedAt = maxOfNullable(incoming.lastReviewedAt, local.lastReviewedAt),
                 introducedAt = minOfNullable(incoming.introducedAt, local.introducedAt),
+                // FSRS sayıları yeni olanın; gelen kayıt eski sürümden
+                // geliyorsa (sayısız) buradakiler kaybolmasın.
+                stability = incoming.stability ?: local.stability,
+                difficulty = incoming.difficulty ?: local.difficulty,
             )
         }
         vocabDao.upsert(merged)

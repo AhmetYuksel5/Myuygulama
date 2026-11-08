@@ -344,6 +344,8 @@ class VocabRepository @Inject constructor(
             lapseCount = next.lapseCount,
             postponeCount = next.postponeCount,
             revealCount = next.revealCount,
+            stability = next.stability,
+            difficulty = next.difficulty,
         )
         vocabDao.upsert(entity)
         changeRecorder.record(
@@ -378,4 +380,6 @@ fun VocabProgressEntity.toSchedule(): VocabSchedule = VocabSchedule(
     lapseCount = lapseCount,
     postponeCount = postponeCount,
     revealCount = revealCount,
+    stability = stability,
+    difficulty = difficulty,
 )

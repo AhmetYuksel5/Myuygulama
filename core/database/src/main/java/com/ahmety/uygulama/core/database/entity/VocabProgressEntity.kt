@@ -45,4 +45,10 @@ data class VocabProgressEntity(
 
     /** Kartın anlamı kaç kez açıldı — hatırlayamama göstergesi. */
     val revealCount: Int = 0,
+
+    /** FSRS dayanıklılığı, gün; null ise kelime hâlâ eski merdivende. */
+    val stability: Double? = null,
+
+    /** FSRS zorluğu, 1–10. */
+    val difficulty: Double? = null,
 )

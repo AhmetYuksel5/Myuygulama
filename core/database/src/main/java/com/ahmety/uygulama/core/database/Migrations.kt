@@ -103,5 +103,16 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+/**
+ * Tekrar programı sabit merdivenden FSRS'ye geçti. Eski satırlar boş kalıyor;
+ * ilk tekrarlarında bulundukları basamaktan başlatılıyorlar.
+ */
+internal val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vocab_progress ADD COLUMN stability REAL")
+        db.execSQL("ALTER TABLE vocab_progress ADD COLUMN difficulty REAL")
+    }
+}
+
 internal val ALL_MIGRATIONS =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)

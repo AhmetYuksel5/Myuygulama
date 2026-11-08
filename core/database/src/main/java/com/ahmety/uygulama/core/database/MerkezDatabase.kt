@@ -41,7 +41,7 @@ import com.ahmety.uygulama.core.database.entity.VocabProgressEntity
         VocabProgressEntity::class,
         ReadingProgressEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

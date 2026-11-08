@@ -14,28 +14,47 @@ class VocabScheduleTest {
     private fun schedule(word: String = "abundant") = VocabSchedule(word = word)
 
     @Test
-    fun `pes pese calismak merdiveni tirmanir`() {
+    fun `zamaninda tekrar araligi buyutur`() {
         var state = schedule()
+        var time = now
         val gaps = mutableListOf<Int>()
-        repeat(VOCAB_LADDER.size) {
-            state = nextSchedule(state, VocabDecision.STUDIED, now, dayStart = today)
-            gaps += ((state.dueAt!! - today) / day).toInt()
+        // Dört tekrar: daha fazlası bir yıllık üst sınıra dayanıyor.
+        repeat(4) {
+            val dayStart = startOfDay(time)
+            state = nextSchedule(state, VocabDecision.STUDIED, time, dayStart = dayStart)
+            gaps += ((state.dueAt!! - dayStart) / day).toInt()
+            time = state.dueAt!! + 3_600_000L
         }
-        // İlk üç kademe sapmasız: kullanıcının istediği 1, 3, 7 gün.
-        assertEquals(listOf(1, 3, 7), gaps.take(3))
-        // Dördüncüsü 16 gün, sapmayla birlikte.
-        assertTrue("${gaps[3]}", gaps[3] in 14..18)
-        // Sonrakiler artan sırada ve son kademede takılı kalıyor.
-        assertTrue(gaps.zipWithNext().all { (a, b) -> b >= a })
-        assertEquals(VOCAB_LADDER.size, state.box)
+        // İlk "iyi"den sonra FSRS-6'nın başlangıç dayanıklılığı: 2,3 gün.
+        assertEquals(2, gaps.first())
+        assertTrue("$gaps", gaps.zipWithNext().all { (a, b) -> b > a })
+        assertTrue("$gaps", gaps.last() > 60)
     }
 
     @Test
-    fun `anlami acinca kademe ilerlemez`() {
+    fun `anlami acinca aralik buyumez`() {
         val first = nextSchedule(schedule(), VocabDecision.STUDIED, now, dayStart = today)
-        val second = nextSchedule(first, VocabDecision.STUDIED, now, revealed = true, dayStart = today)
-        assertEquals(first.box, second.box)
+        val later = first.dueAt!! + 3_600_000L
+        val second = nextSchedule(first, VocabDecision.STUDIED, later, revealed = true, dayStart = startOfDay(later))
+        val firstGap = first.dueAt!! - today
+        val secondGap = second.dueAt!! - startOfDay(later)
+        assertTrue("$firstGap $secondGap", secondGap <= firstGap)
         assertEquals(1, second.revealCount)
+    }
+
+    @Test
+    fun `merdivenden gelen kelime yerinden devam eder`() {
+        // Merdivende 30 günlük basamakta, zamanında tekrarlanıyor.
+        val old = schedule().copy(
+            status = VocabStatus.LEARNING,
+            box = 5,
+            lastReviewedAt = now - 30 * day,
+            reviewCount = 5,
+        )
+        val next = nextSchedule(old, VocabDecision.STUDIED, now, dayStart = today)
+        val gap = ((next.dueAt!! - today) / day).toInt()
+        assertTrue("$gap", gap > 30)
+        assertTrue(next.stability!! > 30.0)
     }
 
     @Test
