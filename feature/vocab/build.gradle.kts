@@ -41,6 +41,10 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     implementation(libs.androidx.core.ktx)
+    // Ana ekrandaki tekrar kartı.
+    implementation(libs.androidx.glance.appwidget)
+    // Kartın durumu (gösterilen kelime) Glance'in tercih deposunda.
+    implementation("androidx.datastore:datastore-preferences-core:1.1.1")
     // Dosya seçici: kelime listesi yükleme ekranı kullanıyor.
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
