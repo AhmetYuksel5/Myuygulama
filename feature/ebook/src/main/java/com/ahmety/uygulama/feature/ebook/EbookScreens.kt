@@ -205,6 +205,7 @@ fun BookShelfRoute(
                     cover = viewModel::coverOf,
                     onOpen = { onOpenBook(book.id, viewModel.isPdf(book)) },
                     onBrief = { viewModel.openBrief(book) },
+                    onCoverage = { viewModel.openCoverage(book) },
                     onRefresh = if (!viewModel.isPdf(book) && viewModel.canRefresh(book)) {
                         { viewModel.refresh(book) }
                     } else {
@@ -243,6 +244,15 @@ fun BookShelfRoute(
         }
     }
 
+    val coverage by viewModel.coverage.collectAsStateWithLifecycle()
+    coverage?.let { state ->
+        CoverageDialog(
+            state = state,
+            onAssumed = viewModel::setAssumedKnown,
+            onDismiss = viewModel::closeCoverage,
+        )
+    }
+
     brief?.let { state ->
         BriefDialog(
             state = state,
@@ -250,6 +260,84 @@ fun BookShelfRoute(
             onDismiss = viewModel::closeBrief,
         )
     }
+}
+
+/**
+ * "Ne kadarını anlarım" penceresi: bilinen kelime yüzdesi ve kitapta en
+ * sık geçen bilinmeyen kelimeler — okumadan önce onları öğrenmek, kitabın
+ * geri kalanını kolaylaştırıyor.
+ */
+@Composable
+private fun CoverageDialog(
+    state: CoverageUiState,
+    onAssumed: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(state.title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 460.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val result = state.result
+                when {
+                    state.busy -> Text("Kelimeler sayılıyor…")
+                    state.failed || result == null -> Text("Bu eserin metni okunamadı.")
+                    else -> {
+                        Text(
+                            "%${result.percent}",
+                            style = MaterialTheme.typography.displaySmall,
+                            color = when {
+                                result.percent >= 98 -> MaterialTheme.colorScheme.primary
+                                result.percent >= 95 -> MaterialTheme.colorScheme.tertiary
+                                else -> MaterialTheme.colorScheme.error
+                            },
+                        )
+                        Text(
+                            when {
+                                result.percent >= 98 -> "Rahat okursun."
+                                result.percent >= 95 -> "Okunur, arada sözlüğe bakarsın."
+                                else -> "Zorlar. Aşağıdaki kelimeleri önce öğrenmek işini kolaylaştırır."
+                            },
+                        )
+                        Text(
+                            "Metindeki ${result.counted} kelimenin ne kadarını bildiğin. " +
+                                "Rahat okumak için %98, en az %95 gerekiyor.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Text(
+                    "Destende olmayan kelimelerden en sık ${state.assumedKnown} tanesini biliyorum say",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        enabled = !state.busy && state.assumedKnown > 0,
+                        onClick = { onAssumed(state.assumedKnown - 500) },
+                    ) { Text("− 500") }
+                    TextButton(
+                        enabled = !state.busy && state.assumedKnown < 15_000,
+                        onClick = { onAssumed(state.assumedKnown + 500) },
+                    ) { Text("+ 500") }
+                }
+
+                if (result != null && !state.busy && result.unknown.isNotEmpty()) {
+                    Text("En sık geçen bilmediğin kelimeler", style = MaterialTheme.typography.labelLarge)
+                    result.unknown.forEach { (word, count) ->
+                        Text("$word  ·  $count kez", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
+    )
 }
 
 /**
@@ -316,6 +404,7 @@ private fun BookCard(
     modifier: Modifier = Modifier,
     onOpen: () -> Unit,
     onBrief: () -> Unit,
+    onCoverage: () -> Unit,
     onRefresh: (() -> Unit)?,
     onDelete: (withWords: Boolean) -> Unit,
     countWords: suspend () -> Int,
@@ -451,6 +540,17 @@ private fun BookCard(
                             onBrief()
                         },
                     )
+                    // PDF'in metni sayfa resminden okunuyor; kelime sayımı
+                    // için güvenilir bir metin yok.
+                    if (!pdf) {
+                        DropdownMenuItem(
+                            text = { Text("Ne kadarını anlarım?") },
+                            onClick = {
+                                menuOpen = false
+                                onCoverage()
+                            },
+                        )
+                    }
                     // Ayrıştırıcı geliştikçe eski kitaplar geride kalıyor;
                     // metin bir kez çıkarılıp saklanıyor. EPUB yanında
                     // durduğu için yeniden okumak mümkün.

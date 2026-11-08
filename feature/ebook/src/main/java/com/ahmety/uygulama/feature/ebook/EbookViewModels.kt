@@ -40,12 +40,58 @@ data class BookShelfUiState(
     val openBookIsPdf: Boolean = false,
 )
 
+data class CoverageUiState(
+    val bookId: Long,
+    val title: String,
+    val assumedKnown: Int,
+    val busy: Boolean = false,
+    val result: BookCoverage? = null,
+    val failed: Boolean = false,
+)
+
 @HiltViewModel
 class BookShelfViewModel @Inject constructor(
     private val repository: BookRepository,
     private val openAi: OpenAiClient,
     private val briefs: WorkBriefStore,
+    private val coverageCalculator: BookCoverageCalculator,
 ) : ViewModel() {
+
+    /** Açık "ne kadarını anlarım" penceresi. */
+    private val _coverage = MutableStateFlow<CoverageUiState?>(null)
+    val coverage: StateFlow<CoverageUiState?> = _coverage.asStateFlow()
+
+    fun openCoverage(entry: Entry) {
+        _coverage.value = CoverageUiState(
+            bookId = entry.id,
+            title = entry.title,
+            assumedKnown = coverageCalculator.assumedKnown,
+        )
+        computeCoverage()
+    }
+
+    /** Destede olmayan kelimelerden kaç tanesinin bilindiği varsayılsın. */
+    fun setAssumedKnown(value: Int) {
+        val current = _coverage.value ?: return
+        coverageCalculator.assumedKnown = value
+        _coverage.value = current.copy(assumedKnown = coverageCalculator.assumedKnown)
+        computeCoverage()
+    }
+
+    fun closeCoverage() {
+        _coverage.value = null
+    }
+
+    private fun computeCoverage() {
+        val current = _coverage.value ?: return
+        _coverage.value = current.copy(busy = true)
+        viewModelScope.launch {
+            val result = runCatching { coverageCalculator.coverage(current.bookId) }.getOrNull()
+            val latest = _coverage.value ?: return@launch
+            if (latest.bookId != current.bookId) return@launch
+            _coverage.value = latest.copy(busy = false, result = result, failed = result == null)
+        }
+    }
 
     /**
      * Açık künye kutusu. Künye, kelime sorgularına eklenen kısa eser
