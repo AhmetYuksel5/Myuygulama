@@ -322,7 +322,7 @@ class VocabRepository @Inject constructor(
      * yalnızca satırı okuyup yazıyoruz. [revealed] kartın anlamının açılıp
      * açılmadığı: açtıysan hatırlayamadın, kademe ilerlemiyor.
      */
-    suspend fun applyDecision(word: String, decision: VocabDecision, revealed: Boolean) {
+    suspend fun applyDecision(word: String, decision: VocabDecision, revealed: Boolean): VocabSchedule {
         val timestamp = now.millis()
         val existing = vocabDao.get(word)
         val next = nextSchedule(
@@ -354,6 +354,7 @@ class VocabRepository @Inject constructor(
             operation = ChangeOperation.UPSERT,
             payload = json.encodeToString(VocabProgressEntity.serializer(), entity),
         )
+        return next
     }
 
     /** Cihazın UTC farkı; gün sınırı yerel saatle hesaplansın diye. */

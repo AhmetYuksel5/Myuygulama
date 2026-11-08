@@ -42,7 +42,7 @@ internal class LiveRecorder(
     @Volatile
     private var running = false
     private var thread: Thread? = null
-    private val pcm = ByteArrayOutputStream()
+    private val pcm = Pcm()
 
     @Volatile
     var loudest = 0
@@ -50,6 +50,18 @@ internal class LiveRecorder(
 
     @Volatile
     private var socket: WebSocket? = null
+
+    /**
+     * Oturum ayarı gönderildi mi. Ondan önce giden ses, sunucunun
+     * varsayılan ayarlarıyla karşılanıp atılıyordu: bağlantı kurulurken
+     * söylenen ilk kelime önizlemede hiç görünmüyordu. Ses o zamana kadar
+     * bekletiliyor, ayar gidince baştan gönderiliyor.
+     */
+    @Volatile
+    private var ready = false
+
+    /** Önizlemeye gönderilmiş ses, bayt. */
+    private var sent = 0
 
     // Konuşma parçaları gelen sırayla; aynı parçanın yazısı büyüyerek geliyor.
     private val items = LinkedHashMap<String, String>()
@@ -94,15 +106,32 @@ internal class LiveRecorder(
             }
             if (peak > loudest) loudest = peak
             onLevel((peak / 12000f).coerceIn(0f, 1f))
-            socket?.send(
-                JSONObject()
-                    .put("type", "input_audio_buffer.append")
-                    .put("audio", Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP))
-                    .toString(),
-            )
+            flush()
         }
         runCatching { record.stop() }
         record.release()
+    }
+
+    /** Önizlemeye henüz gitmemiş sesi gönderir; oturum hazır değilse bekletir. */
+    private fun flush() {
+        val target = socket ?: return
+        if (!ready) return
+        val pending = synchronized(pcm) {
+            if (pcm.size() <= sent) return
+            pcm.from(sent).also { sent = pcm.size() }
+        }
+        // Büyük birikimi (bağlantı beklenirken toplanan) parçalayarak yolla.
+        var offset = 0
+        while (offset < pending.size) {
+            val size = minOf(CHUNK * 10, pending.size - offset)
+            target.send(
+                JSONObject()
+                    .put("type", "input_audio_buffer.append")
+                    .put("audio", Base64.encodeToString(pending, offset, size, Base64.NO_WRAP))
+                    .toString(),
+            )
+            offset += size
+        }
     }
 
     /** Kaydı bitirir; ses WAV olarak [file]'a yazılır. Ses yoksa false. */
@@ -131,6 +160,9 @@ internal class LiveRecorder(
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     webSocket.send(sessionUpdate())
+                    // Mesajlar sırayla gidiyor: bundan sonraki ses ayarı
+                    // görmüş bir oturuma varıyor.
+                    ready = true
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
@@ -203,6 +235,11 @@ internal class LiveRecorder(
             out.writeBytes("data"); intLe(data.size)
             out.write(data)
         }
+    }
+
+    /** Yalnız yeni kısmı kopyalayabilen bellek; her parçada bütün kaydı kopyalamamak için. */
+    private class Pcm : ByteArrayOutputStream() {
+        fun from(start: Int): ByteArray = buf.copyOfRange(start, count)
     }
 
     private companion object {

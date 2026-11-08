@@ -152,7 +152,7 @@ class VocabViewModel @Inject constructor(
     private val briefs: WorkBriefStore,
     private val books: BookRepository,
     private val images: WordImageStore,
-    @ApplicationContext context: Context,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     /** Anlamı getirilen kelime (yükleniyor göstergesi için). */
@@ -373,7 +373,7 @@ class VocabViewModel @Inject constructor(
         val filter: VocabFilter = VocabFilter(),
     )
 
-    private val prefs = VocabPrefs(context)
+    private val prefs = VocabPrefs(appContext)
 
     private val session = MutableStateFlow(VocabSession(filter = VocabFilter(pen = prefs.pen)))
 
@@ -755,7 +755,22 @@ class VocabViewModel @Inject constructor(
 
     private fun decide(word: VocabWord, decision: VocabDecision, revealed: Boolean) {
         advance(word)
-        viewModelScope.launch { repository.applyDecision(word.word, decision, revealed) }
+        viewModelScope.launch {
+            val next = repository.applyDecision(word.word, decision, revealed)
+            // FSRS'nin kelimeye verdiği aralık görünsün: sabit merdivenden
+            // farkı, her kelimenin kendi aralığını alması.
+            val due = next.dueAt
+            if (decision == VocabDecision.STUDIED && due != null) {
+                val now = repository.nowMillis()
+                val today = startOfDay(now, repository.zoneOffsetMillis(now))
+                val days = ((due - today) / 86_400_000L).coerceAtLeast(1L)
+                android.widget.Toast.makeText(
+                    appContext,
+                    "${word.word} · $days gün sonra tekrar",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
     }
 
     fun setMode(newMode: VocabMode) {
