@@ -79,8 +79,10 @@ open class EdgeGestureService : AccessibilityService() {
      */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Öne gelen uygulama buradan öğreniliyor; "önceki uygulamaya geç"
-        // bu sıraya bakıyor.
-        AppHistory.record(
+        // bu sıraya bakıyor. Yalnız pencere değişiminde: sesli yazma için
+        // gelen odak ve klavye haberleri uygulama değişimi değil, sayılsa
+        // listeye yazı kutusu sınıfları karışırdı.
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) AppHistory.record(
             this,
             event?.packageName?.toString(),
             event?.className?.toString(),

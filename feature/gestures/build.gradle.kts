@@ -23,5 +23,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // Sesli yazma: kaydı OpenAI'ye göndermek için.
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
 }

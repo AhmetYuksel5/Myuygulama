@@ -51,6 +51,7 @@ class QuickCursorService : EdgeGestureService() {
     // Kısayol çubuğu: tutamağa çift dokununca açılıyor. Gecikmeli, çünkü
     // alanlar servisin bağlamı bağlanmadan önce kuruluyor.
     private val shortcuts by lazy { ShortcutPanel(this) }
+    private val voice by lazy { VoiceTyping(this) }
 
     /** Son hareketsiz dokunuşun anı; ikincisi yeterince hızlı gelirse çift. */
     private var lastHandleTap = 0L
@@ -133,6 +134,7 @@ class QuickCursorService : EdgeGestureService() {
         // Uygulama sırası üst sınıfta kaydediliyor; burada bir daha
         // kaydetmek her pencere değişiminde aynı işi iki kez yapıyordu.
         super.onAccessibilityEvent(event)
+        voice.onEvent(event)
         if (!::settings.isInitialized) return
         if (handle == null && settings.enabled) rebuild()
     }
@@ -147,6 +149,7 @@ class QuickCursorService : EdgeGestureService() {
         }
         lock.stop()
         shortcuts.hide()
+        voice.release()
         handler.removeCallbacksAndMessages(null)
         removeViews()
         super.onDestroy()

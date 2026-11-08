@@ -35,6 +35,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ahmety.uygulama.feature.gestures.QuickCursorSettings
 import com.ahmety.uygulama.feature.gestures.CursorMarker
+import com.ahmety.uygulama.feature.gestures.VoiceTyping
 import com.ahmety.uygulama.feature.gestures.CursorMarkerPreview
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -248,6 +249,25 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             text = "Deneysel. Açıkken Drive'daki PDF gibi uygulama içi pencereler " +
                 "de bıraktığın yerden gelir; ama bazı telefonlarda arada siyah " +
                 "ekran kalıyor. Öyle olursa kapalı tut.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text("Sesli yazma", style = MaterialTheme.typography.labelLarge)
+        // Ayar servisin okuduğu dosyada; servis her klavye açılışında bakıyor.
+        val voicePrefs = remember {
+            context.getSharedPreferences(VoiceTyping.PREFS, android.content.Context.MODE_PRIVATE)
+        }
+        var voiceOn by remember { mutableStateOf(voicePrefs.getBoolean(VoiceTyping.KEY_ENABLED, true)) }
+        Toggle("Klavyenin üstünde mikrofon", voiceOn) {
+            voiceOn = it
+            voicePrefs.edit().putBoolean(VoiceTyping.KEY_ENABLED, it).apply()
+        }
+        Text(
+            text = "Klavye açılınca sağ üst köşesinde bir mikrofon çıkıyor. Dokun, konuş, " +
+                "tekrar dokun: söylediğin OpenAI ile yazıya çevrilip kutuya ekleniyor. " +
+                "Sürükleyerek yerini değiştirebilirsin; kayıttayken uzun basmak iptal ediyor. " +
+                "Mikrofon izni ve Yapay zekâ ayarlarında OpenAI anahtarı gerekiyor.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

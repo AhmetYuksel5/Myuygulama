@@ -61,6 +61,19 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
 
     add(
         PermissionSpec(
+            id = "microphone",
+            title = "Mikrofon",
+            rationale = "Klavyenin üstündeki mikrofonla sesli yazma için. Ses yalnız " +
+                "düğmeye dokunup konuşurken kaydediliyor ve yazıya çevrilmek üzere " +
+                "OpenAI'ye gidiyor.",
+            kind = PermissionKind.RUNTIME,
+            manifestPermissions = listOf(Manifest.permission.RECORD_AUDIO),
+            isGranted = { it.hasPermission(Manifest.permission.RECORD_AUDIO) },
+        ),
+    )
+
+    add(
+        PermissionSpec(
             id = "calendar",
             title = "Takvim",
             rationale = "Google takvimin cihazdaki takvim sağlayıcısı üzerinden okunup " +
