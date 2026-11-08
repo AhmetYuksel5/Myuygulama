@@ -59,6 +59,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
     private val prefs = service.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private var button: MicButton? = null
+    private val snippets = SnippetBar(service) { insert(it) }
     private var params: WindowManager.LayoutParams? = null
     private val keyboard = Rect()
 
@@ -139,6 +140,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
                 lp.y = y
                 runCatching { windowManager.updateViewLayout(shown, lp) }
             }
+            snippets.place(x, y, size)
             return
         }
         val view = MicButton(service)
@@ -160,9 +162,11 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
             button = view
             params = newParams
         }
+        snippets.place(x, y, size)
     }
 
     private fun hide() {
+        snippets.hide()
         button?.let { view -> runCatching { windowManager.removeView(view) } }
         button = null
         params = null
@@ -220,6 +224,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
                     handler.removeCallbacks(longPress)
                     if (dragging) {
                         rememberPlace(lp)
+                        snippets.place(lp.x, lp.y, (SIZE_DP * density).toInt())
                     } else if (!longFired) {
                         tap()
                     }

@@ -272,6 +272,8 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        SnippetsSection()
+
         Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
         // Birer birer: kenar şeridinde beşer beşer gitmek yetiyordu ama
         // burada çubuk küçük, iki komşu değer arasındaki fark önemli.
