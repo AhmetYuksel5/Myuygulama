@@ -12,7 +12,6 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
-import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -63,23 +62,22 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
     private var params: WindowManager.LayoutParams? = null
     private val keyboard = Rect()
 
-    private var recorder: MediaRecorder? = null
-    private var audio: File? = null
+    private var recorder: LiveRecorder? = null
     private var startedAt = 0L
-    private var loudest = 0
+    private val bubble = PreviewBubble(service)
 
     private val refresh = Runnable { update() }
 
-    // Kayıt sürerken sesin gelip gelmediğine bakılıyor: mikrofon sistemce
-    // engellendiyse Android hata vermiyor, sessizlik kaydediyor.
-    private val meter = object : Runnable {
-        override fun run() {
-            val rec = recorder ?: return
-            val level = runCatching { rec.maxAmplitude }.getOrDefault(0)
-            if (level > loudest) loudest = level
-            button?.level = (level / 12000f).coerceIn(0f, 1f)
-            handler.postDelayed(this, METER_MS)
+    // Renk değişince düğme yeniden kuruluyor; çizim rengi kurulurken alınıyor.
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == KEY_COLOR && button?.state == MicButton.IDLE) {
+            hide()
+            handler.post(refresh)
         }
+    }
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
     }
 
     /** Klavye ya da odak değişti; düğmenin yeri yeniden hesaplanıyor. */
@@ -98,6 +96,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
     }
 
     fun release() {
+        prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         handler.removeCallbacksAndMessages(null)
         cancelRecording()
         hide()
@@ -143,7 +142,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
             snippets.place(x, y, size)
             return
         }
-        val view = MicButton(service)
+        val view = MicButton(service, buttonColor(prefs))
         val newParams = WindowManager.LayoutParams(
             size,
             size,
@@ -167,6 +166,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
 
     private fun hide() {
         snippets.hide()
+        bubble.hide()
         button?.let { view -> runCatching { windowManager.removeView(view) } }
         button = null
         params = null
@@ -267,79 +267,73 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         // bildirimli bir ön plan hizmeti gerekiyor; Android aksi hâlde
         // hata vermeden sessizlik kaydediyor.
         VoiceRecordService.start(service)
-        val file = File(service.cacheDir, "sesli_yazma.m4a")
-        val rec = newRecorder()
-        val ok = runCatching {
-            rec.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
-            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            rec.setAudioChannels(1)
-            rec.setAudioSamplingRate(16_000)
-            rec.setAudioEncodingBitRate(32_000)
-            rec.setOutputFile(file.absolutePath)
-            rec.prepare()
-            rec.start()
-        }.isSuccess
-        if (!ok) {
-            runCatching { rec.release() }
+        // Sesin gelip gelmediğine de bakılıyor: mikrofon sistemce
+        // engellendiyse Android hata vermiyor, sessizlik kaydediyor.
+        val rec = LiveRecorder(
+            http = http,
+            key = apiKey(),
+            preview = prefs.getBoolean(KEY_PREVIEW, true),
+            onLevel = { level -> handler.post { button?.level = level } },
+            onText = { text -> handler.post { if (recorder != null) bubble.show(text, anchor()) } },
+        )
+        if (!rec.start()) {
             VoiceRecordService.stop(service)
             toast("Mikrofon açılamadı; başka bir uygulama kullanıyor olabilir.")
             return
         }
         recorder = rec
-        audio = file
         startedAt = SystemClock.uptimeMillis()
-        loudest = 0
         button?.state = MicButton.RECORDING
+        if (prefs.getBoolean(KEY_PREVIEW, true)) bubble.show("", anchor())
         GestureFeedback.vibrateOnce(service, 15L)
-        handler.post(meter)
     }
 
-    @Suppress("DEPRECATION")
-    private fun newRecorder(): MediaRecorder =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(service) else MediaRecorder()
-
-    /** Kaydı durdurur; kayıt geçerliyse dosyayı, değilse null döner. */
-    private fun finishRecording(): File? {
-        handler.removeCallbacks(meter)
-        val rec = recorder ?: return null
-        recorder = null
-        val stopped = runCatching { rec.stop() }.isSuccess
-        runCatching { rec.release() }
-        VoiceRecordService.stop(service)
-        return if (stopped) audio else null
+    /** Önizleme balonunun dayanacağı yer: mikrofonun sol üst köşesi ve boyu. */
+    private fun anchor(): Rect {
+        val lp = params ?: return Rect()
+        val size = (SIZE_DP * density).toInt()
+        return Rect(lp.x, lp.y, lp.x + size, lp.y + size)
     }
 
     private fun cancelRecording() {
-        finishRecording()
-        audio?.delete()
+        recorder?.cancel()
+        recorder = null
+        VoiceRecordService.stop(service)
+        bubble.hide()
         button?.state = MicButton.IDLE
     }
 
     private fun stopAndTranscribe() {
+        val rec = recorder ?: return
+        recorder = null
         val duration = SystemClock.uptimeMillis() - startedAt
-        val heard = loudest
-        val file = finishRecording()
+        val file = File(service.cacheDir, "sesli_yazma.wav")
+        val saved = rec.stop(file)
+        VoiceRecordService.stop(service)
         GestureFeedback.vibrateOnce(service, 15L)
         when {
-            file == null || duration < MIN_MS -> {
+            !saved || duration < MIN_MS -> {
                 button?.state = MicButton.IDLE
+                bubble.hide()
                 toast("Kayıt çok kısa.")
                 return
             }
-            heard < SILENCE -> {
+            rec.loudest < SILENCE -> {
                 button?.state = MicButton.IDLE
+                bubble.hide()
                 toast("Ses gelmedi. Mikrofon engellenmiş olabilir.")
                 return
             }
         }
         button?.state = MicButton.BUSY
+        bubble.busy()
         val key = apiKey()
         Thread {
-            val result = runCatching { transcribe(file!!, key) }
-            file!!.delete()
+            val result = runCatching { transcribe(file, key) }
+            file.delete()
             handler.post {
                 button?.state = MicButton.IDLE
+                bubble.hide()
                 result
                     .onSuccess { text -> if (text.isNotBlank()) insert(text.trim()) else toast("Konuşma anlaşılamadı.") }
                     .onFailure { toast(it.message ?: "Yazıya çevrilemedi.") }
@@ -363,7 +357,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("model", model)
-            .addFormDataPart("file", file.name, file.asRequestBody("audio/mp4".toMediaType()))
+            .addFormDataPart("file", file.name, file.asRequestBody("audio/wav".toMediaType()))
             .build()
         val request = Request.Builder()
             .url("https://api.openai.com/v1/audio/transcriptions")
@@ -398,7 +392,12 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
             toast("Yazı kutusu bulunamadı; panoya kopyalandı.")
             return
         }
-        val current = if (node.isShowingHintText) "" else node.text?.toString().orEmpty()
+        // Boş kutunun soluk ipucu yazısı ("Mesaj") bazı uygulamalarda metin
+        // olarak geliyor ve "ipucu gösteriliyor" işareti konmuyor. Önceden
+        // yalnız işarete bakılıyordu; ipucu konuşulanın başına ekleniyordu.
+        val raw = node.text?.toString().orEmpty()
+        val hint = node.hintText?.toString().orEmpty()
+        val current = if (node.isShowingHintText || (hint.isNotEmpty() && raw == hint)) "" else raw
         var start = node.textSelectionStart
         var end = node.textSelectionEnd
         if (start < 0 || start > current.length) start = current.length
@@ -444,6 +443,24 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
     companion object {
         const val PREFS = "merkez_sesli_yazma"
         const val KEY_ENABLED = "enabled"
+        const val KEY_PREVIEW = "preview"
+        const val KEY_COLOR = "color"
+
+        /**
+         * Düğme renkleri. İlki eski koyu gri; turuncu, sohbet uygulamalarının
+         * gönder düğmesine uysun diye istendi.
+         */
+        val COLORS = listOf(
+            0xFF2B2F36.toInt(),
+            0xFFC96442.toInt(),
+            0xFF2F6FD6.toInt(),
+            0xFF2E9E6A.toInt(),
+            0xFF7A5AC8.toInt(),
+            0xFF111111.toInt(),
+        )
+
+        fun buttonColor(prefs: android.content.SharedPreferences): Int =
+            prefs.getInt(KEY_COLOR, COLORS.first())
         private const val KEY_RIGHT = "right_dp"
         private const val KEY_UP = "up_dp"
 
@@ -464,7 +481,6 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         private const val DRAG_DP = 10f
         private const val SETTLE_MS = 150L
         private const val LONG_MS = 600L
-        private const val METER_MS = 80L
         private const val MIN_MS = 500L
 
         /** Bunun altındaki en yüksek ses seviyesi "hiç ses yok" sayılıyor. */
@@ -480,7 +496,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
 }
 
 /** Yuvarlak mikrofon düğmesi: boşta koyu, kayıtta kırmızı, çeviride dönen halka. */
-internal class MicButton(context: Context) : View(context) {
+internal class MicButton(context: Context, private val idle: Int) : View(context) {
 
     var state = IDLE
         set(value) {
@@ -513,7 +529,7 @@ internal class MicButton(context: Context) : View(context) {
         val r = width / 2f - 2f * d
         disc.color = when (state) {
             RECORDING -> Color.rgb(0xD9, 0x3B, 0x3B)
-            else -> Color.argb(215, 0x2B, 0x2F, 0x36)
+            else -> Color.argb(235, Color.red(idle), Color.green(idle), Color.blue(idle))
         }
         // Kayıtta sesle büyüyen dış halka: konuşmanın duyulduğu görülsün.
         if (state == RECORDING && level > 0f) {
@@ -551,5 +567,90 @@ internal class MicButton(context: Context) : View(context) {
         const val IDLE = 0
         const val RECORDING = 1
         const val BUSY = 2
+    }
+}
+
+/**
+ * Konuşurken anlaşılan yazının göründüğü balon, mikrofonun hemen üstünde.
+ *
+ * Yalnız gösterim: dokunuş almıyor, arkadaki uygulamaya geçiyor. Uzun
+ * konuşmada son birkaç satır görünüyor; baş tarafı zaten söylenmiş oluyor.
+ */
+internal class PreviewBubble(private val service: AccessibilityService) {
+    private val windowManager = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val density = service.resources.displayMetrics.density
+    private var view: android.widget.TextView? = null
+    private var params: WindowManager.LayoutParams? = null
+    private var anchor = Rect()
+
+    fun show(text: String, at: Rect) {
+        anchor = at
+        val shown = view ?: create() ?: return
+        shown.text = text.ifBlank { "Dinliyor…" }.takeLast(MAX_CHARS)
+        shown.alpha = if (text.isBlank()) 0.7f else 1f
+        place(shown)
+    }
+
+    fun busy() {
+        val shown = view ?: return
+        val current = shown.text.toString().takeIf { it != "Dinliyor…" }.orEmpty()
+        shown.text = if (current.isBlank()) "Yazıya çevriliyor…" else current
+        shown.alpha = 0.7f
+    }
+
+    fun hide() {
+        view?.let { runCatching { windowManager.removeView(it) } }
+        view = null
+        params = null
+    }
+
+    private fun create(): android.widget.TextView? {
+        val text = android.widget.TextView(service).apply {
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            maxLines = 5
+            ellipsize = android.text.TextUtils.TruncateAt.START
+            val p = (12 * density).toInt()
+            setPadding(p, (9 * density).toInt(), p, (9 * density).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 16f * density
+                setColor(Color.argb(235, 0x24, 0x27, 0x2E))
+            }
+        }
+        val lp = WindowManager.LayoutParams(
+            (WIDTH_DP * density).toInt(),
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        return runCatching {
+            windowManager.addView(text, lp)
+            view = text
+            params = lp
+            text
+        }.getOrNull()
+    }
+
+    /** Balonun alt kenarı mikrofonun üstünde, sağ kenarı mikrofonla hizalı. */
+    private fun place(shown: android.widget.TextView) {
+        val lp = params ?: return
+        val width = lp.width
+        shown.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        val screen = service.resources.displayMetrics.widthPixels
+        lp.x = (anchor.right - width).coerceIn(0, (screen - width).coerceAtLeast(0))
+        lp.y = (anchor.top - shown.measuredHeight - (8 * density).toInt()).coerceAtLeast(0)
+        runCatching { windowManager.updateViewLayout(shown, lp) }
+    }
+
+    private companion object {
+        const val WIDTH_DP = 280f
+        const val MAX_CHARS = 400
     }
 }

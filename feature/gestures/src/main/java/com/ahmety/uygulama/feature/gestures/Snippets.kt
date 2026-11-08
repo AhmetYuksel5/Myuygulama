@@ -89,7 +89,8 @@ internal class SnippetBar(
             }
             return
         }
-        val view = SnippetButton(service).apply { setOnClickListener { toggle() } }
+        val color = VoiceTyping.buttonColor(service.getSharedPreferences(VoiceTyping.PREFS, Context.MODE_PRIVATE))
+        val view = SnippetButton(service, color).apply { setOnClickListener { toggle() } }
         val params = overlayParams(size, size, x, y)
         runCatching { windowManager.addView(view, params) }.onSuccess {
             button = view
@@ -209,9 +210,12 @@ internal class SnippetBar(
 }
 
 /** Yuvarlak düğme, içinde üç kısa satır: "hazır yazı" diye okunuyor. */
-private class SnippetButton(context: Context) : View(context) {
+private class SnippetButton(context: Context, color: Int) : View(context) {
     private val d = resources.displayMetrics.density
-    private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(215, 0x2B, 0x2F, 0x36) }
+    // Mikrofonla aynı renk: ikisi yan yana tek bir araç çubuğu gibi dursun.
+    private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = Color.argb(235, Color.red(color), Color.green(color), Color.blue(color))
+    }
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.STROKE

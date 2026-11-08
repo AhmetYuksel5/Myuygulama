@@ -263,6 +263,38 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             voiceOn = it
             voicePrefs.edit().putBoolean(VoiceTyping.KEY_ENABLED, it).apply()
         }
+        var voicePreview by remember { mutableStateOf(voicePrefs.getBoolean(VoiceTyping.KEY_PREVIEW, true)) }
+        Toggle("Konuşurken yazıyı göster", voicePreview) {
+            voicePreview = it
+            voicePrefs.edit().putBoolean(VoiceTyping.KEY_PREVIEW, it).apply()
+        }
+        var voiceColor by remember { mutableIntStateOf(VoiceTyping.buttonColor(voicePrefs)) }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(vertical = 2.dp),
+        ) {
+            VoiceTyping.COLORS.forEach { renk ->
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(renk), CircleShape)
+                        .then(
+                            if (renk == voiceColor) {
+                                Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .clickable {
+                            voiceColor = renk
+                            voicePrefs.edit().putInt(VoiceTyping.KEY_COLOR, renk).apply()
+                        },
+                )
+            }
+        }
         Text(
             text = "Klavye açılınca sağ üst köşesinde bir mikrofon çıkıyor. Dokun, konuş, " +
                 "tekrar dokun: söylediğin OpenAI ile yazıya çevrilip kutuya ekleniyor. " +
