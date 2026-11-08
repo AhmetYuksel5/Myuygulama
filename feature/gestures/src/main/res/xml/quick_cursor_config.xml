@@ -5,7 +5,12 @@
 
     canRetrieveWindowContent ve flagRetrieveInteractiveWindows sesli yazma
     için: klavyenin ekranda nerede durduğunu bulmak ve çevrilen yazıyı
-    odaktaki kutuya koymak. Ekranın içeriği okunup bir yere gönderilmiyor.
+    odaktaki kutuya koymak.
+
+    canTakeScreenshot "Ekrana sor" için: yazısı olmayan ekranlarda (resim,
+    PDF) yapay zekâ görüntüye bakıyor. Ekran içeriği yalnız kullanıcı
+    "Ekrana sor"u açıp bir düğmeye dokunduğunda OpenAI'ye gidiyor; banka
+    uygulamalarında hiç okunmuyor.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged|typeViewFocused"
@@ -13,5 +18,6 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:description="@string/quick_cursor_description"
     android:notificationTimeout="0" />

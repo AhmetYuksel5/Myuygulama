@@ -88,6 +88,7 @@ class ShortcutStore(context: Context) {
         /** Sistem kısayolları: saklanan ad → ekranda görünen ad. */
         val SYSTEM: Map<String, String> = linkedMapOf(
             "last_app" to "Önceki uygulama",
+            "ask_screen" to "Ekrana sor",
             "notifications" to "Bildirimler",
             "quick_settings" to "Hızlı ayarlar",
             "recents" to "Son uygulamalar",
@@ -141,6 +142,12 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
     // geliyor; o yüzden ötekilerden ayrı duruyor.
     ShortcutKind.SYSTEM -> if (item.value == "last_app") {
         switchToLastApp(service)
+    } else if (item.value == "ask_screen") {
+        // Panel az önce kapandı; hemen okunursa ekranda hâlâ panelin
+        // kendisi görünüyor sayılabiliyor.
+        android.os.Handler(android.os.Looper.getMainLooper())
+            .postDelayed({ ScreenAsk.open(service) }, 250L)
+        true
     } else {
         val action = when (item.value) {
             "notifications" -> AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS

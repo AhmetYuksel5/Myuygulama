@@ -17,6 +17,7 @@ enum class GestureAction(val label: String) {
     LOCK_SCREEN("Ekranı kilitle"),
     SCREENSHOT("Ekran görüntüsü"),
     POWER_DIALOG("Güç menüsü"),
+    ASK_SCREEN("Ekrana sor"),
     OPEN_APP("Uygulama aç"),
 }
 
