@@ -30,7 +30,12 @@ class AiSettings @Inject constructor(
      * hangisini kullanacağına sen karar ver.
      */
     var model: String
-        get() = prefs.getString(KEY_MODEL, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
+        get() {
+            val saved = prefs.getString(KEY_MODEL, null)?.takeIf { it.isNotBlank() } ?: return DEFAULT_MODEL
+            // Kapanan bir model seçiliyse yerine geçeni kullanılıyor; yoksa
+            // kapanış günü bütün kartlar bir anda hata verirdi.
+            return RETIRED[saved] ?: saved
+        }
         set(value) = prefs.edit().putString(KEY_MODEL, value.trim()).apply()
 
     val configured: Boolean get() = apiKey.isNotBlank()
@@ -47,14 +52,26 @@ class AiSettings @Inject constructor(
     }
 
     companion object {
-        const val DEFAULT_MODEL = "gpt-4o-mini"
+        /**
+         * OpenAI'nin ucuz metin modeli. Önceki varsayılan `gpt-4o-mini`
+         * 14 Ocak 2027'de kapanıyor; bu hem daha ucuz hem onun yerine geçen.
+         */
+        const val DEFAULT_MODEL = "gpt-6-luna"
+
+        /** Kapanan model → yerine geçen (OpenAI'nin kaldırma listesinden). */
+        private val RETIRED = mapOf(
+            "gpt-4o-mini" to "gpt-6-luna",
+            "gpt-4.1-mini" to "gpt-6-luna",
+            "gpt-4o" to "gpt-6.1-terra",
+            "gpt-4.1" to "gpt-6.1-terra",
+        )
 
 
         /**
          * Hazır seçenekler. Liste kapalı değil: OpenAI yeni bir model
          * çıkardığında adını elle yazabilesin diye kutu da düzenlenebilir.
          */
-        val MODELS = listOf("gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1")
+        val MODELS = listOf("gpt-6-luna", "gpt-6.1-terra")
 
         private const val PREFS_NAME = "merkez_yapay_zeka"
         private const val KEY_API = "openai_key"

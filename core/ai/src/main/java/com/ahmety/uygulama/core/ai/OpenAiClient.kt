@@ -121,13 +121,7 @@ class OpenAiClient @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             runCatching {
-                val request = Request.Builder()
-                    .url(ENDPOINT)
-                    .addHeader("Authorization", "Bearer $key")
-                    .post(payload.toString().toRequestBody(JSON_MEDIA))
-                    .build()
-
-                http.newCall(request).execute().use { response ->
+                send(ENDPOINT, key, payload).use { response ->
                     val body = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@use AiResult.Failed(readableError(response.code, body))
@@ -232,13 +226,7 @@ class OpenAiClient @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             runCatching {
-                val request = Request.Builder()
-                    .url(ENDPOINT)
-                    .addHeader("Authorization", "Bearer $key")
-                    .post(payload.toString().toRequestBody(JSON_MEDIA))
-                    .build()
-
-                http.newCall(request).execute().use { response ->
+                send(ENDPOINT, key, payload).use { response ->
                     val body = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@use AiResult.Failed(readableError(response.code, body))
@@ -329,13 +317,7 @@ class OpenAiClient @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             runCatching {
-                val request = Request.Builder()
-                    .url(ENDPOINT)
-                    .addHeader("Authorization", "Bearer $key")
-                    .post(payload.toString().toRequestBody(JSON_MEDIA))
-                    .build()
-
-                http.newCall(request).execute().use { response ->
+                send(ENDPOINT, key, payload).use { response ->
                     val body = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@use AiResult.Failed(readableError(response.code, body))
@@ -400,13 +382,7 @@ class OpenAiClient @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             runCatching {
-                val request = Request.Builder()
-                    .url(ENDPOINT)
-                    .addHeader("Authorization", "Bearer $key")
-                    .post(payload.toString().toRequestBody(JSON_MEDIA))
-                    .build()
-
-                http.newCall(request).execute().use { response ->
+                send(ENDPOINT, key, payload).use { response ->
                     val body = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@use AiResult.Failed(readableError(response.code, body))
@@ -861,18 +837,16 @@ class OpenAiClient @Inject constructor(
             put("prompt", prompt)
             put("size", "1024x1024")
             put("quality", "low")
+            // Yeni ailede ayrıca bir "karmaşıklık" ayarı var ve verilmezse en
+            // yükseği seçiliyor; kelime resmi için sade çizim yetiyor, daha
+            // yükseği yalnız bekleme süresini uzatıyor.
+            put("complexity", "low")
             put("n", 1)
         }
 
         return withContext(Dispatchers.IO) {
             runCatching {
-                val request = Request.Builder()
-                    .url(IMAGE_ENDPOINT)
-                    .addHeader("Authorization", "Bearer $key")
-                    .post(payload.toString().toRequestBody(JSON_MEDIA))
-                    .build()
-
-                http.newCall(request).execute().use { response ->
+                send(IMAGE_ENDPOINT, key, payload).use { response ->
                     val body = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@use AiResult.Failed(readableError(response.code, body))
@@ -889,16 +863,83 @@ class OpenAiClient @Inject constructor(
         }
     }
 
+    /**
+     * İsteği gönderir; yeni model reddederse aynı isteği eski modelle tekrarlar.
+     *
+     * OpenAI eski modelleri kapatıyor (resim 1 Aralık 2026, metin 14 Ocak
+     * 2027). Yenileri bu telefonda denenmeden yayınlanıyor; ayarlarından biri
+     * kabul edilmezse kart, çeviri ya da resim bir anda bozulurdu. Eski model
+     * kapanana kadar geri dönüş yolu açık kalıyor; kapandıktan sonra o deneme
+     * de hata verir ve ilk hatanın açıklaması gösterilir.
+     */
+    private fun send(url: String, key: String, payload: JSONObject): okhttp3.Response {
+        val first = http.newCall(request(url, key, forModel(payload))).execute()
+        if (first.isSuccessful) return first
+        val fallback = FALLBACK[payload.optString("model")]
+        if (fallback == null || first.code !in RETRY_CODES) return first
+        val retry = runCatching {
+            http.newCall(request(url, key, JSONObject(payload.toString()).put("model", fallback))).execute()
+        }.getOrNull() ?: return first
+        if (retry.isSuccessful) {
+            first.close()
+            return retry
+        }
+        retry.close()
+        return first
+    }
+
+    private fun request(url: String, key: String, payload: JSONObject): Request =
+        Request.Builder()
+            .url(url)
+            .addHeader("Authorization", "Bearer $key")
+            .post(payload.toString().toRequestBody(JSON_MEDIA))
+            .build()
+
+    /**
+     * Yeni ailenin metin modelleri "düşünen" modeller: düşünmeleri varsayılan
+     * olarak açık, bu da her kartta saniyeler ve fazladan para demek. Burada
+     * düşünme kapatılıyor. Önceki düşünen modeller `temperature` ve
+     * `max_tokens` ayarlarını reddediyordu; yenilerinin kabul ettiği
+     * belgelenmediği için gönderilmiyor, sınır yeni adıyla veriliyor.
+     */
+    private fun forModel(payload: JSONObject): JSONObject {
+        val model = payload.optString("model")
+        if (!REASONING_PREFIXES.any { model.startsWith(it) }) return payload
+        val tuned = JSONObject(payload.toString())
+        tuned.remove("temperature")
+        if (tuned.has("max_tokens")) {
+            tuned.put("max_completion_tokens", tuned.getInt("max_tokens"))
+            tuned.remove("max_tokens")
+        }
+        tuned.put("reasoning_effort", "none")
+        return tuned
+    }
+
     private companion object {
+        val REASONING_PREFIXES = listOf("gpt-6", "gpt-5", "o1", "o3", "o4")
+
+        // Yeni model reddederse denenecek eski model. Kapanış tarihinden
+        // sonra bu satırların bir işlevi kalmıyor.
+        val FALLBACK = mapOf(
+            "gpt-6-luna" to "gpt-4o-mini",
+            "gpt-6.1-terra" to "gpt-4.1",
+            "gpt-image-2.6-flare" to "gpt-image-1-mini",
+        )
+
+        // Model ya da ayar hatası; ağ, anahtar ve kota hatalarında eski
+        // modeli denemek bir şey değiştirmez.
+        val RETRY_CODES = setOf(400, 404, 422)
+
         const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
 
         const val IMAGE_ENDPOINT = "https://api.openai.com/v1/images/generations"
 
         /**
-         * Ailenin en ucuzu. Düşük kalitede kare bir görsel, görsel başına birkaç
-         * kuruş; kart başına bir kez üretildiği için toplam da küçük kalıyor.
+         * Hızlı ve ucuz olanı. `gpt-image-1-mini` 1 Aralık 2026'da kapanıyor;
+         * OpenAI yerine bu aileyi gösteriyor. Görsel başına fiyatı yayımlanmadı,
+         * tahmini bir kuruşun altında; kelime başına bir kez üretiliyor.
          */
-        const val IMAGE_MODEL = "gpt-image-1-mini"
+        const val IMAGE_MODEL = "gpt-image-2.6-flare"
 
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     }

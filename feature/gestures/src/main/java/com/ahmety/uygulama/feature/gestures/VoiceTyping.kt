@@ -343,10 +343,21 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         }.start()
     }
 
-    private fun transcribe(file: File, key: String): String {
+    /**
+     * Yeni model reddederse eski modelle bir kez daha dener: `gpt-transcribe`
+     * telefonda denenmeden geliyor, eski model 26 Şubat 2027'ye kadar açık.
+     */
+    private fun transcribe(file: File, key: String): String =
+        runCatching { transcribe(file, key, MODEL) }.getOrElse { first ->
+            if (first is ModelRejected) transcribe(file, key, OLD_MODEL) else throw first
+        }
+
+    private class ModelRejected(message: String) : IllegalStateException(message)
+
+    private fun transcribe(file: File, key: String, model: String): String {
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart("model", MODEL)
+            .addFormDataPart("model", model)
             .addFormDataPart("file", file.name, file.asRequestBody("audio/mp4".toMediaType()))
             .build()
         val request = Request.Builder()
@@ -361,6 +372,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
                 val reason = runCatching {
                     JSONObject(text).getJSONObject("error").getString("message")
                 }.getOrDefault("HTTP ${response.code}")
+                if (response.code in setOf(400, 404, 422)) throw ModelRejected("OpenAI: $reason")
                 throw IllegalStateException("OpenAI: $reason")
             }
             return JSONObject(text).optString("text")
@@ -435,9 +447,11 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         private const val AI_PREFS = "merkez_yapay_zeka"
         private const val AI_KEY = "openai_key"
 
-        // Whisper'dan iyi: Türkçe noktalamayı ve karışık dilleri daha
-        // doğru yazıyor.
-        private const val MODEL = "gpt-4o-transcribe"
+        // Whisper'dan iyi: Türkçe noktalamayı ve karışık dilleri daha doğru
+        // yazıyor. Önceki `gpt-4o-transcribe` 26 Şubat 2027'de kapanıyor;
+        // yerine geçen bu, dakikası da daha ucuz.
+        private const val MODEL = "gpt-transcribe"
+        private const val OLD_MODEL = "gpt-4o-transcribe"
 
         private const val SIZE_DP = 44f
         private const val DEFAULT_RIGHT_DP = 8f
