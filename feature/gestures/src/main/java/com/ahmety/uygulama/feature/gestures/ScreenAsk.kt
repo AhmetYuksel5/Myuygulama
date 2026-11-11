@@ -232,6 +232,9 @@ internal object ScreenAsk {
     private val chipViews = mutableListOf<TextView>()
     private var retry: (() -> Unit)? = null
 
+    /** Son isteğin numarası; geç gelen eski cevap yenisinin üstüne yazılmasın. */
+    private var requestId = 0
+
     private fun show(service: AccessibilityService, source: String) {
         if (screen.isBlank() && image == null) {
             toast(service, "Ekranda okunacak bir şey bulunamadı.")
@@ -257,8 +260,17 @@ internal object ScreenAsk {
         }
         frame.clipToPadding = false
         frame.clipChildren = false
-        frame.setPadding(dp(8f), statusBar(service) + dp(8f), dp(8f), dp(16f))
+        frame.setPadding(dp(8f), dp(4f), dp(8f), dp(16f))
         frame.setOnTouchListener { _, event ->
+            // Pencere kartın gölgesi için biraz geniş; o saydam kenarlara
+            // dokunmak da "dışarısı" sayılıyor.
+            val shown = frame.getChildAt(0)
+            if (event.actionMasked == MotionEvent.ACTION_DOWN && shown != null &&
+                (event.x < shown.left || event.x > shown.right || event.y < shown.top || event.y > shown.bottom)
+            ) {
+                close(service)
+                return@setOnTouchListener true
+            }
             // Başka bir uygulamaya dokunuşun yeri Android'ce gizleniyor (0,0);
             // kendi pencerelerimize (imleç tutamacı, kenar şeridi) dokununca
             // yer geliyor. Yalnız başka uygulamaya dokunmak kartı kapatıyor,
@@ -345,6 +357,7 @@ internal object ScreenAsk {
         val loadingText = TextView(service).apply {
             setTextColor(MUTED)
             textSize = 13f
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             setPadding(dp(8f), 0, 0, 0)
         }
         loading.addView(loadingText)
@@ -355,6 +368,7 @@ internal object ScreenAsk {
             setTextColor(HINT)
             textSize = 14f
             setLineSpacing(0f, 1.25f)
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             // Sağ üstteki kopyala simgesinin altına yazı girmesin.
             setPadding(0, 0, dp(36f), 0)
         }
@@ -367,6 +381,7 @@ internal object ScreenAsk {
         val errorMessage = TextView(service).apply {
             setTextColor(DANGER)
             textSize = 14f
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         error.addView(errorMessage)
         error.addView(
@@ -384,7 +399,7 @@ internal object ScreenAsk {
         )
         content.addView(error)
 
-        val maxAnswer = (metrics.heightPixels * 0.40f).toInt()
+        var maxAnswer = (metrics.heightPixels * 0.40f).toInt()
         val scroll = object : ScrollView(service) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(maxAnswer, MeasureSpec.AT_MOST))
@@ -406,10 +421,13 @@ internal object ScreenAsk {
             setTextColor(SUCCESS)
             textSize = 12f
             setPadding(dp(8f), dp(3f), dp(8f), dp(3f))
-            background = GradientDrawable().apply {
-                cornerRadius = 12f * d
-                setColor(SUCCESS_BG)
-            }
+            // Dolu zemin: cevabın ilk satırının üstüne biniyor, altı görünmesin.
+            background = android.graphics.drawable.LayerDrawable(
+                arrayOf(
+                    GradientDrawable().apply { cornerRadius = 12f * d; setColor(0xFF2E3138.toInt()) },
+                    GradientDrawable().apply { cornerRadius = 12f * d; setColor(SUCCESS_BG) },
+                ),
+            )
             alpha = 0f
         }
         val icon = CopyIcon(service).apply {
@@ -447,6 +465,11 @@ internal object ScreenAsk {
         }
         val send = SendButton(service).apply {
             contentDescription = "Sor"
+            foreground = RippleDrawable(
+                ColorStateList.valueOf(0x40000000),
+                null,
+                GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.BLACK) },
+            )
             isEnabled = false
             alpha = 0.4f
         }
@@ -481,6 +504,12 @@ internal object ScreenAsk {
             }
         }
         send.setOnClickListener { sendInput() }
+        // Klavye açıkken cevap alanı kısalıyor: uzun bir cevap soru kutusunu
+        // klavyenin altına itiyordu.
+        input.setOnFocusChangeListener { _, focused ->
+            maxAnswer = (metrics.heightPixels * if (focused) 0.18f else 0.40f).toInt()
+            scroll.requestLayout()
+        }
         val inputRow = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -518,6 +547,8 @@ internal object ScreenAsk {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP
+            // Durum çubuğunun altından başlıyor: o şerit bildirim perdesine kalsın.
+            y = statusBar(service)
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
         }
         runCatching {
@@ -564,8 +595,11 @@ internal object ScreenAsk {
         return RippleDrawable(ColorStateList.valueOf(RIPPLE), shape, null)
     }
 
+    private var selected = -1
+
     /** Dokunulan eylem vurgulanıyor; -1 hiçbiri (kendi sorusu). */
     private fun selectChip(index: Int) {
+        selected = index
         val d = chipViews.firstOrNull()?.resources?.displayMetrics?.density ?: return
         chipViews.forEachIndexed { i, chip -> chip.background = chipBackground(d, i == index) }
     }
@@ -574,7 +608,11 @@ internal object ScreenAsk {
 
     private fun showLoading(label: String) {
         retry = null
-        chipViews.forEach { it.isEnabled = false; it.alpha = 0.5f }
+        // Çalışan eylem parlak kalıyor; hangisinin beklendiği görünsün.
+        chipViews.forEachIndexed { i, chip ->
+            chip.isEnabled = false
+            chip.alpha = if (i == selected) 1f else 0.5f
+        }
         errorRow?.visibility = View.GONE
         copyRow?.visibility = View.GONE
         answerText?.visibility = View.GONE
@@ -634,10 +672,13 @@ internal object ScreenAsk {
             }
         }
         copiedPill?.animate()?.alpha(1f)?.setDuration(150L)?.start()
-        handler.postDelayed({
-            copyIcon?.done = false
-            copiedPill?.animate()?.alpha(0f)?.setDuration(150L)?.start()
-        }, 1_500L)
+        handler.removeCallbacks(uncopy)
+        handler.postDelayed(uncopy, 1_500L)
+    }
+
+    private val uncopy = Runnable {
+        copyIcon?.done = false
+        copiedPill?.animate()?.alpha(0f)?.setDuration(150L)?.start()
     }
 
     private fun statusBar(service: Context): Int {
@@ -658,6 +699,7 @@ internal object ScreenAsk {
 
     private fun ask(service: AccessibilityService, prompt: String, search: Boolean = false) {
         if (answer == null) return
+        val id = ++requestId
         showLoading(if (search) "Bakıyorum, gerekirse internette arıyorum…" else "Bakıyorum…")
         val key = apiKey(service)
         Thread {
@@ -667,7 +709,7 @@ internal object ScreenAsk {
                 searched ?: complete(key, system(), userContent(prompt), json = false)
             }
             handler.post {
-                if (answer == null) return@post
+                if (answer == null || id != requestId) return@post
                 result.onSuccess { showAnswer(it) }
                     .onFailure { showError(friendly(it)) { ask(service, prompt, search) } }
             }
@@ -682,6 +724,7 @@ internal object ScreenAsk {
      */
     private fun addToCalendar(service: AccessibilityService) {
         if (answer == null) return
+        val id = ++requestId
         showLoading("Randevu aranıyor…")
         val key = apiKey(service)
         val prompt = "Ekranda bir randevu, iş, buluşma ya da etkinlik varsa onu çıkar. " +
@@ -691,7 +734,7 @@ internal object ScreenAsk {
         Thread {
             val result = runCatching { JSONObject(complete(key, system(), userContent(prompt), json = true)) }
             handler.post {
-                if (answer == null) return@post
+                if (answer == null || id != requestId) return@post
                 val again = { addToCalendar(service) }
                 val event = result.getOrElse {
                     showError(friendly(it), again)
@@ -1011,6 +1054,7 @@ internal class CopyIcon(context: Context) : View(context) {
     }
     private val box = android.graphics.RectF()
     private val path = android.graphics.Path()
+    private val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2B2E35.toInt() }
 
     var done = false
         set(value) {
@@ -1035,7 +1079,9 @@ internal class CopyIcon(context: Context) : View(context) {
         val r = 2.5f * d
         box.set(cx - s * 0.35f, cy - s * 0.75f, cx + s * 0.85f, cy + s * 0.45f)
         canvas.drawRoundRect(box, r, r, paint)
+        // Öndeki dikdörtgen dolu: arkadakinin çizgileri içinden geçmesin.
         box.set(cx - s * 0.85f, cy - s * 0.35f, cx + s * 0.35f, cy + s * 0.85f)
+        canvas.drawRoundRect(box, r, r, fill)
         canvas.drawRoundRect(box, r, r, paint)
     }
 }
