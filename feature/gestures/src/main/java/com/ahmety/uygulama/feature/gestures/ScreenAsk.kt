@@ -91,12 +91,15 @@ internal object ScreenAsk {
         screen = mask(screenText(service))
         image = null
         lastAnswer = ""
-        if (screen.length >= MIN_TEXT || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        // Görüntü her zaman alınıyor. Önceden yalnız yazısı az ekranlarda
+        // alınıyordu; WhatsApp'ta gönderilmiş bir haber resmi, sohbetin
+        // yazısı yeterli sayıldığı için hiç görülmüyordu.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             show(service, "ekrandaki yazı")
         } else {
             capture(service) { encoded ->
                 image = encoded
-                show(service, if (encoded != null) "ekran görüntüsü" else "ekrandaki yazı")
+                show(service, if (encoded != null) "ekrandaki yazı ve görüntü" else "ekrandaki yazı")
             }
         }
         return true
@@ -1062,8 +1065,6 @@ Bilmediğini uydurma: mahalle, telefon, m², oda, tutar gibi eksik ya da emin ol
     private const val OLD_MODEL = "gpt-4o-mini"
     private val ZONE: ZoneId = ZoneId.of("Europe/Istanbul")
 
-    /** Bundan kısa yazı varsa ekran görüntüsüne bakılıyor. */
-    private const val MIN_TEXT = 120
     private const val MAX_CHARS = 12_000
     private const val MAX_DEPTH = 80
     private const val MAX_IMAGE_SIDE = 1600
