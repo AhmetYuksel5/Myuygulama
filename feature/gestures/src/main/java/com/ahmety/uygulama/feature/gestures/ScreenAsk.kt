@@ -1,8 +1,11 @@
 package com.ahmety.uygulama.feature.gestures
 
 import android.accessibilityservice.AccessibilityService
-import android.content.ClipData
-import android.content.ClipboardManager
+import android.view.inputmethod.InputMethodManager
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.content.ContentValues
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -302,8 +305,14 @@ internal object ScreenAsk {
         fun sendInput() {
             val question = input.text.toString().trim()
             if (question.isNotEmpty()) {
-                ask(service, question)
+                // Kendi sorun internette de aranabiliyor; hazır düğmeler
+                // yalnız ekrana bakıyor.
+                ask(service, question, search = true)
                 input.setText("")
+                // Gönderince klavye kapansın; cevap görünsün.
+                input.clearFocus()
+                (service.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                    ?.hideSoftInputFromWindow(input.windowToken, 0)
             }
         }
         input.setOnEditorActionListener { _, actionId, _ ->
@@ -322,22 +331,6 @@ internal object ScreenAsk {
         }
         card.addView(inputRow)
 
-        val bottom = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-            setPadding(0, dp(8), 0, 0)
-            addView(
-                chip(service, "Kopyala", d) {
-                    if (lastAnswer.isNotBlank()) {
-                        val clipboard = service.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        clipboard?.setPrimaryClip(ClipData.newPlainText("Ekrana sor", lastAnswer))
-                        toast(service, "Kopyalandı.")
-                    }
-                },
-            )
-            addView(chip(service, "Kapat", d) { close(service) })
-        }
-        card.addView(bottom)
 
         frame.addView(
             card,
@@ -345,8 +338,10 @@ internal object ScreenAsk {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
-                gravity = Gravity.BOTTOM
-                setMargins(dp(10), dp(10), dp(10), dp(30))
+                // Üstte: altta duran kart, soru yazarken klavyenin altında
+                // kalıyordu. Erişilebilirlik katmanı klavyeye göre küçülmüyor.
+                gravity = Gravity.TOP
+                setMargins(dp(10), dp(36), dp(10), dp(10))
             },
         )
 
@@ -358,8 +353,7 @@ internal object ScreenAsk {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            // Klavye açılınca kart yukarı kaysın, soru kutusu altında kalmasın.
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
         }
         runCatching {
             manager.addView(frame, params)
@@ -389,13 +383,17 @@ internal object ScreenAsk {
 
     // ---- Yapay zekâ ----
 
-    private fun ask(service: AccessibilityService, prompt: String) {
+    private fun ask(service: AccessibilityService, prompt: String, search: Boolean = false) {
         val view = answer ?: return
-        view.text = "Bakıyorum…"
+        view.text = if (search) "Bakıyorum, gerekirse internette arıyorum…" else "Bakıyorum…"
         view.setTextColor(Color.argb(170, 255, 255, 255))
         val key = apiKey(service)
         Thread {
-            val result = runCatching { complete(key, system(), userContent(prompt), json = false) }
+            val result = runCatching {
+                // Arama yolu yeni arayüzden; o reddederse arama olmadan cevap.
+                val searched = if (search) runCatching { searchAnswer(key, prompt) }.getOrNull() else null
+                searched ?: complete(key, system(), userContent(prompt), json = false)
+            }
             handler.post {
                 val target = answer ?: return@post
                 result.onSuccess { text ->
@@ -411,9 +409,10 @@ internal object ScreenAsk {
     }
 
     /**
-     * Ekrandaki randevuyu takvim uygulamasında, alanları doldurulmuş olarak
-     * açar. Kaydetmek kullanıcıda: yanlış okunmuş bir saat sessizce takvime
-     * girmesin.
+     * Ekrandaki randevuyu doğrudan Google takvimine yazar ve ne yazıldığını
+     * kartta gösterir. Önce takvim uygulaması dolu açılıp kaydetmek
+     * kullanıcıya bırakılıyordu; doğrudan eklenmesi istendi. Yanlış okunan
+     * bir saat kartta hemen görülüyor.
      */
     private fun addToCalendar(service: AccessibilityService) {
         val view = answer ?: return
@@ -438,18 +437,123 @@ internal object ScreenAsk {
                     return@post
                 }
                 val end = millis(event.optString("end")) ?: (start + 60 * 60 * 1000L)
+                val title = event.optString("title").ifBlank { "Randevu" }
+                val location = event.optString("location")
+                val notes = event.optString("notes")
+                if (insertEvent(service, title, start, end, location, notes)) {
+                    val day = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(start), ZONE)
+                        .format(DateTimeFormatter.ofPattern("d MMMM EEEE, HH:mm", Locale.forLanguageTag("tr")))
+                    lastAnswer = "Takvime eklendi:\n$title\n$day" +
+                        if (location.isNotBlank()) "\n$location" else ""
+                    target.text = lastAnswer
+                    target.setTextColor(Color.WHITE)
+                    return@post
+                }
+                // İzin ya da Google takvimi yoksa takvim uygulaması dolu açılıyor.
                 val intent = Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
-                    .putExtra(CalendarContract.Events.TITLE, event.optString("title"))
+                    .putExtra(CalendarContract.Events.TITLE, title)
                     .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start)
                     .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end)
-                    .putExtra(CalendarContract.Events.EVENT_LOCATION, event.optString("location"))
-                    .putExtra(CalendarContract.Events.DESCRIPTION, event.optString("notes"))
+                    .putExtra(CalendarContract.Events.EVENT_LOCATION, location)
+                    .putExtra(CalendarContract.Events.DESCRIPTION, notes)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 close(service)
                 runCatching { service.startActivity(intent) }
                     .onFailure { toast(service, "Takvim uygulaması açılamadı.") }
             }
         }.start()
+    }
+
+    /** Google hesabının ana takvimine yazar; olmazsa false. */
+    private fun insertEvent(
+        service: Context,
+        title: String,
+        start: Long,
+        end: Long,
+        location: String,
+        notes: String,
+    ): Boolean = runCatching {
+        if (ContextCompat.checkSelfPermission(service, Manifest.permission.WRITE_CALENDAR) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        val calendar = writableCalendar(service) ?: return false
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.CALENDAR_ID, calendar)
+            put(CalendarContract.Events.TITLE, title)
+            put(CalendarContract.Events.DTSTART, start)
+            put(CalendarContract.Events.DTEND, end)
+            put(CalendarContract.Events.EVENT_TIMEZONE, ZONE.id)
+            if (location.isNotBlank()) put(CalendarContract.Events.EVENT_LOCATION, location)
+            if (notes.isNotBlank()) put(CalendarContract.Events.DESCRIPTION, notes)
+        }
+        service.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values) != null
+    }.getOrDefault(false)
+
+    /** Yazılabilir takvimlerden Google hesabının ana takvimi; yoksa ilk Google takvimi. */
+    private fun writableCalendar(service: Context): Long? {
+        val columns = arrayOf(
+            CalendarContract.Calendars._ID,
+            CalendarContract.Calendars.ACCOUNT_TYPE,
+            CalendarContract.Calendars.IS_PRIMARY,
+        )
+        val where = "${CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL} >= ?"
+        val args = arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString())
+        val found = mutableListOf<Triple<Long, Boolean, Boolean>>()
+        service.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, columns, where, args, null)
+            ?.use { c ->
+                while (c.moveToNext()) {
+                    found += Triple(c.getLong(0), c.getString(1) == "com.google", c.getInt(2) == 1)
+                }
+            }
+        return (found.firstOrNull { it.second && it.third } ?: found.firstOrNull { it.second } ?: found.firstOrNull())
+            ?.first
+    }
+
+    /**
+     * İnternette arayarak cevap: OpenAI'nin yeni arayüzü ve web araması.
+     * Ekranın yazısı ve varsa görüntüsü de gidiyor; soru ekrana dair olabilir.
+     */
+    private fun searchAnswer(key: String, prompt: String): String {
+        val text = (userContent(prompt) as? String) ?: buildString {
+            append("İstek: ").append(prompt).append("\n\n")
+            if (screen.isNotBlank()) append("Ekrandaki yazı:\n").append(screen)
+        }
+        val content = JSONArray().put(JSONObject().put("type", "input_text").put("text", text))
+        image?.let {
+            content.put(
+                JSONObject().put("type", "input_image").put("image_url", "data:image/jpeg;base64,$it"),
+            )
+        }
+        val payload = JSONObject()
+            .put("model", MODEL)
+            .put("instructions", system())
+            .put("input", JSONArray().put(JSONObject().put("role", "user").put("content", content)))
+            .put("tools", JSONArray().put(JSONObject().put("type", "web_search")))
+            .put("reasoning", JSONObject().put("effort", "low"))
+        val request = Request.Builder()
+            .url("https://api.openai.com/v1/responses")
+            .header("Authorization", "Bearer $key")
+            .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .build()
+        http.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            check(response.isSuccessful) { "HTTP ${response.code}" }
+            val output = JSONObject(body).getJSONArray("output")
+            val answer = StringBuilder()
+            for (i in 0 until output.length()) {
+                val item = output.getJSONObject(i)
+                if (item.optString("type") != "message") continue
+                val parts = item.optJSONArray("content") ?: continue
+                for (j in 0 until parts.length()) {
+                    val part = parts.getJSONObject(j)
+                    if (part.optString("type") == "output_text") answer.append(part.optString("text"))
+                }
+            }
+            check(answer.isNotBlank()) { "Boş cevap" }
+            return answer.toString()
+        }
     }
 
     private fun millis(text: String): Long? = runCatching {
@@ -534,8 +638,6 @@ internal object ScreenAsk {
 
     private const val CALENDAR = "takvim"
     private val ACTIONS = listOf(
-        "Özetle" to "Ekrandakini kısaca özetle. Önemli tarih, tutar, isim, adres varsa ayrı satırlarda ver.",
-        "Açıkla" to "Ekranda ne olduğunu ve benim ne yapmam gerektiğini sade Türkçe açıkla.",
         "Çevir" to "Ekrandaki yabancı dildeki yazıyı Türkçeye çevir. Yalnız çeviriyi yaz.",
         "Cevap yaz" to "Bu bir yazışmaysa son gelen mesaja kısa, kibar, doğal bir Türkçe cevap taslağı yaz. Yalnız cevabı yaz.",
         "Takvime ekle" to CALENDAR,
