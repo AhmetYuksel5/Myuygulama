@@ -725,14 +725,10 @@ internal object ScreenAsk {
     private fun addToCalendar(service: AccessibilityService) {
         if (answer == null) return
         val id = ++requestId
-        showLoading("Randevu aranıyor…")
+        showLoading("Kayıt hazırlanıyor…")
         val key = apiKey(service)
-        val prompt = "Ekranda bir randevu, iş, buluşma ya da etkinlik varsa onu çıkar. " +
-            "Yalnız JSON döndür: {\"found\": true, \"title\": \"\", \"start\": \"YYYY-MM-DDTHH:MM\", " +
-            "\"end\": \"YYYY-MM-DDTHH:MM\", \"location\": \"\", \"notes\": \"\"}. Bitiş belli " +
-            "değilse başlangıçtan bir saat sonrası yaz. Hiçbir şey yoksa {\"found\": false}."
         Thread {
-            val result = runCatching { JSONObject(complete(key, system(), userContent(prompt), json = true)) }
+            val result = runCatching { JSONObject(complete(key, system(), userContent(CALENDAR_RULES), json = true)) }
             handler.post {
                 if (answer == null || id != requestId) return@post
                 val again = { addToCalendar(service) }
@@ -741,87 +737,151 @@ internal object ScreenAsk {
                     return@post
                 }
                 if (!event.optBoolean("found")) {
-                    showError("Ekranda bir randevu bulunamadı.", again)
+                    showError("Ekranda bir iş, keşif ya da randevu bulunamadı.", again)
                     return@post
                 }
-                val start = millis(event.optString("start"))
-                if (start == null) {
-                    showError("Randevunun tarihi anlaşılamadı.", again)
+                val kind = event.optString("kind", "is")
+                val allDay = kind == "is"
+                val date = runCatching { java.time.LocalDate.parse(event.optString("date").trim()) }.getOrNull()
+                if (date == null) {
+                    showError("Tarih anlaşılamadı.", again)
                     return@post
                 }
-                val end = millis(event.optString("end")) ?: (start + 60 * 60 * 1000L)
-                val title = event.optString("title").ifBlank { "Randevu" }
-                val location = event.optString("location")
-                val notes = event.optString("notes")
-                if (insertEvent(service, title, start, end, location, notes)) {
-                    val day = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(start), ZONE)
-                        .format(DateTimeFormatter.ofPattern("d MMMM EEEE, HH:mm", Locale.forLanguageTag("tr")))
+                val (start, end) = if (allDay) {
+                    // Tam gün kayıt UTC gece yarısında: yerel saatle verilirse
+                    // Google kaydı bir önceki güne kaydırıyor.
+                    val utc = date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+                    utc to utc + DAY_MILLIS
+                } else {
+                    val time = runCatching { java.time.LocalTime.parse(event.optString("start").trim()) }
+                        .getOrDefault(java.time.LocalTime.of(10, 0))
+                    val s = date.atTime(time).atZone(ZONE).toInstant().toEpochMilli()
+                    val e = runCatching { java.time.LocalTime.parse(event.optString("end").trim()) }.getOrNull()
+                        ?.let { date.atTime(it).atZone(ZONE).toInstant().toEpochMilli() }
+                        ?.takeIf { it > s } ?: (s + 60 * 60 * 1000L)
+                    s to e
+                }
+                val record = CalendarRecord(
+                    title = event.optString("title").ifBlank { "Randevu" },
+                    start = start,
+                    end = end,
+                    allDay = allDay,
+                    location = event.optString("location"),
+                    description = event.optString("description"),
+                    // Keşif rengi: Google Takvim renk numarası 9.
+                    color = if (kind == "kesif") "9" else null,
+                )
+                val missing = event.optJSONArray("missing")?.let { array ->
+                    (0 until array.length()).map { array.optString(it) }.filter { it.isNotBlank() }
+                }.orEmpty()
+
+                if (insertEvent(service, record)) {
+                    val pattern = if (allDay) "d MMMM EEEE" else "d MMMM EEEE, HH:mm"
+                    val day = date.atTime(java.time.LocalTime.MIDNIGHT).let {
+                        if (allDay) it else LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(start), ZONE)
+                    }.format(DateTimeFormatter.ofPattern(pattern, Locale.forLanguageTag("tr")))
                     showAnswer(
-                        "Takvime eklendi:\n$title\n$day" + if (location.isNotBlank()) "\n$location" else "",
+                        buildString {
+                            append("Yeşil temizlik takvimine eklendi:\n")
+                            append(record.title).append(" · ").append(day)
+                            if (record.description.isNotBlank()) append("\n\n").append(record.description)
+                            if (missing.isNotEmpty()) {
+                                append("\n\nEksik ya da şüpheli: ").append(missing.joinToString(", "))
+                            }
+                        },
                     )
                     return@post
                 }
-                // İzin ya da Google takvimi yoksa takvim uygulaması dolu açılıyor.
+                // İzin yoksa ya da iş takvimi telefonda bulunamadıysa kayıt
+                // kişisel takvime girmesin: takvim uygulaması dolu açılıyor,
+                // takvimi kullanıcı seçiyor.
                 endLoading()
                 val intent = Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
-                    .putExtra(CalendarContract.Events.TITLE, title)
+                    .putExtra(CalendarContract.Events.TITLE, record.title)
                     .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start)
                     .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end)
-                    .putExtra(CalendarContract.Events.EVENT_LOCATION, location)
-                    .putExtra(CalendarContract.Events.DESCRIPTION, notes)
+                    .putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, allDay)
+                    .putExtra(CalendarContract.Events.EVENT_LOCATION, record.location)
+                    .putExtra(CalendarContract.Events.DESCRIPTION, record.description)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 close(service)
+                toast(service, "\"Yeşil temizlik\" takvimi bulunamadı; takvimi sen seç.")
                 runCatching { service.startActivity(intent) }
                     .onFailure { toast(service, "Takvim uygulaması açılamadı.") }
             }
         }.start()
     }
 
-    /** Google hesabının ana takvimine yazar; olmazsa false. */
-    private fun insertEvent(
-        service: Context,
-        title: String,
-        start: Long,
-        end: Long,
-        location: String,
-        notes: String,
-    ): Boolean = runCatching {
+    private class CalendarRecord(
+        val title: String,
+        val start: Long,
+        val end: Long,
+        val allDay: Boolean,
+        val location: String,
+        val description: String,
+        val color: String?,
+    )
+
+    /** İş takvimine yazar; izin ya da takvim yoksa false. */
+    private fun insertEvent(service: Context, record: CalendarRecord): Boolean = runCatching {
         if (ContextCompat.checkSelfPermission(service, Manifest.permission.WRITE_CALENDAR) !=
             PackageManager.PERMISSION_GRANTED
         ) {
             return false
         }
-        val calendar = writableCalendar(service) ?: return false
-        val values = ContentValues().apply {
+        val calendar = businessCalendar(service) ?: return false
+        fun values(withColor: Boolean) = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, calendar)
-            put(CalendarContract.Events.TITLE, title)
-            put(CalendarContract.Events.DTSTART, start)
-            put(CalendarContract.Events.DTEND, end)
-            put(CalendarContract.Events.EVENT_TIMEZONE, ZONE.id)
-            if (location.isNotBlank()) put(CalendarContract.Events.EVENT_LOCATION, location)
-            if (notes.isNotBlank()) put(CalendarContract.Events.DESCRIPTION, notes)
+            put(CalendarContract.Events.TITLE, record.title)
+            put(CalendarContract.Events.DTSTART, record.start)
+            put(CalendarContract.Events.DTEND, record.end)
+            if (record.allDay) {
+                put(CalendarContract.Events.ALL_DAY, 1)
+                put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
+            } else {
+                put(CalendarContract.Events.EVENT_TIMEZONE, ZONE.id)
+            }
+            if (record.location.isNotBlank()) put(CalendarContract.Events.EVENT_LOCATION, record.location)
+            if (record.description.isNotBlank()) put(CalendarContract.Events.DESCRIPTION, record.description)
+            if (withColor && record.color != null) put(CalendarContract.Events.EVENT_COLOR_KEY, record.color)
         }
-        service.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values) != null
+        val resolver = service.contentResolver
+        // Renk anahtarı hesabın renk tablosunda yoksa kayıt reddediliyor;
+        // o zaman renksiz yazılıyor, kayıt kaybolmuyor.
+        val inserted = runCatching { resolver.insert(CalendarContract.Events.CONTENT_URI, values(true)) }.getOrNull()
+            ?: resolver.insert(CalendarContract.Events.CONTENT_URI, values(false))
+        inserted != null
     }.getOrDefault(false)
 
-    /** Yazılabilir takvimlerden Google hesabının ana takvimi; yoksa ilk Google takvimi. */
-    private fun writableCalendar(service: Context): Long? {
+    /**
+     * Firmanın "Yeşil temizlik" takvimi. İş kayıtları
+     * kişisel takvime girmemeli; bu takvim yoksa null, kayıt yapılmıyor.
+     */
+    private fun businessCalendar(service: Context): Long? {
         val columns = arrayOf(
             CalendarContract.Calendars._ID,
-            CalendarContract.Calendars.ACCOUNT_TYPE,
-            CalendarContract.Calendars.IS_PRIMARY,
+            CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.OWNER_ACCOUNT,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
         )
         val where = "${CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL} >= ?"
         val args = arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString())
-        val found = mutableListOf<Triple<Long, Boolean, Boolean>>()
         service.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, columns, where, args, null)
             ?.use { c ->
+                var byName: Long? = null
                 while (c.moveToNext()) {
-                    found += Triple(c.getLong(0), c.getString(1) == "com.google", c.getInt(2) == 1)
+                    val owner = c.getString(2).orEmpty().lowercase(Locale.ROOT)
+                    val account = c.getString(1).orEmpty().lowercase(Locale.ROOT)
+                    val name = c.getString(3).orEmpty().lowercase(Locale.forLanguageTag("tr"))
+                    // Takvimin kendi adı ya da sahibi olan hesabın adı.
+                    if ("yeşil temizlik" in name || "yesiltemizlik" in owner || "yesiltemizlik" in account) {
+                        byName = c.getLong(0)
+                        break
+                    }
                 }
+                return byName
             }
-        return (found.firstOrNull { it.second && it.third } ?: found.firstOrNull { it.second } ?: found.firstOrNull())
-            ?.first
+        return null
     }
 
     /**
@@ -973,6 +1033,30 @@ internal object ScreenAsk {
     private const val DANGER = 0xFFF28B82.toInt()
     private const val SUCCESS = 0xFF81C995.toInt()
     private const val SUCCESS_BG = 0x3381C995
+
+    private const val DAY_MILLIS = 86_400_000L
+
+    /**
+     * Takvim kaydının biçimi: Yeşil Temizlik'in takvim yönergesinin kaydı
+     * yazan kısmı. Kontrol listeleri, bilinen müşteriler ve panel adımları
+     * burada yok; bu düğme yalnız ekrandakinden tek bir kayıt çıkarıyor.
+     */
+    private const val CALENDAR_RULES = """Ekrandaki iş, keşif ya da hatırlatmayı Yeşil Temizlik takvim biçiminde tek kayıt olarak çıkar. Yalnız JSON döndür:
+{"found": true, "kind": "is|kesif|hatirlatma", "date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM", "title": "", "location": "", "description": "", "missing": []}
+Hiçbir şey yoksa {"found": false}.
+
+kind: temizlik işi "is" (tam gün, saat yazma), keşif "kesif", diğerleri "hatirlatma" (saatli).
+title:
+- İş: "[Semt/İlçe] [kişi sayısı]", ör. "Göktürk 2". Kişi sayısı yoksa tutardan tahmin: ~12.000 ₺ → 2, ~15.000 ₺ → 3, ~20.000 ₺ → 4.
+- Keşif: "KEŞİF [Semt]".
+description (paragraflar arasında boş satır):
+1. Kişi: "Ad Telefon", ör. "Ayşe Hanım 0532 000 00 00". Telefon 0XXX XXX XX XX biçiminde; +90, parantez temizlenir.
+2. Adres: firma varsa ilk satır "Firma adı - X"; sonra "[Mahalle] Mah. [Sokak] Sk. No: [..] [İlçe]" (cadde ise "Cad.", ikisi birden değil); sonra "[Site/Apt/Plaza] · Blok X · Kat X · Daire X" (yalnız olanlar).
+3. İş: "İş türü · oda · m² · tutar ₺", ör. "Boş Daire Temizliği · 3+1 · 120 m² · 18000 ₺". Ev/daire işinde iş türü yoksa "Boş Daire Temizliği". Firma varsa tutara " (+KDV)" eklenir; daire işinde KDV yazılmaz.
+4. "──────────" çizgisinin altına notlar (özel saat, müşterinin istekleri, harita linki).
+Adres kuralları: "İstanbul" ve posta kodu yazılmaz; No'dan sonra virgül yok; "No: 9/7" ise "No: 9" ve bina satırında "Daire 7"; site/plaza adı bina satırına.
+location: yalnız "[Mahalle] Mah. [Cadde/Sokak] No:[..] [İlçe]"; site, blok, kat, daire, firma yazılmaz.
+Bilmediğini uydurma: mahalle, telefon, m², oda, tutar gibi eksik ya da emin olmadığın alanları boş bırak ve "missing" listesine kısa adıyla yaz."""
 
     private const val MODEL = "gpt-6-luna"
     private const val OLD_MODEL = "gpt-4o-mini"
