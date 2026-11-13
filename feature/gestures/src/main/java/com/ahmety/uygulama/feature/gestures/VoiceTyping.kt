@@ -17,6 +17,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.InputType
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -86,8 +87,12 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
             -> {
-                // Klavye açılırken pencere haberleri art arda geliyor;
-                // en sonuncusundan sonra bir kez bakmak yetiyor.
+                // Hemen bakılıyor: önceden haberlerin durulması beklenip
+                // 150 ms sonra bakılıyordu, mikrofon klavyeden sonra gelip
+                // klavye kapandıktan sonra gidiyordu. Klavye açılırken
+                // haberler art arda geldiği için yer bir kez de durulunca
+                // düzeltiliyor.
+                update()
                 handler.removeCallbacks(refresh)
                 handler.postDelayed(refresh, SETTLE_MS)
             }
@@ -108,11 +113,30 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         // Kayıt ya da çeviri sürerken düğme yerinde kalıyor: klavye bir an
         // kapanıp açılsa da iş yarıda kesilmesin.
         if (state != MicButton.IDLE) return
-        if (!enabled() || !findKeyboard()) {
+        if (!enabled() || !findKeyboard() || !speakable()) {
             hide()
             return
         }
         show()
+    }
+
+    /**
+     * Odaktaki kutuya konuşarak yazılır mı. Rakam, telefon, tarih ve şifre
+     * kutularında mikrofonun işi yok; klavyenin sayı tuşlarının üstünde
+     * yalnız yer kaplıyordu.
+     */
+    private fun speakable(): Boolean {
+        val node = runCatching { service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
+            ?: return true
+        if (node.isPassword) return false
+        val type = node.inputType
+        return when (type and InputType.TYPE_MASK_CLASS) {
+            InputType.TYPE_CLASS_NUMBER,
+            InputType.TYPE_CLASS_PHONE,
+            InputType.TYPE_CLASS_DATETIME,
+            -> false
+            else -> true
+        }
     }
 
     private fun findKeyboard(): Boolean {
@@ -158,6 +182,10 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         runCatching { windowManager.addView(view, newParams) }.onSuccess {
             button = view
             params = newParams
+            // Klavye aşağıdan kayarak geliyor; mikrofon da yumuşakça
+            // belirsin, klavyeden önce sert bir şekilde ortaya çıkmasın.
+            view.alpha = 0f
+            view.animate().alpha(1f).setDuration(FADE_MS).start()
         }
     }
 
@@ -475,6 +503,7 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         private const val DEFAULT_UP_DP = 6f
         private const val DRAG_DP = 10f
         private const val SETTLE_MS = 150L
+        private const val FADE_MS = 180L
         private const val LONG_MS = 600L
         private const val MIN_MS = 500L
 
