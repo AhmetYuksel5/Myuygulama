@@ -87,12 +87,15 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
             -> {
-                // Hemen bakılıyor: önceden haberlerin durulması beklenip
-                // 150 ms sonra bakılıyordu, mikrofon klavyeden sonra gelip
-                // klavye kapandıktan sonra gidiyordu. Klavye açılırken
-                // haberler art arda geldiği için yer bir kez de durulunca
-                // düzeltiliyor.
-                update()
+                // Gizlemek hemen, göstermek klavye durulunca.
+                //
+                // Klavye kayarak açılıp kapanıyor ve bu sırada penceresinin
+                // yeri de değişiyor. Her haberde yerleştirmek mikrofonu önce
+                // ekranın ortasında gösterip sonra yukarı kaydırıyordu;
+                // kapanırken de ortada bırakıyordu. Şimdi klavye kayboldu ya
+                // da aşağı inmeye başladıysa mikrofon o anda gidiyor; açılırken
+                // ise klavye yerine oturana kadar hiç çizilmiyor.
+                hideIfClosing()
                 handler.removeCallbacks(refresh)
                 handler.postDelayed(refresh, SETTLE_MS)
             }
@@ -107,6 +110,13 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
     }
 
     private fun enabled() = prefs.getBoolean(KEY_ENABLED, true)
+
+    private fun hideIfClosing() {
+        if (button == null || button?.state != MicButton.IDLE) return
+        val shownTop = keyboard.top
+        val present = enabled() && findKeyboard() && speakable()
+        if (!present || keyboard.top > shownTop) hide()
+    }
 
     private fun update() {
         val state = button?.state ?: MicButton.IDLE
