@@ -80,12 +80,20 @@ internal object RecentAppsPanel {
 
     val showing: Boolean get() = root != null
 
+    /** Panel açılırken içinde olunan uygulama. */
+    private var current: String? = null
+
     fun show(service: AccessibilityService): Boolean {
         if (root != null) {
             if (launching == null) hide(service)
             return true
         }
-        val apps = AppHistory.others(service, COUNT)
+        // İçinde olunan uygulama da listede: en yeni kart, "Açık" işaretli.
+        current = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
+            ?.takeIf { it != service.packageName && AppHistory.snapshot(service, 1).firstOrNull() == it }
+        // Kartında güncel görüntüsü olsun.
+        if (current != null) AppThumbnails.capture(service)
+        val apps = listOfNotNull(current) + AppHistory.others(service, COUNT - if (current != null) 1 else 0)
         if (apps.isEmpty()) {
             Toast.makeText(service, "Henüz son uygulama yok; uygulamalar arasında geçtikçe dolacak.", Toast.LENGTH_SHORT).show()
             return false
@@ -457,6 +465,25 @@ internal object RecentAppsPanel {
             )
         }
         card.addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(d, 64), Gravity.BOTTOM))
+        if (pkg == current) {
+            card.addView(
+                TextView(service).apply {
+                    text = "Açık"
+                    setTextColor(Color.WHITE)
+                    textSize = 12f
+                    setPadding(dp(d, 10), dp(d, 4), dp(d, 10), dp(d, 4))
+                    background = GradientDrawable().apply {
+                        cornerRadius = 12f * d
+                        setColor(ACCENT)
+                    }
+                },
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.TOP or Gravity.END,
+                ).apply { setMargins(0, dp(d, 10), dp(d, 10), 0) },
+            )
+        }
 
         card.setOnClickListener {
             if (launching != null) return@setOnClickListener
@@ -469,7 +496,8 @@ internal object RecentAppsPanel {
                     )
                 }
             } else {
-                open(service, pkg, card, label, shot)
+                // Açık uygulamaya dokunmak yalnız paneli kapatıyor: zaten orada.
+                if (pkg == current) hide(service) else open(service, pkg, card, label, shot)
             }
         }
         // Kapatılan uygulamayı Android haber vermiyor; elle çıkarılıyor.
@@ -629,7 +657,8 @@ internal object RecentAppsPanel {
         card.animate().scaleX(0.9f).scaleY(0.9f).translationY(-24f * d).alpha(0f)
             .setDuration(200).setInterpolator(EXIT)
             .withEndAction {
-                val apps = AppHistory.others(service, COUNT)
+                val apps = listOfNotNull(current?.takeIf { it != pkg }) +
+                    AppHistory.others(service, COUNT - if (current != null && current != pkg) 1 else 0)
                 if (apps.isEmpty()) {
                     hide(service)
                     return@withEndAction
