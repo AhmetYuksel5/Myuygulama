@@ -85,9 +85,6 @@ internal object RecentAppsPanel {
             if (launching == null) hide(service)
             return true
         }
-        // İçinde olunan uygulamanın güncel görüntüsü: bir sonraki açılışta
-        // o da listede olacak, arka planda da bulanık hâli kullanılıyor.
-        AppThumbnails.capture(service)
         val apps = AppHistory.others(service, COUNT)
         if (apps.isEmpty()) {
             Toast.makeText(service, "Henüz son uygulama yok; uygulamalar arasında geçtikçe dolacak.", Toast.LENGTH_SHORT).show()
@@ -95,7 +92,6 @@ internal object RecentAppsPanel {
         }
         val manager = service.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return false
         val d = service.resources.displayMetrics.density
-        val current = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
         settingsMode = false
         launching = null
 
@@ -117,7 +113,9 @@ internal object RecentAppsPanel {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         )
-        background(service, manager, frame, params, current)
+        windowManager = manager
+        windowParams = params
+        background(service, manager, frame, params)
 
         val stack = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
@@ -150,11 +148,17 @@ internal object RecentAppsPanel {
         val shown = runCatching {
             manager.addView(frame, params)
             root = frame
+            blurView = frame
         }.isSuccess
         if (shown) {
             // Kenar şeritleri ve imleç panelin üstünde: kenardan geri hareketi çalışsın.
             QuickCursorService.raise()
-            if (animate(service)) enter(frame, stack, d)
+            if (animate(service)) {
+                enter(frame, stack, d)
+                blurTo(blurTarget, SCRIM_MS, STANDARD)
+            } else {
+                blurTo(blurTarget, 0L, STANDARD)
+            }
         }
         return shown
     }
@@ -171,6 +175,7 @@ internal object RecentAppsPanel {
     fun hide(service: AccessibilityService) {
         val view = root ?: return
         if (launching != null) return
+        blurTo(0, if (animate(service)) EXIT_MS else 0L, EXIT)
         root = null
         val manager = service.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
         val remove = { runCatching { manager?.removeView(view) } }
@@ -192,41 +197,82 @@ internal object RecentAppsPanel {
      * kötü görünüyordu ama arkadaki uygulama da seçilmemeli.
      */
     private fun background(
-        service: Context,
+        service: AccessibilityService,
         manager: WindowManager,
         frame: FrameLayout,
         params: WindowManager.LayoutParams,
-        current: String?,
     ) {
+        blurTarget = 0
         val blurred = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && manager.isCrossWindowBlurEnabled
         if (blurred) {
+            // Bulanıklık sıfırdan başlıyor; açılışta yavaşça artıyor. Sistem
+            // çizdiği için panelin solmasına uymuyor, ayrıca canlandırılıyor.
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-            params.blurBehindRadius = (BLUR_DP * service.resources.displayMetrics.density).toInt()
+            params.blurBehindRadius = 0
+            blurTarget = (BLUR_DP * service.resources.displayMetrics.density).toInt()
             frame.background = gradient(0x59101418, 0xB30B0D10.toInt())
             return
         }
-        val shot = current?.let { AppThumbnails.get(it) }
-        if (shot != null) {
-            frame.addView(
-                ImageView(service).apply {
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        setImageBitmap(shot)
-                        setRenderEffect(RenderEffect.createBlurEffect(25f, 25f, Shader.TileMode.CLAMP))
-                    } else {
-                        // Eski sürümde ucuz bulanıklık: çok küçültüp süzerek büyütmek.
-                        val tiny = Bitmap.createScaledBitmap(shot, (shot.width / 24).coerceAtLeast(1), (shot.height / 24).coerceAtLeast(1), true)
-                        setImageBitmap(Bitmap.createScaledBitmap(tiny, shot.width, shot.height, true))
-                    }
-                },
-                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
-            )
-            frame.addView(
-                View(service).apply { background = gradient(0xB3101318.toInt(), 0xE60B0D10.toInt()) },
-                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
-            )
-        } else {
-            frame.setBackgroundColor(0xE6121418.toInt())
+        // Bulanıklık yoksa o anki ekranın bulanık kopyası. Görüntü gelene kadar
+        // koyu düz zemin; elde kalan eski bir görüntü gösterilmiyor.
+        frame.setBackgroundColor(0xE6121418.toInt())
+        AppThumbnails.capture(service) { shot ->
+            if (shot == null || root !== frame) return@capture
+            val image = ImageView(service).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setImageBitmap(shot)
+                    setRenderEffect(RenderEffect.createBlurEffect(25f, 25f, Shader.TileMode.CLAMP))
+                } else {
+                    // Ucuz bulanıklık: çok küçük görüntü, büyütürken süzülüyor.
+                    setImageBitmap(
+                        Bitmap.createScaledBitmap(
+                            shot,
+                            (shot.width / 24).coerceAtLeast(1),
+                            (shot.height / 24).coerceAtLeast(1),
+                            true,
+                        ),
+                    )
+                }
+                alpha = 0f
+            }
+            val shade = View(service).apply {
+                background = gradient(0xB3101318.toInt(), 0xE60B0D10.toInt())
+                alpha = 0f
+            }
+            frame.addView(image, 0, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            frame.addView(shade, 1, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            image.animate().alpha(1f).setDuration(150).start()
+            shade.animate().alpha(1f).setDuration(150).start()
+        }
+    }
+
+    private var windowManager: WindowManager? = null
+    private var windowParams: WindowManager.LayoutParams? = null
+    private var blurTarget = 0
+    private var blurAnimator: ValueAnimator? = null
+    private var blurView: View? = null
+
+    /** Pencere arkası bulanıklığını yumuşakça değiştirir; bulanıklık yoksa bir şey yapmaz. */
+    private fun blurTo(target: Int, duration: Long, interpolator: android.animation.TimeInterpolator) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val params = windowParams ?: return
+        if (params.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND == 0) return
+        val view = blurView ?: return
+        blurAnimator?.cancel()
+        if (duration <= 0L) {
+            params.blurBehindRadius = target
+            runCatching { windowManager?.updateViewLayout(view, params) }
+            return
+        }
+        blurAnimator = ValueAnimator.ofInt(params.blurBehindRadius, target).apply {
+            this.duration = duration
+            this.interpolator = interpolator
+            addUpdateListener {
+                params.blurBehindRadius = it.animatedValue as Int
+                runCatching { windowManager?.updateViewLayout(view, params) }
+            }
+            start()
         }
     }
 
@@ -534,6 +580,14 @@ internal object RecentAppsPanel {
         val view = root ?: return
         root = null
         val manager = service?.get()?.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        // Görüntü ekranı kaplarken bulanıklık kalkıyor; yoksa solma sırasında
+        // yeni uygulama bir an bulanık görünüp birden netleşiyordu.
+        blurAnimator?.cancel()
+        windowParams?.let { params ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) params.blurBehindRadius = 0
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+            runCatching { manager?.updateViewLayout(view, params) }
+        }
         // Bayat görüntü yerine uygulamanın kendisi: kısa bir solmayla.
         view.animate().alpha(0f).setDuration(120).setInterpolator(null)
             .withEndAction { runCatching { manager?.removeView(view) } }.start()

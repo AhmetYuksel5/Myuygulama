@@ -42,16 +42,21 @@ internal object AppThumbnails {
         handler.postDelayed(run, SETTLE_MS)
     }
 
-    fun capture(service: AccessibilityService) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+    /**
+     * Ekranı şimdi çeker. [onDone] çekilen görüntüyle çağrılıyor; çekilemezse
+     * (sınır, güvenli pencere, eski sürüm) elde ne varsa onunla.
+     */
+    fun capture(service: AccessibilityService, onDone: ((Bitmap?) -> Unit)? = null) {
+        val pkg = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        val fallback: () -> Unit = { onDone?.invoke(pkg?.let { cache.get(it) }) }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || pkg == null) return fallback()
         // Sistem erişilebilirlik görüntüsünü saniyede bir ile sınırlıyor.
         val now = SystemClock.uptimeMillis()
-        if (now - lastShot < MIN_GAP_MS) return
-        val pkg = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull() ?: return
+        if (now - lastShot < MIN_GAP_MS) return fallback()
         // Merkez'in kendi pencereleri ve listede olmayan (klavye, ana ekran)
         // uygulamalar çekilmiyor.
-        if (pkg == service.packageName) return
-        if (AppHistory.snapshot(service, 1).firstOrNull() != pkg) return
+        if (pkg == service.packageName) return fallback()
+        if (AppHistory.snapshot(service, 1).firstOrNull() != pkg) return fallback()
         lastShot = now
         runCatching {
             service.takeScreenshot(
@@ -71,12 +76,13 @@ internal object AppThumbnails {
                         }.getOrNull()
                         buffer.close()
                         if (small != null) cache.put(pkg, small)
+                        onDone?.invoke(small ?: cache.get(pkg))
                     }
 
-                    override fun onFailure(errorCode: Int) = Unit
+                    override fun onFailure(errorCode: Int) = fallback()
                 },
             )
-        }
+        }.onFailure { fallback() }
     }
 
     private const val MAX_ITEMS = 12
