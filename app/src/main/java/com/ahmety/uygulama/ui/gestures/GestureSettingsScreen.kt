@@ -219,7 +219,7 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
         }
         Text(
             "Açıkken \"Son uygulamalar\" telefonun ekranı yerine Merkez'in panelini açar: " +
-                "en son kullandığın 4 uygulama, dokununca geçer, uzun basınca listeden çıkar.",
+                "en son kullandığın 10 uygulama (aynı anda 4'ü, aşağı kaydırınca eskileri), dokununca geçer, uzun basınca listeden çıkar.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

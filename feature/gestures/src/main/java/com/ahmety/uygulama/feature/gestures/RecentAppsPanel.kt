@@ -360,13 +360,40 @@ internal object RecentAppsPanel {
             addView(slot(service, right, d, width, height), LinearLayout.LayoutParams(width, height))
         }
 
-        return LinearLayout(service).apply {
+        // Sıralar alttan yukarı: en alttaki sırada 1 ve 2, üstünde 3 ve 4…
+        // Eskiler yukarıda kalıyor; aşağı kaydırınca geliyorlar.
+        val rows = (apps.size + 1) / 2
+        val list = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            if (apps.size > 2) {
-                addView(row(apps.getOrNull(3), apps.getOrNull(2)))
-                addView(Space(service), LinearLayout.LayoutParams(1, gap))
+            for (r in rows - 1 downTo 0) {
+                addView(row(apps.getOrNull(r * 2 + 1), apps.getOrNull(r * 2)))
+                if (r > 0) addView(Space(service), LinearLayout.LayoutParams(1, gap))
             }
-            addView(row(apps.getOrNull(1), apps.getOrNull(0)))
+        }
+        // Aynı anda iki sıra, yani dört kart görünüyor; fazlası kaydırılarak.
+        val visible = minOf(rows, VISIBLE_ROWS)
+        val viewport = visible * height + (visible - 1) * gap
+        val scroll = object : android.widget.ScrollView(service) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(viewport, MeasureSpec.EXACTLY))
+            }
+
+            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+                super.onLayout(changed, l, t, r, b)
+                // Panel her açılışta en yenilerle başlıyor: en alta kaydırılmış.
+                if (!startedAtBottom) {
+                    startedAtBottom = true
+                    scrollTo(0, (getChildAt(0)?.height ?: 0) - this.height)
+                }
+            }
+
+            private var startedAtBottom = false
+        }
+        return scroll.apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            clipToPadding = false
+            addView(list)
         }
     }
 
@@ -468,7 +495,7 @@ internal object RecentAppsPanel {
             card.scaleY = 0.94f
             card.animate()
                 .alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
-                .setStartDelay(STAGGER_MS * i)
+                .setStartDelay(STAGGER_MS * i.coerceAtMost(3))
                 .setDuration(CARD_MS)
                 .setInterpolator(EMPHASIZED)
                 .start()
@@ -649,7 +676,8 @@ internal object RecentAppsPanel {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
     }.getOrDefault(true)
 
-    private const val COUNT = 4
+    private const val COUNT = 10
+    private const val VISIBLE_ROWS = 2
     private const val ACCENT = 0xFF3D7BFF.toInt()
     private const val BLUR_DP = 40
     private const val SCRIM_MS = 280L
