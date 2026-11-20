@@ -55,6 +55,7 @@ import com.ahmety.uygulama.takvim.TakvimBildirimi
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
+import com.ahmety.uygulama.ui.gestures.NotificationFilterScreen
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
 import com.ahmety.uygulama.ui.update.UpdateDialog
@@ -219,6 +220,7 @@ fun MerkezApp() {
                     onOpenAi = { navController.navigate(AI_ROUTE) },
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
+                    onOpenNotificationFilter = { navController.navigate(NOTIFICATION_FILTER_ROUTE) },
                     onOpenSubtitles = { navController.navigate(SUBTITLE_ROUTE) },
                 )
             }
@@ -274,6 +276,9 @@ fun MerkezApp() {
             composable(CURSOR_ROUTE) {
                 QuickCursorScreen(onBack = { navController.popBackStack() })
             }
+            composable(NOTIFICATION_FILTER_ROUTE) {
+                NotificationFilterScreen(onBack = { navController.popBackStack() })
+            }
             composable(SUBTITLE_ROUTE) {
                 SubtitleRoute(onBack = { navController.popBackStack() })
             }
@@ -291,6 +296,7 @@ private const val PERMISSIONS_ROUTE = "permissions"
 private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
 private const val CURSOR_ROUTE = "cursor"
+private const val NOTIFICATION_FILTER_ROUTE = "bildirim_suzgeci"
 
 /**
  * Liste satırının simgesi: tonlu bir dairenin içinde.
@@ -337,6 +343,7 @@ private fun MoreScreen(
     onOpenAi: () -> Unit,
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
+    onOpenNotificationFilter: () -> Unit,
     onOpenSubtitles: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -408,6 +415,12 @@ private fun MoreScreen(
             headlineContent = { Text("Tek elle imleç") },
             supportingContent = { Text("Ulaşılamayan köşelere basmak için sanal imleç") },
             modifier = Modifier.clickable(onClick = onOpenCursor),
+        )
+        ListItem(
+            leadingContent = { MoreIcon(MerkezIcons.Shield) },
+            headlineContent = { Text("Bildirim süzgeci") },
+            supportingContent = { Text("Kapatılamayan sistem bildirimlerini kendiliğinden gizler") },
+            modifier = Modifier.clickable(onClick = onOpenNotificationFilter),
         )
 
         SectionLabel("AYARLAR")
