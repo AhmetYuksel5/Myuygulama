@@ -47,6 +47,8 @@ internal object RecentAppsPanel {
 
     private var root: View? = null
 
+    val showing: Boolean get() = root != null
+
     fun show(service: AccessibilityService): Boolean {
         if (root != null) {
             hide(service)
@@ -74,7 +76,8 @@ internal object RecentAppsPanel {
                 return super.dispatchKeyEvent(event)
             }
         }
-        frame.setBackgroundColor(Color.argb(170, 0, 0, 0))
+        // Arkadaki uygulama seçilmesin: koyu örtü, destekleyen telefonda bulanıklık da.
+        frame.setBackgroundColor(Color.argb(SCRIM_ALPHA, 0, 0, 0))
         frame.setOnClickListener { hide(service) }
 
         val content: View = if (GestureSettings(service).recentsStyle == GestureSettings.RECENTS_GRID) {
@@ -100,10 +103,21 @@ internal object RecentAppsPanel {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         )
-        return runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+            manager.isCrossWindowBlurEnabled
+        ) {
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+            params.blurBehindRadius = (BLUR_DP * d).toInt()
+            frame.setBackgroundColor(Color.argb(BLURRED_SCRIM_ALPHA, 0, 0, 0))
+        }
+        val shown = runCatching {
             manager.addView(frame, params)
             root = frame
         }.isSuccess
+        // Kenar şeritleri ve imleç panelin üstünde: kenardan geri hareketi
+        // paneli kapatabilsin.
+        if (shown) QuickCursorService.raise()
+        return shown
     }
 
     fun hide(service: AccessibilityService) {
@@ -253,4 +267,7 @@ internal object RecentAppsPanel {
     }.getOrDefault(pkg)
 
     private const val COUNT = 10
+    private const val SCRIM_ALPHA = 235
+    private const val BLURRED_SCRIM_ALPHA = 190
+    private const val BLUR_DP = 30
 }

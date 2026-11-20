@@ -143,6 +143,8 @@ class QuickCursorService : EdgeGestureService() {
     override fun onInterrupt() = Unit
 
     private fun raiseSelf() {
+        // Önce şeritler, sonra imleç: imleç en üstte kalsın.
+        raiseEdges()
         handler.post { if (::settings.isInitialized) rebuild() }
     }
 

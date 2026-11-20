@@ -113,6 +113,15 @@ open class EdgeGestureService : AccessibilityService() {
         super.onDestroy()
     }
 
+    /**
+     * Kenar şeritlerini öteki katmanların üstüne alır: sonradan açılan tam
+     * ekran bir panel (son uygulamalar) şeritleri örtünce kenardan geri
+     * hareketi çalışmıyordu.
+     */
+    protected fun raiseEdges() {
+        handler.post { if (::settings.isInitialized) rebuild() }
+    }
+
     private fun rebuild() {
         removeAll()
         if (!settings.enabled) return
@@ -304,7 +313,13 @@ open class EdgeGestureService : AccessibilityService() {
         if (action == GestureAction.NONE) return
         val ok = when (action) {
             GestureAction.OPEN_APP -> openApp(gestureKey)
-            GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
+            // Panel açıksa geri onu kapatıyor; arkadaki uygulamaya gitmesin.
+            GestureAction.BACK -> if (RecentAppsPanel.showing) {
+                RecentAppsPanel.hide(this)
+                true
+            } else {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            }
             GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
             GestureAction.RECENTS -> openRecents(this)
             GestureAction.LAST_APP -> switchToLastApp(this)
