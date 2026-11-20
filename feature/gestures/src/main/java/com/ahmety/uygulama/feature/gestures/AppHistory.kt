@@ -174,6 +174,17 @@ internal object AppHistory {
         return recent.getOrNull(if (atHome) 0 else 1)
     }
 
+    /**
+     * Son uygulamalar paneli için liste: en son kullanılandan başlayarak.
+     * Şu an içinde olunan uygulama yok; ana ekrandaysak liste başından.
+     */
+    @Synchronized
+    fun others(context: Context, count: Int): List<String> {
+        load(context)
+        syncUsage(context)
+        return recent.drop(if (atHome) 0 else 1).take(count)
+    }
+
     fun hasUsageAccess(context: Context): Boolean = runCatching {
         val ops = context.getSystemService(AppOpsManager::class.java)
         ops.unsafeCheckOpNoThrow(

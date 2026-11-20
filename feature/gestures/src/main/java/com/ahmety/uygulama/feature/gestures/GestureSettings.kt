@@ -128,6 +128,15 @@ class GestureSettings(context: Context) {
         get() = prefs.getInt(KEY_LONG_MS, 350).coerceIn(100, 800)
         set(value) = prefs.edit().putInt(KEY_LONG_MS, value.coerceIn(100, 800)).apply()
 
+    /**
+     * "Son uygulamalar" telefonun kendi ekranı yerine Merkez'in panelini
+     * açsın mı. Bazı telefonlarda (Honor) sistemin ekranı kayıyor, sırayı
+     * karıştırıyor; Merkez'in paneli kullanım kaydından okuyor.
+     */
+    var ownRecents: Boolean
+        get() = prefs.getBoolean(KEY_OWN_RECENTS, true)
+        set(value) = prefs.edit().putBoolean(KEY_OWN_RECENTS, value).apply()
+
     /** Şeride arka arkaya iki dokunuş. Varsayılan olarak kapalı. */
     var doubleTapAction: GestureAction
         get() = actionOf(KEY_ACTION_DOUBLE, GestureAction.NONE)
@@ -170,6 +179,7 @@ class GestureSettings(context: Context) {
         private const val KEY_ACTION_LONG = "action_long"
         private const val KEY_ACTION_DOUBLE = "action_double"
         private const val KEY_LONG_MS = "long_press_ms"
+        private const val KEY_OWN_RECENTS = "own_recents"
         private const val KEY_APP_PREFIX = "app_for_"
 
         // Jest adları: hangi jeste hangi uygulamanın atandığını ayırmak için.

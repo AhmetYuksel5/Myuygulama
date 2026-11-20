@@ -300,7 +300,7 @@ open class EdgeGestureService : AccessibilityService() {
             GestureAction.OPEN_APP -> openApp(gestureKey)
             GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
             GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
-            GestureAction.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            GestureAction.RECENTS -> openRecents(this)
             GestureAction.LAST_APP -> switchToLastApp(this)
             GestureAction.NOTIFICATIONS -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
             GestureAction.QUICK_SETTINGS -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)

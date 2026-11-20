@@ -142,6 +142,8 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
     // geliyor; o yüzden ötekilerden ayrı duruyor.
     ShortcutKind.SYSTEM -> if (item.value == "last_app") {
         switchToLastApp(service)
+    } else if (item.value == "recents") {
+        openRecents(service)
     } else if (item.value == "ask_screen") {
         // Panel az önce kapandı; hemen okunursa ekranda hâlâ panelin
         // kendisi görünüyor sayılabiliyor.

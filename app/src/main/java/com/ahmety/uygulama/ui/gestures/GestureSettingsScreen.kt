@@ -212,6 +212,18 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        var ownRecents by remember { mutableStateOf(settings.ownRecents) }
+        Toggle("Son uygulamalar için Merkez'in panelini kullan", ownRecents) {
+            ownRecents = it
+            settings.ownRecents = it
+        }
+        Text(
+            "Açıkken \"Son uygulamalar\" telefonun ekranı yerine Merkez'in panelini açar: " +
+                "en son kullandığın 10 uygulama, dokununca geçer, uzun basınca listeden çıkar.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         // "Önceki uygulama" eylemi buradan da atanabildiği için ayarı burada da var.
         Stepper("Önceki uygulama: kaç uygulama arasında", cycle, 2..4, step = 1, suffix = "") {
             cycle = it
