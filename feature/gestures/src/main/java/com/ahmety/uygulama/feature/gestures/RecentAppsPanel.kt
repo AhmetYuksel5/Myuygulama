@@ -68,6 +68,7 @@ internal object RecentAppsPanel {
     private var column: LinearLayout? = null
     private var grid: View? = null
     private var hint: TextView? = null
+    private var countLabel: TextView? = null
     private var settingsButton: TextView? = null
     private val cards = mutableListOf<View>()
     private var settingsMode = false
@@ -293,15 +294,25 @@ internal object RecentAppsPanel {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(d, 4), 0, 0, dp(d, 16))
         }
-        row.addView(
-            TextView(service).apply {
-                text = "Son uygulamalar"
-                setTextColor(0xCCFFFFFF.toInt())
-                textSize = 15f
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
-        )
+        val titles = LinearLayout(service).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(
+                TextView(service).apply {
+                    text = "Son uygulamalar"
+                    setTextColor(0xCCFFFFFF.toInt())
+                    textSize = 15f
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                },
+            )
+            // Kaç uygulama olduğu: dörtten fazlası varsa kaydırılabildiği görülsün.
+            val count = TextView(service).apply {
+                setTextColor(0x99FFFFFF.toInt())
+                textSize = 12f
+            }
+            countLabel = count
+            addView(count)
+        }
+        row.addView(titles, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val settings = pill(service, d, "⚙  Ayarlar") { toggleSettings(d) }
         settingsButton = settings
         row.addView(settings)
@@ -355,12 +366,16 @@ internal object RecentAppsPanel {
         cards.clear()
         val metrics = service.resources.displayMetrics
         val gap = dp(d, 16)
-        val width = (metrics.widthPixels - dp(d, 32) - gap) / 2
-        // Telefon ekranı oranında; küçük ekranda iki sıra ekranın %62'sini geçmesin.
-        val height = (width * 1.55f).toInt().coerceAtMost(((metrics.heightPixels * 0.62f).toInt() - gap) / 2)
+        // Kart tam telefon ekranı oranında: ekran görüntüsü kesilmeden sığıyor.
+        // Önceden kart ekrandan kısaydı ve görüntünün altı kırpılıyordu. İki
+        // sıra ekranın %62'sini geçmesin diye boy önce, en ona göre.
+        val aspect = metrics.heightPixels.toFloat() / metrics.widthPixels
+        val height = ((metrics.heightPixels * 0.62f).toInt() - gap) / 2
+        val width = minOf((metrics.widthPixels - dp(d, 32) - gap) / 2, (height / aspect).toInt())
 
         fun row(left: String?, right: String?) = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
             addView(slot(service, left, d, width, height), LinearLayout.LayoutParams(width, height))
             addView(Space(service), LinearLayout.LayoutParams(gap, 1))
             addView(slot(service, right, d, width, height), LinearLayout.LayoutParams(width, height))
@@ -371,6 +386,7 @@ internal object RecentAppsPanel {
         val rows = (apps.size + 1) / 2
         val list = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
             for (r in 0 until rows) {
                 if (r > 0) addView(Space(service), LinearLayout.LayoutParams(1, gap))
                 addView(row(apps.getOrNull(r * 2), apps.getOrNull(r * 2 + 1)))
@@ -384,11 +400,15 @@ internal object RecentAppsPanel {
                 super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(viewport, MeasureSpec.EXACTLY))
             }
         }
+        countLabel?.text = when {
+            apps.size > VISIBLE_ROWS * 2 -> "${apps.size} uygulama · aşağı kaydır"
+            else -> "${apps.size} uygulama"
+        }
         return scroll.apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             clipToPadding = false
-            addView(list)
+            addView(list, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
     }
 
