@@ -116,7 +116,10 @@ internal object RecentAppsPanel {
         }.isSuccess
         // Kenar şeritleri ve imleç panelin üstünde: kenardan geri hareketi
         // paneli kapatabilsin.
-        if (shown) QuickCursorService.raise()
+        if (shown) {
+            QuickCursorService.raise()
+            if (animate(service)) enter(frame, content, d)
+        }
         return shown
     }
 
@@ -124,8 +127,54 @@ internal object RecentAppsPanel {
         val view = root ?: return
         root = null
         val manager = service.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-        runCatching { manager?.removeView(view) }
+        val remove = { runCatching { manager?.removeView(view) } }
+        if (!animate(service)) {
+            remove()
+            return
+        }
+        // Uygulamaya geçerken beklenmesin: kapanış kısa.
+        view.animate().alpha(0f).translationY(24f * service.resources.displayMetrics.density)
+            .setDuration(EXIT_MS).setInterpolator(android.view.animation.AccelerateInterpolator())
+            .withEndAction { remove() }.start()
     }
+
+    /**
+     * Açılış: arka plan yavaşça kararıyor, kartlar aşağıdan süzülerek ve
+     * birbiri ardına geliyor.
+     */
+    private fun enter(frame: View, content: View, d: Float) {
+        val ease = android.view.animation.DecelerateInterpolator(2f)
+        frame.alpha = 0f
+        frame.animate().alpha(1f).setDuration(SCRIM_MS).setInterpolator(ease).start()
+        val tiles = when (content) {
+            is HorizontalScrollView -> (content.getChildAt(0) as? ViewGroup)
+            is ScrollView -> (content.getChildAt(0) as? ViewGroup)
+            else -> null
+        }
+        val count = tiles?.childCount ?: 0
+        for (i in 0 until count) {
+            val tile = tiles!!.getChildAt(i)
+            tile.alpha = 0f
+            tile.translationY = 48f * d
+            tile.scaleX = 0.96f
+            tile.scaleY = 0.96f
+            tile.animate()
+                .alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+                .setStartDelay(STAGGER_MS * i.coerceAtMost(6))
+                .setDuration(TILE_MS)
+                .setInterpolator(ease)
+                .start()
+        }
+    }
+
+    /** Sistem animasyonları kapatıldıysa panel de kıpırdamasın. */
+    private fun animate(context: Context): Boolean = runCatching {
+        android.provider.Settings.Global.getFloat(
+            context.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) > 0f
+    }.getOrDefault(true)
 
     /** Kayan büyük kartlar: en son kullanılan solda, ekranın oranında. */
     private fun cards(service: AccessibilityService, apps: List<String>, d: Float): View {
@@ -270,4 +319,8 @@ internal object RecentAppsPanel {
     private const val SCRIM_ALPHA = 235
     private const val BLURRED_SCRIM_ALPHA = 190
     private const val BLUR_DP = 30
+    private const val SCRIM_MS = 220L
+    private const val TILE_MS = 320L
+    private const val STAGGER_MS = 40L
+    private const val EXIT_MS = 160L
 }
