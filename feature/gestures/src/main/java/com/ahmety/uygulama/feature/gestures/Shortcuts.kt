@@ -214,14 +214,18 @@ internal fun switchToLastApp(service: AccessibilityService): Boolean {
  * düşülmesi bundandı. Simgenin gönderdiği niyetle birebir aynı olunca
  * görev olduğu gibi öne geliyor.
  */
-internal fun launchPackage(service: AccessibilityService, name: String): Boolean {
+internal fun launchPackage(
+    service: AccessibilityService,
+    name: String,
+    options: android.os.Bundle? = null,
+): Boolean {
     val component = service.packageManager.getLaunchIntentForPackage(name)?.component
         ?: return false
     val intent = Intent(Intent.ACTION_MAIN)
         .addCategory(Intent.CATEGORY_LAUNCHER)
         .setComponent(component)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-    return runCatching { service.startActivity(intent) }.isSuccess
+    return runCatching { service.startActivity(intent, options) }.isSuccess
 }
 
 /** Son uygulamalar tuşuna hızlıca iki kez basmak: sistemin önceki uygulamaya geçişi. */

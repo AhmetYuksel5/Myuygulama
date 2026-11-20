@@ -284,6 +284,16 @@ internal object AppHistory {
         if (recent.remove(name)) save(context)
     }
 
+    /** Listeyi boşaltır; içinde olunan uygulama kalıyor. */
+    @Synchronized
+    fun clearOthers(context: Context) {
+        load(context)
+        val keep = if (atHome) null else recent.firstOrNull()
+        recent.clear()
+        keep?.let { recent.add(it) }
+        save(context)
+    }
+
     /** Seçilen uygulamayı listenin başına alır; şeritten seçilince. */
     @Synchronized
     fun promote(context: Context, name: String) {

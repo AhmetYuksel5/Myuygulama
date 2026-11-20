@@ -94,6 +94,9 @@ open class EdgeGestureService : AccessibilityService() {
         ) {
             AppThumbnails.schedule(this)
         }
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            RecentAppsPanel.onWindowChanged(event.packageName?.toString())
+        }
         if (!::settings.isInitialized) return
         if (edgeViews.isEmpty() && settings.enabled && !lock.locked) rebuild()
     }
