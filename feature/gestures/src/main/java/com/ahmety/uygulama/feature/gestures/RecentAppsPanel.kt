@@ -52,10 +52,9 @@ internal fun openRecents(service: AccessibilityService): Boolean =
  * karıştırıyor. Sıra "önceki uygulama" geçişinin tuttuğu kayıttan geliyor;
  * her kartta uygulamanın son ekranı ([AppThumbnails]) duruyor.
  *
- * Düzen tek elle kullanım için: kaydırma yok, en fazla dört kart, en son
- * kullanılan sağ altta başparmağın dibinde. Önceki sürüm on uygulamayı
- * kaydırarak gösteriyordu; en yenisi ekranın tepesinde kalıyor, yarım
- * kartlar karmaşık duruyordu.
+ * Düzen: aynı anda dört kart, okuma sırasıyla (1 sol üst, 2 sağ üst…);
+ * 1 içinde olunan uygulama. Eskiler aşağı kaydırınca geliyor. Kart boyu
+ * yuvaya göre: yarım görünen kart yok.
  *
  * Dokunulan kart büyüyerek ekranı kaplıyor ve uygulama onun arkasında,
  * sistem animasyonu olmadan açılıyor; panel ancak uygulamanın penceresi
@@ -350,8 +349,7 @@ internal object RecentAppsPanel {
     }
 
     /**
-     * 2×2 kart: 1 sağ alt, 2 sol alt, 3 sağ üst, 4 sol üst. İki ve daha az
-     * uygulamada yalnız alt sıra.
+     * İki sütunlu kartlar, okuma sırasıyla; görünen alan iki sıra.
      */
     private fun buildGrid(service: AccessibilityService, apps: List<String>, d: Float): View {
         cards.clear()
@@ -368,14 +366,14 @@ internal object RecentAppsPanel {
             addView(slot(service, right, d, width, height), LinearLayout.LayoutParams(width, height))
         }
 
-        // Sıralar alttan yukarı: en alttaki sırada 1 ve 2, üstünde 3 ve 4…
-        // Eskiler yukarıda kalıyor; aşağı kaydırınca geliyorlar.
+        // Okuma sırası: 1 sol üst (açık uygulama), 2 sağ üst, 3 ve 4 altında;
+        // aşağı kaydırınca 5, 6…
         val rows = (apps.size + 1) / 2
         val list = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            for (r in rows - 1 downTo 0) {
-                addView(row(apps.getOrNull(r * 2 + 1), apps.getOrNull(r * 2)))
+            for (r in 0 until rows) {
                 if (r > 0) addView(Space(service), LinearLayout.LayoutParams(1, gap))
+                addView(row(apps.getOrNull(r * 2), apps.getOrNull(r * 2 + 1)))
             }
         }
         // Aynı anda iki sıra, yani dört kart görünüyor; fazlası kaydırılarak.
@@ -385,17 +383,6 @@ internal object RecentAppsPanel {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(viewport, MeasureSpec.EXACTLY))
             }
-
-            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-                super.onLayout(changed, l, t, r, b)
-                // Panel her açılışta en yenilerle başlıyor: en alta kaydırılmış.
-                if (!startedAtBottom) {
-                    startedAtBottom = true
-                    scrollTo(0, (getChildAt(0)?.height ?: 0) - this.height)
-                }
-            }
-
-            private var startedAtBottom = false
         }
         return scroll.apply {
             isVerticalScrollBarEnabled = false
@@ -515,8 +502,8 @@ internal object RecentAppsPanel {
     private fun enter(frame: View, stack: LinearLayout, d: Float) {
         frame.alpha = 0f
         frame.animate().alpha(1f).setDuration(SCRIM_MS).setInterpolator(STANDARD).start()
-        // Kartlar en yeniden (sağ alt) başlayarak geliyor.
-        cards.reversed().forEachIndexed { i, card ->
+        // Kartlar sırayla, 1 numaradan başlayarak geliyor.
+        cards.forEachIndexed { i, card ->
             card.alpha = 0f
             card.translationY = 24f * d
             card.scaleX = 0.94f
