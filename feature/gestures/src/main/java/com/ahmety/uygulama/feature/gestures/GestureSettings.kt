@@ -137,6 +137,11 @@ class GestureSettings(context: Context) {
         get() = prefs.getBoolean(KEY_OWN_RECENTS, true)
         set(value) = prefs.edit().putBoolean(KEY_OWN_RECENTS, value).apply()
 
+    /** Son uygulamalar panelinin görünümü: [RECENTS_CARDS] ya da [RECENTS_GRID]. */
+    var recentsStyle: Int
+        get() = prefs.getInt(KEY_RECENTS_STYLE, RECENTS_CARDS)
+        set(value) = prefs.edit().putInt(KEY_RECENTS_STYLE, value).apply()
+
     /** Şeride arka arkaya iki dokunuş. Varsayılan olarak kapalı. */
     var doubleTapAction: GestureAction
         get() = actionOf(KEY_ACTION_DOUBLE, GestureAction.NONE)
@@ -180,6 +185,9 @@ class GestureSettings(context: Context) {
         private const val KEY_ACTION_DOUBLE = "action_double"
         private const val KEY_LONG_MS = "long_press_ms"
         private const val KEY_OWN_RECENTS = "own_recents"
+        private const val KEY_RECENTS_STYLE = "recents_style"
+        const val RECENTS_CARDS = 0
+        const val RECENTS_GRID = 1
         private const val KEY_APP_PREFIX = "app_for_"
 
         // Jest adları: hangi jeste hangi uygulamanın atandığını ayırmak için.

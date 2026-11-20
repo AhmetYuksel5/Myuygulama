@@ -88,6 +88,12 @@ open class EdgeGestureService : AccessibilityService() {
             event?.className?.toString(),
             event?.text?.joinToString(" ").orEmpty(),
         )
+        // Son uygulamalar panelinde içerik görünsün: öne gelen ekranın görüntüsü.
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            GestureSettings(this).ownRecents
+        ) {
+            AppThumbnails.schedule(this)
+        }
         if (!::settings.isInitialized) return
         if (edgeViews.isEmpty() && settings.enabled && !lock.locked) rebuild()
     }

@@ -111,6 +111,7 @@ class QuickCursorService : EdgeGestureService() {
         settings.prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         lock.start()
         rebuild()
+        instance = java.lang.ref.WeakReference(this)
     }
 
     /**
@@ -141,7 +142,12 @@ class QuickCursorService : EdgeGestureService() {
 
     override fun onInterrupt() = Unit
 
+    private fun raiseSelf() {
+        handler.post { if (::settings.isInitialized) rebuild() }
+    }
+
     override fun onDestroy() {
+        instance = null
         // Bağlanma tamamlanmadan servis öldürülebilir; lateinit'e körlemesine
         // dokunmak süreci çökertir.
         if (::settings.isInitialized) {
@@ -535,6 +541,17 @@ class QuickCursorService : EdgeGestureService() {
     }
 
     companion object {
+        private var instance: java.lang.ref.WeakReference<QuickCursorService>? = null
+
+        /**
+         * İmleci öteki katmanların üstüne alır. Aynı türdeki pencerelerde
+         * sonra eklenen üstte kalıyor; sonradan açılan bir kart (ekrana sor)
+         * imleci örtüyordu. Pencereler yeniden eklenince yine en üstteler.
+         */
+        internal fun raise() {
+            instance?.get()?.raiseSelf()
+        }
+
         private const val LONG_PRESS_MS = 350L
 
         /** İki dokunuş arasındaki en uzun süre; sistemin varsayılanıyla aynı. */

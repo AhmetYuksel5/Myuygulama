@@ -224,6 +224,7 @@ internal object ScreenAsk {
 
     // Kartın parçaları; cevap ve durum değiştikçe güncelleniyor.
     private var answerText: TextView? = null
+    private var answerPanel: View? = null
     private var loadingRow: View? = null
     private var loadingLabel: TextView? = null
     private var dots: LoadingDots? = null
@@ -306,18 +307,10 @@ internal object ScreenAsk {
         // Başlık
         card.addView(
             TextView(service).apply {
-                text = "Bu ekrana sor"
+                text = "Ekrana sor"
                 setTextColor(Color.WHITE)
                 textSize = 17f
                 typeface = Typeface.DEFAULT_BOLD
-            },
-        )
-        card.addView(
-            TextView(service).apply {
-                text = "Bakılan: $source"
-                setTextColor(MUTED)
-                textSize = 12f
-                setPadding(0, dp(2f), 0, 0)
             },
         )
 
@@ -341,13 +334,16 @@ internal object ScreenAsk {
         )
 
         // Cevap alanı: kendi zemini olan bir iç panel.
+        // Bir şey sorulana kadar kapalı: boş bir kutu ve "dokun" yazısı yer kaplıyordu.
         val panel = FrameLayout(service).apply {
             background = GradientDrawable().apply {
-                cornerRadius = 14f * d
+                cornerRadius = 20f * d
                 setColor(PANEL_BG)
             }
             setPadding(dp(12f), dp(12f), dp(12f), dp(12f))
+            visibility = View.GONE
         }
+        answerPanel = panel
         val content = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
 
         val loading = LinearLayout(service).apply {
@@ -367,7 +363,7 @@ internal object ScreenAsk {
         content.addView(loading)
 
         val answerView = TextView(service).apply {
-            text = "Bir eyleme dokun ya da aşağıya sorunu yaz."
+            text = ""
             setTextColor(HINT)
             textSize = 14f
             setLineSpacing(0f, 1.25f)
@@ -558,6 +554,8 @@ internal object ScreenAsk {
             manager.addView(frame, params)
             root = frame
         }
+        // İmleç kartın altında kalmasın: kartı imleçle de kullanmak gerekiyor.
+        QuickCursorService.raise()
         if (animate(service)) {
             card.alpha = 0f
             card.translationY = -16f * d
@@ -578,8 +576,9 @@ internal object ScreenAsk {
             setTextColor(Color.WHITE)
             textSize = 14f
             gravity = Gravity.CENTER
-            minHeight = (48 * d).toInt()
-            setPadding((16 * d).toInt(), (12 * d).toInt(), (16 * d).toInt(), (12 * d).toInt())
+            // 48 dp'den %35 kısa; üç düğme dikeyde fazla yer kaplıyordu.
+            minHeight = (31 * d).toInt()
+            setPadding((16 * d).toInt(), (5 * d).toInt(), (16 * d).toInt(), (5 * d).toInt())
             background = chipBackground(d, selected = false)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -591,7 +590,8 @@ internal object ScreenAsk {
 
     private fun chipBackground(d: Float, selected: Boolean): RippleDrawable {
         val shape = GradientDrawable().apply {
-            cornerRadius = 24f * d
+            // Tam oval: yarıçap yüksekliğin yarısından büyük.
+            cornerRadius = 100f * d
             setColor(if (selected) ACCENT_BG else CHIP_BG)
             setStroke((1 * d).toInt(), if (selected) ACCENT else CHIP_STROKE)
         }
@@ -620,6 +620,7 @@ internal object ScreenAsk {
         copyRow?.visibility = View.GONE
         answerText?.visibility = View.GONE
         loadingLabel?.text = label
+        answerPanel?.visibility = View.VISIBLE
         loadingRow?.visibility = View.VISIBLE
         dots?.start()
     }

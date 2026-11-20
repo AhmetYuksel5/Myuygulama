@@ -223,6 +223,24 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (ownRecents) {
+            var recentsStyle by remember { mutableIntStateOf(settings.recentsStyle) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    GestureSettings.RECENTS_CARDS to "Kayan kartlar",
+                    GestureSettings.RECENTS_GRID to "İki sütun ızgara",
+                ).forEach { (value, name) ->
+                    androidx.compose.material3.FilterChip(
+                        selected = recentsStyle == value,
+                        onClick = {
+                            recentsStyle = value
+                            settings.recentsStyle = value
+                        },
+                        label = { Text(name) },
+                    )
+                }
+            }
+        }
 
         // "Önceki uygulama" eylemi buradan da atanabildiği için ayarı burada da var.
         Stepper("Önceki uygulama: kaç uygulama arasında", cycle, 2..4, step = 1, suffix = "") {
