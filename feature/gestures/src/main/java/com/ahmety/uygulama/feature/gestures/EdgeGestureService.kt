@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -82,12 +83,24 @@ open class EdgeGestureService : AccessibilityService() {
         // bu sıraya bakıyor. Yalnız pencere değişiminde: sesli yazma için
         // gelen odak ve klavye haberleri uygulama değişimi değil, sayılsa
         // listeye yazı kutusu sınıfları karışırdı.
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) AppHistory.record(
-            this,
-            event?.packageName?.toString(),
-            event?.className?.toString(),
-            event?.text?.joinToString(" ").orEmpty(),
-        )
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val className = event.className?.toString()
+            val text = event.text?.joinToString(" ").orEmpty()
+            // Chrome'dan kurulan web uygulamasının (Yeşil Temizlik) adı
+            // pencerenin başlığında; sayfanın kendi başlığı başka olabiliyor
+            // ve uygulama tanınmayıp listeye hiç girmiyordu.
+            val title = if (className != null && ".webapps." in className) "${activeTitle()} $text" else text
+            AppHistory.record(this, event.packageName?.toString(), className, title)
+        }
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
+            event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        ) {
+            val covering = systemUiCovering()
+            if (covering != SystemUi.covering) {
+                SystemUi.covering = covering
+                onSystemUiChanged(covering)
+            }
+        }
         // Son uygulamalar panelinde içerik görünsün: öne gelen ekranın görüntüsü.
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             GestureSettings(this).ownRecents
@@ -102,6 +115,38 @@ open class EdgeGestureService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
+
+    private fun activeTitle(): String = runCatching {
+        windows.firstOrNull { it.isActive && it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            ?.title?.toString()
+    }.getOrNull().orEmpty()
+
+    /**
+     * Sistemin büyük bir penceresi (bildirim perdesi, kontrol paneli, ekran
+     * görüntüsü önizlemesi) ekranda mı. Merkez'in katmanları onların üstünde
+     * kalıyordu; perde açıkken kenar şeridi ve imleç perdenin üstünde
+     * duruyor, ekran görüntüsü önizlemesine dokunulamıyordu.
+     *
+     * Durum çubuğu ve gezinme çubuğu da sistem penceresi ama küçük; ekranın
+     * beşte birini geçen sistem penceresi açılmış bir şey demek.
+     */
+    private fun systemUiCovering(): Boolean = runCatching {
+        val metrics = resources.displayMetrics
+        val screen = metrics.widthPixels.toLong() * metrics.heightPixels
+        val bounds = android.graphics.Rect()
+        windows.any { window ->
+            window.type == AccessibilityWindowInfo.TYPE_SYSTEM && run {
+                window.getBoundsInScreen(bounds)
+                bounds.width().toLong() * bounds.height() > screen / 5
+            }
+        }
+    }.getOrDefault(false)
+
+    /** Sistem penceresi açıldı ya da kapandı; şeritler çekiliyor ya da geri geliyor. */
+    protected open fun onSystemUiChanged(covering: Boolean) {
+        if (!::settings.isInitialized) return
+        if (covering) removeAll() else handler.post { rebuild() }
+    }
 
     override fun onDestroy() {
         // Bağlanma tamamlanmadan servis öldürülebilir; lateinit'e körlemesine
@@ -128,6 +173,7 @@ open class EdgeGestureService : AccessibilityService() {
     private fun rebuild() {
         removeAll()
         if (!settings.enabled) return
+        if (SystemUi.covering) return
         // Kilit ekranında şerit yok: orada jestlerin karşılığı yok ve
         // saatin üstünde duran çubuk göze batıyordu.
         if (lock.locked) return

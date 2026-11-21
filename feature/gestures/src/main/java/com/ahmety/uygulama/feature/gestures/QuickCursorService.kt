@@ -137,7 +137,13 @@ class QuickCursorService : EdgeGestureService() {
         super.onAccessibilityEvent(event)
         voice.onEvent(event)
         if (!::settings.isInitialized) return
-        if (handle == null && settings.enabled) rebuild()
+        if (handle == null && settings.enabled && !SystemUi.covering) rebuild()
+    }
+
+    override fun onSystemUiChanged(covering: Boolean) {
+        super.onSystemUiChanged(covering)
+        if (!::settings.isInitialized) return
+        if (covering) removeViews() else handler.post { rebuild() }
     }
 
     override fun onInterrupt() = Unit
@@ -166,6 +172,8 @@ class QuickCursorService : EdgeGestureService() {
     private fun rebuild() {
         removeViews()
         if (!settings.enabled) return
+        // Bildirim perdesi ya da ekran görüntüsü önizlemesi açıkken imleç yok.
+        if (SystemUi.covering) return
         // Yatay ekranda imleç yok: bkz. sınıf açıklaması.
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) return
         // Kilit ekranında da yok: orada dokunacak bir şey yok.

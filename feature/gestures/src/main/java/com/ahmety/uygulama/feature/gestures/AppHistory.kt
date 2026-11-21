@@ -284,6 +284,18 @@ internal object AppHistory {
         if (recent.remove(name)) save(context)
     }
 
+    /**
+     * Öndeki pencerenin paketinden listedeki uygulama. Chrome'dan kurulan
+     * web uygulamasının penceresi Chrome'a ait görünüyor; listenin başı o
+     * web uygulamasıysa Chrome değil o sayılıyor.
+     */
+    @Synchronized
+    fun appFor(context: Context, pkg: String?): String? {
+        load(context)
+        val first = recent.firstOrNull()
+        return if (pkg != null && isChrome(pkg) && first != null && first.startsWith("org.chromium.webapk.")) first else pkg
+    }
+
     /** Listeyi boşaltır; içinde olunan uygulama kalıyor. */
     @Synchronized
     fun clearOthers(context: Context) {
@@ -419,4 +431,10 @@ internal object AppHistory {
 
     private const val PREFS = "merkez_app_history"
     private const val KEY = "recent"
+}
+
+/** Sistemin büyük bir penceresi (perde, ekran görüntüsü önizlemesi) şu an açık mı. */
+internal object SystemUi {
+    @Volatile
+    var covering = false
 }

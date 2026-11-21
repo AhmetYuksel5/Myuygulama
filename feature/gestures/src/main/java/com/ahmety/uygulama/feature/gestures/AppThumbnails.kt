@@ -47,7 +47,10 @@ internal object AppThumbnails {
      * (sınır, güvenli pencere, eski sürüm) elde ne varsa onunla.
      */
     fun capture(service: AccessibilityService, onDone: ((Bitmap?) -> Unit)? = null) {
-        val pkg = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        val pkg = AppHistory.appFor(
+            service,
+            runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull(),
+        )
         val fallback: () -> Unit = { onDone?.invoke(pkg?.let { cache.get(it) }) }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || pkg == null) return fallback()
         // Sistem erişilebilirlik görüntüsünü saniyede bir ile sınırlıyor.

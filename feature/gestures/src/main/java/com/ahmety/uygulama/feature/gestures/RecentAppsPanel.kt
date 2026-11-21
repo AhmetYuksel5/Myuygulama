@@ -89,7 +89,7 @@ internal object RecentAppsPanel {
             return true
         }
         // İçinde olunan uygulama da listede: en yeni kart, "Açık" işaretli.
-        current = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        current = AppHistory.appFor(service, runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull())
             ?.takeIf { it != service.packageName && AppHistory.snapshot(service, 1).firstOrNull() == it }
         // Kartında güncel görüntüsü olsun.
         if (current != null) AppThumbnails.capture(service)
