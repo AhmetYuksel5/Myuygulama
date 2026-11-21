@@ -436,7 +436,7 @@ internal object AppHistory {
     private const val KEY = "recent"
 }
 
-/** Sistemin büyük bir penceresi (perde, ekran görüntüsü önizlemesi) şu an açık mı. */
+/** Ekran görüntüsü önizlemesi şu an açık mı; açıkken Merkez'in katmanları çekiliyor. */
 internal object SystemUi {
     @Volatile
     var covering = false

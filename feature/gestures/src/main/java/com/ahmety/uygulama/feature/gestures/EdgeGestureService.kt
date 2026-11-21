@@ -122,23 +122,18 @@ open class EdgeGestureService : AccessibilityService() {
     }.getOrNull().orEmpty()
 
     /**
-     * Sistemin büyük bir penceresi (bildirim perdesi, kontrol paneli, ekran
-     * görüntüsü önizlemesi) ekranda mı. Merkez'in katmanları onların üstünde
-     * kalıyordu; perde açıkken kenar şeridi ve imleç perdenin üstünde
-     * duruyor, ekran görüntüsü önizlemesine dokunulamıyordu.
+     * Ekran görüntüsü önizlemesi ekranda mı. Merkez'in katmanları onun
+     * üstünde kalıyor, önizlemeye dokunulamıyordu.
      *
-     * Durum çubuğu ve gezinme çubuğu da sistem penceresi ama küçük; ekranın
-     * beşte birini geçen sistem penceresi açılmış bir şey demek.
+     * Bildirim perdesi ve kontrol merkezi bilerek sayılmıyor: önce onlarda da
+     * katmanlar çekiliyordu, ama o zaman imleç ve kısayollar perdede
+     * kullanılamıyordu. Önizleme penceresi adından tanınıyor; adı
+     * bildirilmeyen telefonda hiçbir şey çekilmiyor.
      */
     private fun systemUiCovering(): Boolean = runCatching {
-        val metrics = resources.displayMetrics
-        val screen = metrics.widthPixels.toLong() * metrics.heightPixels
-        val bounds = android.graphics.Rect()
         windows.any { window ->
-            window.type == AccessibilityWindowInfo.TYPE_SYSTEM && run {
-                window.getBoundsInScreen(bounds)
-                bounds.width().toLong() * bounds.height() > screen / 5
-            }
+            window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+                window.title?.toString()?.contains("screenshot", ignoreCase = true) == true
         }
     }.getOrDefault(false)
 

@@ -172,7 +172,7 @@ class QuickCursorService : EdgeGestureService() {
     private fun rebuild() {
         removeViews()
         if (!settings.enabled) return
-        // Bildirim perdesi ya da ekran görüntüsü önizlemesi açıkken imleç yok.
+        // Ekran görüntüsü önizlemesi açıkken imleç yok: önizlemeye dokunulabilsin.
         if (SystemUi.covering) return
         // Yatay ekranda imleç yok: bkz. sınıf açıklaması.
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) return
