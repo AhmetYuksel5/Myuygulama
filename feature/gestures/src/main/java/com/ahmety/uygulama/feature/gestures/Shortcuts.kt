@@ -89,6 +89,7 @@ class ShortcutStore(context: Context) {
         val SYSTEM: Map<String, String> = linkedMapOf(
             "last_app" to "Önceki uygulama",
             "ask_screen" to "Ekrana sor",
+            "text_shot" to "Yazı görüntüsü",
             "notifications" to "Bildirimler",
             "quick_settings" to "Hızlı ayarlar",
             "recents" to "Son uygulamalar",
@@ -144,6 +145,11 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
         switchToLastApp(service)
     } else if (item.value == "recents") {
         openRecents(service)
+    } else if (item.value == "text_shot") {
+        // Panel kapanmadan okunursa panelin yazıları da resme giriyordu.
+        android.os.Handler(android.os.Looper.getMainLooper())
+            .postDelayed({ TextSnapshot.take(service) }, 250L)
+        true
     } else if (item.value == "ask_screen") {
         // Panel az önce kapandı; hemen okunursa ekranda hâlâ panelin
         // kendisi görünüyor sayılabiliyor.
