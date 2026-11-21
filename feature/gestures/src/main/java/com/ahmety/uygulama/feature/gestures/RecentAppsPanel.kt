@@ -91,8 +91,23 @@ internal object RecentAppsPanel {
         // İçinde olunan uygulama da listede: en yeni kart, "Açık" işaretli.
         current = AppHistory.appFor(service, runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull())
             ?.takeIf { it != service.packageName && AppHistory.snapshot(service, 1).firstOrNull() == it }
-        // Kartında güncel görüntüsü olsun.
-        if (current != null) AppThumbnails.capture(service)
+        // Kartında güncel görüntüsü olsun: panel görüntü alındıktan sonra açılıyor.
+        if (opening) return true
+        if (current != null) {
+            opening = true
+            AppThumbnails.capture(service) {
+                opening = false
+                present(service)
+            }
+            return true
+        }
+        return present(service)
+    }
+
+    private var opening = false
+
+    private fun present(service: AccessibilityService): Boolean {
+        if (root != null) return true
         val apps = listOfNotNull(current) + AppHistory.others(service, COUNT - if (current != null) 1 else 0)
         if (apps.isEmpty()) {
             Toast.makeText(service, "Henüz son uygulama yok; uygulamalar arasında geçtikçe dolacak.", Toast.LENGTH_SHORT).show()
@@ -366,12 +381,11 @@ internal object RecentAppsPanel {
         cards.clear()
         val metrics = service.resources.displayMetrics
         val gap = dp(d, 16)
-        // Kart tam telefon ekranı oranında: ekran görüntüsü kesilmeden sığıyor.
-        // Önceden kart ekrandan kısaydı ve görüntünün altı kırpılıyordu. İki
-        // sıra ekranın %62'sini geçmesin diye boy önce, en ona göre.
-        val aspect = metrics.heightPixels.toFloat() / metrics.widthPixels
-        val height = ((metrics.heightPixels * 0.62f).toInt() - gap) / 2
-        val width = minOf((metrics.widthPixels - dp(d, 32) - gap) / 2, (height / aspect).toInt())
+        // Geniş kart; görüntü üstten hizalı, alt kısmı kırpılıyor. Ekran
+        // oranında daraltılmış kart denendi, beğenilmedi.
+        val width = (metrics.widthPixels - dp(d, 32) - gap) / 2
+        // Küçük ekranda iki sıra ekranın %62'sini geçmesin.
+        val height = (width * 1.55f).toInt().coerceAtMost(((metrics.heightPixels * 0.62f).toInt() - gap) / 2)
 
         fun row(left: String?, right: String?) = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -423,7 +437,7 @@ internal object RecentAppsPanel {
             setColor(0xFF1E2127.toInt())
             setStroke(dp(d, 1), 0x1FFFFFFF)
         }
-        val shot = AppThumbnails.get(pkg)
+        val shot = AppThumbnails.get(service, pkg)
         val card = FrameLayout(service).apply {
             background = shape
             tag = shape
@@ -663,7 +677,7 @@ internal object RecentAppsPanel {
         val d = service.resources.displayMetrics.density
         GestureFeedback.vibrateOnce(service, 25L)
         AppHistory.forget(service, pkg)
-        AppThumbnails.forget(pkg)
+        AppThumbnails.forget(service, pkg)
         close(service, pkg)
         val leave = if (fling != 0) {
             // Yana fırlatıldı: parmağın gittiği yönde ekrandan çıkıyor.

@@ -25,10 +25,32 @@ internal object AppThumbnails {
     private var lastShot = 0L
     private var pending: Runnable? = null
 
-    fun get(pkg: String): Bitmap? = cache.get(pkg)
+    /**
+     * Uygulamanın son görüntüsü. Bellekte yoksa diskten: önceden yalnız
+     * bellekte tutuluyordu; her güncellemede ve yeniden başlatmada siliniyor,
+     * kartlar simgeyle kalıyordu. Diskteki yer Merkez'in kendi önbelleği,
+     * başka uygulamalar okuyamıyor.
+     */
+    fun get(context: android.content.Context, pkg: String): Bitmap? = cache.get(pkg)
+        ?: runCatching {
+            val file = fileFor(context, pkg)
+            if (!file.exists()) null else android.graphics.BitmapFactory.decodeFile(file.path)
+        }.getOrNull()?.also { cache.put(pkg, it) }
 
-    fun forget(pkg: String) {
+    fun forget(context: android.content.Context, pkg: String) {
         cache.remove(pkg)
+        runCatching { fileFor(context, pkg).delete() }
+    }
+
+    private fun fileFor(context: android.content.Context, pkg: String) =
+        java.io.File(java.io.File(context.cacheDir, "son_uygulamalar").apply { mkdirs() }, "$pkg.jpg")
+
+    private fun save(context: android.content.Context, pkg: String, bitmap: Bitmap) {
+        Thread {
+            runCatching {
+                fileFor(context, pkg).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+            }
+        }.start()
     }
 
     /**
@@ -51,7 +73,7 @@ internal object AppThumbnails {
             service,
             runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull(),
         )
-        val fallback: () -> Unit = { onDone?.invoke(pkg?.let { cache.get(it) }) }
+        val fallback: () -> Unit = { onDone?.invoke(pkg?.let { get(service, it) }) }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || pkg == null) return fallback()
         // Sistem erişilebilirlik görüntüsünü saniyede bir ile sınırlıyor.
         val now = SystemClock.uptimeMillis()
@@ -78,8 +100,11 @@ internal object AppThumbnails {
                             }
                         }.getOrNull()
                         buffer.close()
-                        if (small != null) cache.put(pkg, small)
-                        onDone?.invoke(small ?: cache.get(pkg))
+                        if (small != null) {
+                            cache.put(pkg, small)
+                            save(service, pkg, small)
+                        }
+                        onDone?.invoke(small ?: get(service, pkg))
                     }
 
                     override fun onFailure(errorCode: Int) = fallback()
