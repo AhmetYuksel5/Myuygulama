@@ -35,11 +35,40 @@ internal object AppThumbnails {
      * Bir pencere değişiminden sonra çağrılıyor. Ekranın yerleşmesi
      * bekleniyor; art arda gelen değişimlerde yalnız sonuncusu çekiliyor.
      */
-    fun schedule(service: AccessibilityService) {
+    fun schedule(service: AccessibilityService, pkg: String?) {
+        if (pkg == null || !worthShooting(service, pkg)) return
         pending?.let { handler.removeCallbacks(it) }
         val run = Runnable { capture(service) }
         pending = run
         handler.postDelayed(run, SETTLE_MS)
+    }
+
+    /**
+     * Bu uygulamanın görüntüsü alınsın mı.
+     *
+     * Ekran görüntüsü ekran kartını bir an meşgul ediyor. Her pencere
+     * değişiminde çekmek oyunlarda (satranç) takılma yapabiliyordu: oyun
+     * içinde açılıp kapanan her pencere bir görüntü demekti. Oyunlarda hiç
+     * çekilmiyor, panelde simgeleri görünüyor; ötekilerde aynı uygulamanın
+     * görüntüsü dakikada bir yenileniyor.
+     */
+    private fun worthShooting(service: AccessibilityService, pkg: String): Boolean {
+        if (pkg == service.packageName) return false
+        if (isGame(service, pkg)) return false
+        val last = shotAt[pkg] ?: return true
+        return SystemClock.uptimeMillis() - last > REFRESH_MS
+    }
+
+    private val shotAt = HashMap<String, Long>()
+    private val games = HashMap<String, Boolean>()
+
+    private fun isGame(service: AccessibilityService, pkg: String): Boolean = games.getOrPut(pkg) {
+        runCatching {
+            val info = service.packageManager.getApplicationInfo(pkg, 0)
+            @Suppress("DEPRECATION")
+            info.category == android.content.pm.ApplicationInfo.CATEGORY_GAME ||
+                info.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME != 0
+        }.getOrDefault(false)
     }
 
     /**
@@ -57,7 +86,9 @@ internal object AppThumbnails {
         // uygulamalar çekilmiyor.
         if (pkg == service.packageName) return fallback()
         if (AppHistory.snapshot(service, 1).firstOrNull() != pkg) return fallback()
+        if (isGame(service, pkg)) return fallback()
         lastShot = now
+        shotAt[pkg] = now
         runCatching {
             service.takeScreenshot(
                 Display.DEFAULT_DISPLAY,
@@ -89,4 +120,5 @@ internal object AppThumbnails {
     private const val THUMB_WIDTH = 360
     private const val SETTLE_MS = 900L
     private const val MIN_GAP_MS = 1_200L
+    private const val REFRESH_MS = 60_000L
 }
