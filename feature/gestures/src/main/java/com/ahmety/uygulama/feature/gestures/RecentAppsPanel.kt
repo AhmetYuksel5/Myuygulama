@@ -415,7 +415,7 @@ internal object RecentAppsPanel {
     private fun slot(service: AccessibilityService, pkg: String?, d: Float, width: Int, height: Int): View =
         if (pkg == null) Space(service) else card(service, pkg, d, width, height)
 
-    /** Kart: uygulamanın son ekranı, altta karartılmış şeritte simge ve ad. */
+    /** Kart: uygulamanın son ekranı, üstte karartılmış şeritte simge ve ad. */
     private fun card(service: AccessibilityService, pkg: String, d: Float, width: Int, height: Int): View {
         val radius = 24f * d
         val shape = GradientDrawable().apply {
@@ -452,9 +452,10 @@ internal object RecentAppsPanel {
         }
         val label = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL or Gravity.BOTTOM
-            setPadding(dp(d, 12), 0, dp(d, 12), dp(d, 12))
-            background = gradient(0x00000000, 0xB3000000.toInt())
+            // Ad kartın tepesinde: hangi uygulama olduğu ilk bakışta görülsün.
+            gravity = Gravity.CENTER_VERTICAL or Gravity.TOP
+            setPadding(dp(d, 12), dp(d, 12), dp(d, 12), 0)
+            background = gradient(0xB3000000.toInt(), 0x00000000)
             addView(
                 ImageView(service).apply { setImageDrawable(AppIcons.get(service, pkg)) },
                 LinearLayout.LayoutParams(dp(d, 20), dp(d, 20)),
@@ -471,7 +472,7 @@ internal object RecentAppsPanel {
                 },
             )
         }
-        card.addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(d, 64), Gravity.BOTTOM))
+        card.addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(d, 64), Gravity.TOP))
         if (pkg == current) {
             card.addView(
                 TextView(service).apply {
@@ -487,8 +488,9 @@ internal object RecentAppsPanel {
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    Gravity.TOP or Gravity.END,
-                ).apply { setMargins(0, dp(d, 10), dp(d, 10), 0) },
+                    // Ad üstte olduğu için işaret alt köşede.
+                    Gravity.BOTTOM or Gravity.END,
+                ).apply { setMargins(0, 0, dp(d, 10), dp(d, 10)) },
             )
         }
 
