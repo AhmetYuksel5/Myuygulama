@@ -49,7 +49,9 @@ internal object AppHistory {
     @Synchronized
     fun record(context: Context, packageName: String?, className: String?, title: String = "") {
         load(context)
-        accept(context, packageName, className, title)?.let { pushFront(context, it) }
+        accept(context, packageName, className, title)
+            ?.takeUnless { HiddenApps.contains(context, it) }
+            ?.let { pushFront(context, it) }
     }
 
     /** Pencere listeye girecekse girecek paketin adı, girmeyecekse null. */
@@ -134,7 +136,8 @@ internal object AppHistory {
             events.getNextEvent(event)
             if (event.eventType != UsageEvents.Event.ACTIVITY_RESUMED) continue
             last = event.timeStamp
-            val name = accept(context, event.packageName, event.className, "") ?: continue
+            val name = accept(context, event.packageName, event.className, "")
+                ?.takeUnless { HiddenApps.contains(context, it) } ?: continue
             atHome = false
             if (recent.firstOrNull() == name) continue
             recent.remove(name)
@@ -437,4 +440,33 @@ internal object AppHistory {
 internal object SystemUi {
     @Volatile
     var covering = false
+}
+
+/**
+ * Son uygulamalarda ve önceki uygulama geçişinde hiç gösterilmeyecek
+ * uygulamalar. Bazı paketler (BeyinDostu gibi) kendi başına açılan bir
+ * uygulama değil ama ekranda pencere açtığı için listeye giriyordu;
+ * kullanıcı bunları buradan seçiyor.
+ */
+object HiddenApps {
+    private const val PREFS = "merkez_app_history"
+    private const val KEY = "hidden"
+
+    @Volatile
+    private var cache: Set<String>? = null
+
+    fun all(context: Context): Set<String> = cache ?: context.applicationContext
+        .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        .getStringSet(KEY, emptySet()).orEmpty().toSet()
+        .also { cache = it }
+
+    fun contains(context: Context, pkg: String) = pkg in all(context)
+
+    /** Gizlenen uygulama listeden de hemen çıkıyor. */
+    fun set(context: Context, packages: Set<String>) {
+        cache = packages.toSet()
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putStringSet(KEY, packages.toSet()).apply()
+        packages.forEach { AppHistory.forget(context, it) }
+    }
 }

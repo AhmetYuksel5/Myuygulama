@@ -223,6 +223,7 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        HiddenAppsButton()
 
         // "Önceki uygulama" eylemi buradan da atanabildiği için ayarı burada da var.
         Stepper("Önceki uygulama: kaç uygulama arasında", cycle, 2..4, step = 1, suffix = "") {
