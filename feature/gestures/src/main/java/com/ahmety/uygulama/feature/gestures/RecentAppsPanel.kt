@@ -512,6 +512,7 @@ internal object RecentAppsPanel {
             remove(service, pkg, card)
             true
         }
+        card.setOnTouchListener(Swipe(service, pkg, card))
         cards += card
         return card
     }
@@ -656,13 +657,22 @@ internal object RecentAppsPanel {
     }
 
     /** Uzun basma: kart uçarak çıkıyor, yerine kalanlar diziliyor; panel yeniden açılmıyor. */
-    private fun remove(service: AccessibilityService, pkg: String, card: View) {
+    private fun remove(service: AccessibilityService, pkg: String, card: View, fling: Int = 0) {
         val d = service.resources.displayMetrics.density
         GestureFeedback.vibrateOnce(service, 25L)
         AppHistory.forget(service, pkg)
         AppThumbnails.forget(pkg)
-        card.animate().scaleX(0.9f).scaleY(0.9f).translationY(-24f * d).alpha(0f)
-            .setDuration(200).setInterpolator(EXIT)
+        close(service, pkg)
+        val leave = if (fling != 0) {
+            // Yana fırlatıldı: parmağın gittiği yönde ekrandan çıkıyor.
+            val screen = service.resources.displayMetrics.widthPixels.toFloat()
+            card.animate().translationX(fling * screen).rotation(fling * 14f).alpha(0f)
+                .setDuration(FLING_MS).setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
+        } else {
+            card.animate().scaleX(0.9f).scaleY(0.9f).translationY(-24f * d).alpha(0f)
+                .setDuration(200).setInterpolator(EXIT)
+        }
+        leave
             .withEndAction {
                 val apps = listOfNotNull(current?.takeIf { it != pkg }) +
                     AppHistory.others(service, COUNT - if (current != null && current != pkg) 1 else 0)
@@ -684,6 +694,99 @@ internal object RecentAppsPanel {
                 fresh.alpha = 0f
                 fresh.animate().alpha(1f).setDuration(300).setInterpolator(EMPHASIZED).start()
             }.start()
+    }
+
+    /**
+     * Uygulamayı kapatır: arka plandaysa sistemden işlemini sonlandırmasını
+     * istiyor. Android başka bir uygulamayı tamamen öldürmeye izin vermiyor;
+     * bu, sistemin son uygulamalar ekranında kaydırıp atmakla aynı etki:
+     * arka planda tuttuğu bellek boşalıyor. Öndeki uygulama sonlandırılamıyor.
+     */
+    private fun close(service: Context, pkg: String) {
+        if (pkg == current) return
+        runCatching {
+            (service.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager)
+                .killBackgroundProcesses(pkg)
+        }
+    }
+
+    /**
+     * Kartı yana sürükleyip fırlatmak. Kart parmağı izliyor, uzaklaştıkça
+     * dönüp soluyor; yeterince uzağa ya da hızlı atılırsa kapanıyor, değilse
+     * yerine dönüyor. Yatay hareket başlamadan dokunma ve dikey kaydırma
+     * eskisi gibi kalıyor.
+     */
+    private class Swipe(
+        private val service: AccessibilityService,
+        private val pkg: String,
+        private val card: View,
+    ) : View.OnTouchListener {
+        private val slop = android.view.ViewConfiguration.get(service).scaledTouchSlop
+        private var downX = 0f
+        private var downY = 0f
+        private var swiping = false
+        private var velocity: android.view.VelocityTracker? = null
+
+        override fun onTouch(v: View, event: android.view.MotionEvent): Boolean {
+            if (launching != null) return false
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    swiping = false
+                    velocity?.recycle()
+                    velocity = android.view.VelocityTracker.obtain().apply { addMovement(event) }
+                }
+
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    velocity?.addMovement(event)
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (!swiping && kotlin.math.abs(dx) > slop && kotlin.math.abs(dx) > kotlin.math.abs(dy)) {
+                        swiping = true
+                        card.cancelLongPress()
+                        card.isPressed = false
+                        // Dikey kaydırma bu hareketi kendine almasın.
+                        card.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (swiping) {
+                        val progress = (kotlin.math.abs(dx) / card.width).coerceIn(0f, 1f)
+                        card.translationX = dx
+                        card.rotation = dx / card.width * 10f
+                        card.alpha = 1f - progress * 0.7f
+                        return true
+                    }
+                }
+
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    val tracker = velocity
+                    velocity = null
+                    if (!swiping) {
+                        tracker?.recycle()
+                        return false
+                    }
+                    swiping = false
+                    tracker?.addMovement(event)
+                    tracker?.computeCurrentVelocity(1000)
+                    val speed = tracker?.xVelocity ?: 0f
+                    tracker?.recycle()
+                    val dx = card.translationX
+                    val d = service.resources.displayMetrics.density
+                    val flung = event.actionMasked == android.view.MotionEvent.ACTION_UP &&
+                        (kotlin.math.abs(dx) > card.width * 0.35f || kotlin.math.abs(speed) > 1200f * d)
+                    if (flung) {
+                        val direction = if ((if (kotlin.math.abs(speed) > 1200f * d) speed else dx) > 0) 1 else -1
+                        remove(service, pkg, card, direction)
+                    } else {
+                        // Yerine yaylanarak dönüyor.
+                        card.animate().translationX(0f).rotation(0f).alpha(1f)
+                            .setDuration(260).setInterpolator(android.view.animation.OvershootInterpolator(1.2f)).start()
+                    }
+                    return true
+                }
+            }
+            return false
+        }
     }
 
     // ---- Yardımcılar ----
@@ -720,6 +823,7 @@ internal object RecentAppsPanel {
     private const val CARD_MS = 380L
     private const val STAGGER_MS = 30L
     private const val EXIT_MS = 180L
+    private const val FLING_MS = 240L
     private const val ZOOM_MS = 320L
     private const val LAUNCH_DELAY_MS = 80L
     private const val LAUNCH_TIMEOUT_MS = 700L

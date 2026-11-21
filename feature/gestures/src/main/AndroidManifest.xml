@@ -3,6 +3,8 @@
 
     <!-- Sesli yazma: klavyenin üstündeki mikrofon. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Son uygulamalar panelinde yana fırlatılan uygulamanın arka plan işlemini kapatmak. -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
