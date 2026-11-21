@@ -112,7 +112,7 @@ class NotificationFilterService : NotificationListenerService() {
             extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
                 ?: extras.getCharSequence(Notification.EXTRA_TEXT)
             )?.toString().orEmpty()
-        if (rules.none { matches(it, sbn.packageName, "$title\n$text") }) {
+        if (rules.none { matches(it, sbn.packageName, everything(sbn.notification, title, text)) }) {
             remember(sbn.packageName, title, text)
             return
         }
@@ -120,6 +120,33 @@ class NotificationFilterService : NotificationListenerService() {
             if (sbn.isClearable) cancelNotification(sbn.key) else snoozeNotification(sbn.key, SNOOZE_MS)
             store.hiddenCount = store.hiddenCount + 1
         }
+    }
+
+    /**
+     * Bildirimdeki bütün yazılar. Mesaj uygulamalarının sohbet bildiriminde
+     * metin olağan alanda değil, ayrı bir mesaj listesinde duruyor; önceden
+     * yalnız başlığa ve olağan metne bakılıyordu, banka SMS'i kurala uyduğu
+     * hâlde gizlenmiyordu.
+     */
+    private fun everything(notification: Notification, title: String, text: String): String {
+        val extras = notification.extras
+        val parts = mutableListOf(title, text)
+        listOf(
+            Notification.EXTRA_TEXT,
+            Notification.EXTRA_SUB_TEXT,
+            Notification.EXTRA_SUMMARY_TEXT,
+            Notification.EXTRA_INFO_TEXT,
+            Notification.EXTRA_TITLE_BIG,
+            Notification.EXTRA_CONVERSATION_TITLE,
+        ).forEach { key -> extras.getCharSequence(key)?.let { parts += it.toString() } }
+        extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.forEach { parts += it.toString() }
+        @Suppress("DEPRECATION")
+        val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+        messages?.forEach { item ->
+            (item as? android.os.Bundle)?.getCharSequence("text")?.let { parts += it.toString() }
+        }
+        notification.tickerText?.let { parts += it.toString() }
+        return parts.joinToString("\n")
     }
 
     private fun matches(rule: NotificationRule, pkg: String, content: String): Boolean {
