@@ -92,7 +92,7 @@ open class EdgeGestureService : AccessibilityService() {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             GestureSettings(this).ownRecents
         ) {
-            AppThumbnails.schedule(this, event.packageName?.toString())
+            AppThumbnails.schedule(this)
         }
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             RecentAppsPanel.onWindowChanged(event.packageName?.toString())
