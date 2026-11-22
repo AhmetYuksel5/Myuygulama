@@ -74,6 +74,14 @@ internal object ScreenAsk {
     private var answer: TextView? = null
     private var lastAnswer = ""
 
+    /**
+     * Kart açıkken sorulanlar ve cevapları. Her soru önceden tek başına
+     * gidiyordu; "peki bunu nasıl yazayım" gibi bir devam sorusunda model
+     * önceki cevabı bilmiyordu. Kart kapanınca sıfırlanıyor: yeni açılış
+     * yeni ekran, yeni konu.
+     */
+    private val turns = mutableListOf<Pair<String, String>>()
+
     fun open(service: AccessibilityService): Boolean {
         if (root != null) {
             close(service)
@@ -91,6 +99,7 @@ internal object ScreenAsk {
         screen = mask(screenText(service))
         image = null
         lastAnswer = ""
+        turns.clear()
         // Görüntü her zaman alınıyor. Önceden yalnız yazısı az ekranlarda
         // alınıyordu; WhatsApp'ta gönderilmiş bir haber resmi, sohbetin
         // yazısı yeterli sayıldığı için hiç görülmüyordu.
@@ -714,7 +723,12 @@ internal object ScreenAsk {
             }
             handler.post {
                 if (answer == null || id != requestId) return@post
-                result.onSuccess { showAnswer(it) }
+                result.onSuccess {
+                    turns += prompt to it.trim()
+                    // Uzayan konuşmada en eski turlar düşüyor; istek şişmesin.
+                    while (turns.size > MAX_TURNS) turns.removeAt(0)
+                    showAnswer(it)
+                }
                     .onFailure { showError(friendly(it)) { ask(service, prompt, search) } }
             }
         }.start()
@@ -893,10 +907,7 @@ internal object ScreenAsk {
      * Ekranın yazısı ve varsa görüntüsü de gidiyor; soru ekrana dair olabilir.
      */
     private fun searchAnswer(key: String, prompt: String): String {
-        val text = (userContent(prompt) as? String) ?: buildString {
-            append("İstek: ").append(prompt).append("\n\n")
-            if (screen.isNotBlank()) append("Ekrandaki yazı:\n").append(screen)
-        }
+        val text = intro(prompt)
         val content = JSONArray().put(JSONObject().put("type", "input_text").put("text", text))
         image?.let {
             content.put(
@@ -947,11 +958,21 @@ internal object ScreenAsk {
             "kullanıcının isteğini yerine getir. Ekranda dolandırıcılık izi görürsen söyle."
     }
 
-    private fun userContent(prompt: String): Any {
-        val intro = buildString {
-            append("İstek: ").append(prompt).append("\n\n")
-            if (screen.isNotBlank()) append("Ekrandaki yazı:\n").append(screen)
+    /** İsteğin yazısı: önceki konuşma, yeni istek ve ekrandaki yazı. */
+    private fun intro(prompt: String): String = buildString {
+        if (turns.isNotEmpty()) {
+            append("Bu kartta daha önce konuşulanlar (yeni istek bunların devamı olabilir):\n")
+            turns.forEach { (question, reply) ->
+                append("Kullanıcı: ").append(question).append('\n')
+                append("Sen: ").append(reply).append("\n\n")
+            }
         }
+        append("İstek: ").append(prompt).append("\n\n")
+        if (screen.isNotBlank()) append("Ekrandaki yazı:\n").append(screen)
+    }
+
+    private fun userContent(prompt: String): Any {
+        val intro = intro(prompt)
         val picture = image ?: return intro
         return JSONArray()
             .put(JSONObject().put("type", "text").put("text", intro))
@@ -1014,6 +1035,9 @@ internal object ScreenAsk {
     }
 
     private const val CALENDAR = "takvim"
+
+    /** Sonraki soruya eklenen en fazla soru-cevap sayısı. */
+    private const val MAX_TURNS = 6
     private val ACTIONS = listOf(
         "Çevir" to "Ekrandaki yabancı dildeki yazıyı Türkçeye çevir. Yalnız çeviriyi yaz.",
         "Cevap yaz" to "Bu bir yazışmaysa son gelen mesaja kısa, kibar, doğal bir Türkçe cevap taslağı yaz. Yalnız cevabı yaz.",
