@@ -24,4 +24,19 @@ class CallFilterTest {
         assertEquals("0850", CallFilterStore.normalizePrefix("+90 850"))
         assertEquals("0212", CallFilterStore.normalizePrefix("0212"))
     }
+
+    @Test
+    fun `kalip isaretleri`() {
+        assertEquals("02129*", CallFilterStore.normalizePrefix("0212 9*"))
+        assertEquals("0212???00", CallFilterStore.normalizePrefix("0212 xxx 00"))
+        val star = CallFilterStore.pattern("02129*")
+        assertEquals(true, star.matches("02129001122"))
+        assertEquals(false, star.matches("02128001122"))
+        val single = CallFilterStore.pattern("0212???00")
+        assertEquals(true, single.matches("02125550012"))
+        assertEquals(false, single.matches("02125551212"))
+        // Düz başlangıç eskisi gibi.
+        assertEquals(true, CallFilterStore.pattern("0850").matches("08501234567"))
+        assertEquals(false, CallFilterStore.pattern("0850").matches("05321234567"))
+    }
 }

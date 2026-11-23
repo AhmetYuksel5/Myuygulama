@@ -11,7 +11,9 @@ data class BlockedCall(val number: String, val at: Long)
 
 /**
  * Arama süzgecinin ayarları: hangi başlangıçlar engelleniyor, ne kadar
- * engellendi. Engellenecek başlangıçlar ulusal biçimde tutuluyor ("0850").
+ * engellendi. Başlangıçlar ulusal biçimde tutuluyor ("0850"); içinde kalıp
+ * işaretleri olabilir: `*` istenen kadar rakam, `?` tek rakam ("02129*",
+ * "0212???00").
  */
 class CallFilterStore(context: Context) {
     private val prefs: SharedPreferences =
@@ -32,7 +34,7 @@ class CallFilterStore(context: Context) {
     fun matches(number: String): Boolean {
         val national = national(number)
         if (national.isEmpty()) return false
-        return prefixes().any { national.startsWith(it) }
+        return prefixes().any { pattern(it).matches(national) }
     }
 
     var blockedCount: Int
@@ -79,13 +81,38 @@ class CallFilterStore(context: Context) {
             }
         }
 
-        /** Kullanıcının yazdığı başlangıç ("850", "+90850", "0850") → "0850". */
+        /**
+         * Başlangıç kalıbını numaraya uyan düzenli ifadeye çevirir. Kalıp hep
+         * baştan karşılaştırılıyor ve sonu açık: "0850" de "0850*" de 0850 ile
+         * başlayan her numarayı tutuyor.
+         */
+        fun pattern(prefix: String): Regex = Regex(
+            prefix.map { c ->
+                when (c) {
+                    '*' -> "\\d*"
+                    '?' -> "\\d"
+                    else -> Regex.escape(c.toString())
+                }
+            }.joinToString("") + ".*",
+        )
+
+        /** Kalıpta kaç gerçek rakam var; çok genel kalıp (ör. yalnız "0") eklenmesin. */
+        fun digitCount(prefix: String): Int = prefix.count { it.isDigit() }
+
+        /**
+         * Kullanıcının yazdığı başlangıç ("850", "+90850", "0212 9*") ulusal
+         * biçime: "0850", "02129*". Boşluk ve tire atılıyor; x de tek rakam
+         * sayılıyor, telefon klavyesinde soru işareti zor bulunuyor.
+         */
         fun normalizePrefix(text: String): String {
-            val digits = text.filter { it.isDigit() }
+            val digits = text.trim()
+                .map { if (it == 'x' || it == 'X') '?' else it }
+                .filter { it.isDigit() || it == '*' || it == '?' }
+                .joinToString("")
             return when {
                 digits.isEmpty() -> ""
                 digits.startsWith("0090") -> "0" + digits.drop(4)
-                text.trim().startsWith("+90") || (digits.startsWith("90") && digits.length > 4) ->
+                text.trim().startsWith("+90") || (digits.startsWith("90") && digitCount(digits) > 4) ->
                     "0" + digits.drop(2)
                 digits.startsWith("0") -> digits
                 else -> "0$digits"

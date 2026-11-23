@@ -135,7 +135,11 @@ fun CallFilterScreen(onBack: (() -> Unit)? = null) {
         Text("Engellenen başlangıçlar", style = MaterialTheme.typography.labelLarge)
         prefixes.forEach { prefix ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("$prefix ile başlayanlar", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(
+                    "${spaced(prefix)} ile başlayanlar",
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
                 TextButton(onClick = { save(prefixes - prefix) }) { Text("Sil") }
             }
         }
@@ -143,19 +147,27 @@ fun CallFilterScreen(onBack: (() -> Unit)? = null) {
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
-                label = { Text("Başlangıç, ör. 0850") },
+                label = { Text("Başlangıç, ör. 0850 ya da 0212 9*") },
                 singleLine = true,
+                // Telefon klavyesinde * var; ? için x de yazılabiliyor.
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.weight(1f),
             )
             TextButton(
-                enabled = CallFilterStore.normalizePrefix(draft).length >= 3,
+                enabled = CallFilterStore.digitCount(CallFilterStore.normalizePrefix(draft)) >= 3,
                 onClick = {
                     save(prefixes + CallFilterStore.normalizePrefix(draft))
                     draft = ""
                 },
             ) { Text("Ekle") }
         }
+
+        Text(
+            "* istenen kadar rakam, ? (ya da x) tek rakam yerine geçer. Örnek: \"0212 9*\" 0212 9 ile " +
+                "başlayan bütün numaraları, \"0212 xxx 00\" 0212'den sonra üç rakam ve 00 gelenleri engeller.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         Text("Son engellenenler", style = MaterialTheme.typography.labelLarge)
         Text(
@@ -176,3 +188,10 @@ fun CallFilterScreen(onBack: (() -> Unit)? = null) {
         }
     }
 }
+
+/**
+ * Kalıbı okunur biçimde gösterir: "02129*" → "0212 9*". Türkiye'de alan
+ * kodu dört hane; ondan sonrası ayrı yazılınca ne engellendiği hemen okunuyor.
+ */
+private fun spaced(prefix: String): String =
+    if (prefix.length > 4) prefix.take(4) + " " + prefix.drop(4) else prefix
