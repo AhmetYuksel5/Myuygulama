@@ -64,6 +64,9 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
 
     private var recorder: LiveRecorder? = null
     private var startedAt = 0L
+
+    /** Canlı önizlemenin bu kayıtta duyduğu son metin; son yazıya ipucu. */
+    private var heard = ""
     private val bubble = PreviewBubble(service)
 
     private val refresh = Runnable { update() }
@@ -307,8 +310,16 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
             key = apiKey(),
             preview = prefs.getBoolean(KEY_PREVIEW, true),
             onLevel = { level -> handler.post { button?.level = level } },
-            onText = { text -> handler.post { if (recorder != null) bubble.show(text, anchor()) } },
+            onText = { text ->
+                handler.post {
+                    if (recorder != null) {
+                        heard = text
+                        bubble.show(text, anchor())
+                    }
+                }
+            },
         )
+        heard = ""
         if (!rec.start()) {
             VoiceRecordService.stop(service)
             toast("Mikrofon açılamadı; başka bir uygulama kullanıyor olabilir.")
@@ -361,8 +372,9 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         button?.state = MicButton.BUSY
         bubble.busy()
         val key = apiKey()
+        val hint = hint(heard)
         Thread {
-            val result = runCatching { transcribe(file, key) }
+            val result = runCatching { transcribe(file, key, hint) }
             file.delete()
             handler.post {
                 button?.state = MicButton.IDLE
@@ -379,17 +391,36 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
      * Yeni model reddederse eski modelle bir kez daha dener: `gpt-transcribe`
      * telefonda denenmeden geliyor, eski model 26 Şubat 2027'ye kadar açık.
      */
-    private fun transcribe(file: File, key: String): String =
-        runCatching { transcribe(file, key, MODEL) }.getOrElse { first ->
-            if (first is ModelRejected) transcribe(file, key, OLD_MODEL) else throw first
+    private fun transcribe(file: File, key: String, hint: String): String =
+        runCatching { transcribe(file, key, MODEL, hint) }.getOrElse { first ->
+            if (first is ModelRejected) transcribe(file, key, OLD_MODEL, hint) else throw first
         }
+
+    /**
+     * Yazıya çevirene yazım ipucu. "PNG" diye söylenen kısaltma önizlemede
+     * doğru çıkıyor, bütün kaydı yazan modelde "Piyancı" oluyordu: o model
+     * sesi Türkçe kelime sanıyor. Kısaltmaların harfle yazıldığı söyleniyor
+     * ve canlı önizlemenin duyduğu metin de veriliyor; iki model birbirinin
+     * yanlışını kapatıyor.
+     */
+    private fun hint(preview: String): String = buildString {
+        append("Türkçe konuşma; arada İngilizce ve Arapça kelimeler olabilir. ")
+        append("Kısaltmalar ve dosya biçimleri harfleriyle büyük yazılır: ")
+        append("PNG, JPG, PDF, SVG, GIF, MP3, MP4, ZIP, APK, USB, API, URL, SMS, PIN, IBAN, KDV, SGK. ")
+        append("Uygulama ve marka adları özgün yazımıyla yazılır.")
+        if (preview.isNotBlank()) {
+            append(" Aynı kaydın hızlı bir dökümü (yazımı yol gösterebilir, yanlış da olabilir): ")
+            append(preview.take(HINT_CHARS))
+        }
+    }
 
     private class ModelRejected(message: String) : IllegalStateException(message)
 
-    private fun transcribe(file: File, key: String, model: String): String {
+    private fun transcribe(file: File, key: String, model: String, hint: String): String {
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("model", model)
+            .addFormDataPart("prompt", hint)
             .addFormDataPart("file", file.name, file.asRequestBody("audio/wav".toMediaType()))
             .build()
         val request = Request.Builder()
@@ -506,6 +537,9 @@ class VoiceTyping internal constructor(private val service: AccessibilityService
         // yazıyor. Önceki `gpt-4o-transcribe` 26 Şubat 2027'de kapanıyor;
         // yerine geçen bu, dakikası da daha ucuz.
         private const val MODEL = "gpt-transcribe"
+
+        /** Önizlemeden ipucuna giden en fazla harf; uzun kayıtta istek şişmesin. */
+        private const val HINT_CHARS = 600
         private const val OLD_MODEL = "gpt-4o-transcribe"
 
         private const val SIZE_DP = 44f
