@@ -198,7 +198,7 @@ class RevealAction : ActionCallback {
 
 /**
  * Bildim / Bilemedim. Uygulamadaki kartla aynı anlam: bilemedim, anlamını
- * açıp hatırlayamamak demek (FSRS'de "unuttum").
+ * açıp hatırlayamamak demek (merdivende bir basamak geri).
  */
 class AnswerAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {

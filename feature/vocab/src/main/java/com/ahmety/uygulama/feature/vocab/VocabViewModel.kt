@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -371,11 +372,15 @@ class VocabViewModel @Inject constructor(
          */
         val pinned: String? = null,
         val filter: VocabFilter = VocabFilter(),
+        /** Günlük yeni kelime hedefi; değişince deste yeniden kurulsun diye burada. */
+        val dailyNew: Int = 10,
     )
 
     private val prefs = VocabPrefs(appContext)
 
-    private val session = MutableStateFlow(VocabSession(filter = VocabFilter(pen = prefs.pen)))
+    private val session = MutableStateFlow(
+        VocabSession(filter = VocabFilter(pen = prefs.pen), dailyNew = prefs.dailyNew),
+    )
 
     private val mode = MutableStateFlow(VocabMode.ALL)
 
@@ -384,6 +389,10 @@ class VocabViewModel @Inject constructor(
 
     private val _fontScale = MutableStateFlow(prefs.fontScale)
     val fontScale: StateFlow<Int> = _fontScale
+
+    val dailyNew: StateFlow<Int> = session
+        .map { it.dailyNew }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, prefs.dailyNew)
 
 
     val uiState: StateFlow<VocabUiState> = combine(
@@ -474,11 +483,19 @@ class VocabViewModel @Inject constructor(
             .filter { untouched(it) }
             .sortedBy { it.word.lowercase() }
 
+        // Günlük yeni kelime: önce tekrarlar, sonra hedef kadar yeni kelime
+        // (Blarma'daki gibi). Bugün öğrenmeye başladıkların hedeften düşüyor;
+        // hedef dolunca deste yalnız tekrarlardan oluşuyor.
+        val startedToday = schedules.values.count { plan ->
+            plan.lastReviewedAt != null &&
+                plan.status != VocabStatus.KNOWN &&
+                plan.status != VocabStatus.IGNORED &&
+                (plan.introducedAt ?: 0L) >= dayStart
+        }
+        val newToday = fresh.take((sessionState.dailyNew - startedToday).coerceAtLeast(0))
+
         val deck = when (currentMode) {
-            // Tekrar yalnızca çalıştığın kelimelerden oluşuyor. Eskiden araya
-            // yeni kelime serpiştiriyorduk; "bakmadığım kelimenin tekrarı
-            // olmaz" — yenilerin yeri "Yeni" bölmesi.
-            VocabMode.TODAY -> due
+            VocabMode.TODAY -> due + newToday
             // Tümü: öğrendiğin ve önemsize attığın dışındaki her kelime.
             // Vadesi gelenler başa geliyor ki tekrar aksamasın.
             VocabMode.ALL -> {
@@ -544,7 +561,7 @@ class VocabViewModel @Inject constructor(
                 .distinct()
                 .sortedBy { it.second.lowercase() },
             filter = sessionState.filter,
-            dueToday = due.size,
+            dueToday = due.size + newToday.size,
             nextDueInDays = nextDue,
             loaded = true,
             turn = sessionState.turn,
@@ -757,10 +774,16 @@ class VocabViewModel @Inject constructor(
         advance(word)
         viewModelScope.launch {
             val next = repository.applyDecision(word.word, decision, revealed)
-            // FSRS'nin kelimeye verdiği aralık görünsün: sabit merdivenden
-            // farkı, her kelimenin kendi aralığını alması.
+            // Kelimenin ne zaman döneceği görünsün; merdivenin sonundaysa
+            // öğrenildiği.
             val due = next.dueAt
-            if (decision == VocabDecision.STUDIED && due != null) {
+            if (decision == VocabDecision.STUDIED && next.status == VocabStatus.KNOWN) {
+                android.widget.Toast.makeText(
+                    appContext,
+                    "${word.word} · 120 gün tamam, öğrenildi",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            } else if (decision == VocabDecision.STUDIED && due != null) {
                 val now = repository.nowMillis()
                 val today = startOfDay(now, repository.zoneOffsetMillis(now))
                 val days = ((due - today) / 86_400_000L).coerceAtLeast(1L)
@@ -775,6 +798,11 @@ class VocabViewModel @Inject constructor(
 
     fun setMode(newMode: VocabMode) {
         mode.value = newMode
+    }
+
+    fun setDailyNew(value: Int) {
+        prefs.dailyNew = value
+        session.value = session.value.copy(dailyNew = prefs.dailyNew)
     }
 
     fun setSwipeThreshold(value: Int) {

@@ -24,7 +24,7 @@ data class VocabProgressEntity(
     val updatedAt: Long,
     val deletedAt: Long? = null,
 
-    /** Tekrar merdiveninin kademesi. 0 = henüz programa girmedi. */
+    /** Tekrar merdiveninin kademesi (1–5: sıradaki tekrar 1., 3., 7., 30. ya da 120. gün). 0 = henüz programa girmedi. */
     val box: Int = 0,
 
     /** Bir sonraki tekrar zamanı; null ise programda değil (öğrenildi/önemsiz). */
@@ -46,9 +46,9 @@ data class VocabProgressEntity(
     /** Kartın anlamı kaç kez açıldı — hatırlayamama göstergesi. */
     val revealCount: Int = 0,
 
-    /** FSRS dayanıklılığı, gün; null ise kelime hâlâ eski merdivende. */
+    /** FSRS döneminden kalma dayanıklılık, gün; yeni merdivende boş. */
     val stability: Double? = null,
 
-    /** FSRS zorluğu, 1–10. */
+    /** FSRS döneminden kalma zorluk, 1–10. 0 ise satır yeni 1-3-7-30-120 merdiveninde. */
     val difficulty: Double? = null,
 )

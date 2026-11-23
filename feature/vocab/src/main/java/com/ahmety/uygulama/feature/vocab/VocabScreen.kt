@@ -131,6 +131,7 @@ fun VocabRoute(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(wordListViewModel::load) }
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
+    val dailyNew by viewModel.dailyNew.collectAsStateWithLifecycle()
     val enrichingWord by viewModel.enriching.collectAsStateWithLifecycle()
     val imagingWord by viewModel.imaging.collectAsStateWithLifecycle()
     val imageTurn by viewModel.imageTurn.collectAsStateWithLifecycle()
@@ -390,6 +391,8 @@ fun VocabRoute(
             onThresholdChange = viewModel::setSwipeThreshold,
             fontScale = fontScale,
             onFontScaleChange = viewModel::setFontScale,
+            dailyNew = dailyNew,
+            onDailyNewChange = viewModel::setDailyNew,
             onDismiss = { showSettings = false },
         )
     }
@@ -939,6 +942,8 @@ private fun VocabSettingsDialog(
     onThresholdChange: (Int) -> Unit,
     fontScale: Int,
     onFontScaleChange: (Int) -> Unit,
+    dailyNew: Int,
+    onDailyNewChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -990,6 +995,31 @@ private fun VocabSettingsDialog(
                         onClick = { onFontScaleChange(fontScale + 10) },
                     ) { Text("+") }
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Günlük yeni kelime",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        enabled = dailyNew > 0,
+                        onClick = { onDailyNewChange(dailyNew - 5) },
+                    ) { Text("-") }
+                    Text("$dailyNew", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(
+                        enabled = dailyNew < 50,
+                        onClick = { onDailyNewChange(dailyNew + 5) },
+                    ) { Text("+") }
+                }
+                Text(
+                    text = "Tekrar destesinde tekrarlardan sonra gelir. Tekrar günleri: 1, 3, 7, 30, 120.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } },
@@ -1373,8 +1403,8 @@ private fun EmptyDeck(state: VocabUiState) {
         state.nextDueInDays != null ->
             "Sıradaki tekrar ${state.nextDueInDays} gün sonra."
         state.newCount > 0 ->
-            "Tekrar, çalıştığın kelimelerden oluşuyor. " +
-                "\"Yeni\" bölmesinde ${state.newCount} kelime bekliyor."
+            "Bugünkü yeni kelime hedefi tamam. " +
+                "\"Yeni\" bölmesinde ${state.newCount} kelime daha bekliyor."
         else -> "Yeni kelime eklemek için kitapta ya da altyazıda işaretle."
     }
     MerkezEmptyState(

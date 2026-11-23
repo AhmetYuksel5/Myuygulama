@@ -28,6 +28,15 @@ class VocabPrefs(context: Context) {
         set(value) = prefs.edit().putInt(KEY_FONT_SCALE, value.coerceIn(80, 180)).apply()
 
     /**
+     * Günlük yeni kelime hedefi. "Tekrar" destesinde vadesi gelen tekrarlardan
+     * sonra bu kadar yeni kelime geliyor; bugün öğrenmeye başladıkların
+     * bundan düşülüyor. 0: Tekrar'da yalnız tekrarlar.
+     */
+    var dailyNew: Int
+        get() = prefs.getInt(KEY_DAILY_NEW, 10).coerceIn(0, 50)
+        set(value) = prefs.edit().putInt(KEY_DAILY_NEW, value.coerceIn(0, 50)).apply()
+
+    /**
      * Kalem süzgeci. Sekmeler arasında gidip gelince ekran sıfırdan
      * kuruluyor; "yalnız kırmızılar" seçimi her seferinde bozulmasın.
      */
@@ -41,5 +50,6 @@ class VocabPrefs(context: Context) {
         const val KEY_THRESHOLD = "swipe_threshold"
         const val KEY_PEN = "pen"
         const val KEY_FONT_SCALE = "font_scale"
+        const val KEY_DAILY_NEW = "daily_new"
     }
 }

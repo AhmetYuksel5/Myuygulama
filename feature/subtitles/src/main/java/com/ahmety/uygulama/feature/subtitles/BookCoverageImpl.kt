@@ -23,7 +23,7 @@ import javax.inject.Singleton
  * Kitap başına "ne kadarını anlarım".
  *
  * Bir kelime bilinen sayılıyor:
- * - destedeyse ve "biliyorum", "önemsiz" ya da iyice oturmuşsa (16 gün ve üstü);
+ * - destedeyse ve "biliyorum", "önemsiz" ya da iyice oturmuşsa (7. gün tekrarını geçmişse);
  * - destede değilse ve sıklık listesinin ilk [assumedKnown] kelimesindeyse.
  *
  * Destede olup henüz oturmamış kelime ile listenin dışında kalan nadir
@@ -119,7 +119,7 @@ class BookCoverageImpl @Inject constructor(
         const val KEY_ASSUMED = "assumed_known"
         const val DEFAULT_ASSUMED = 3000
 
-        /** Merdivende 16 günlük basamak: kelime artık oturmuş sayılıyor. */
+        /** 7. gün tekrarını geçmiş, 30. günü bekleyen kelime: artık oturmuş sayılıyor. */
         const val SETTLED_BOX = 4
         const val UNKNOWN_LIMIT = 30
     }
