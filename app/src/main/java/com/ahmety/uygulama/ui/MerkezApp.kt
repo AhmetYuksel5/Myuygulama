@@ -55,6 +55,7 @@ import com.ahmety.uygulama.takvim.TakvimBildirimi
 import com.ahmety.uygulama.ui.ai.AiSettingsScreen
 import com.ahmety.uygulama.ui.gestures.GestureSettingsScreen
 import com.ahmety.uygulama.ui.gestures.QuickCursorScreen
+import com.ahmety.uygulama.ui.gestures.CallFilterScreen
 import com.ahmety.uygulama.ui.gestures.NotificationFilterScreen
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
@@ -221,6 +222,7 @@ fun MerkezApp() {
                     onOpenGestures = { navController.navigate(GESTURES_ROUTE) },
                     onOpenCursor = { navController.navigate(CURSOR_ROUTE) },
                     onOpenNotificationFilter = { navController.navigate(NOTIFICATION_FILTER_ROUTE) },
+                    onOpenCallFilter = { navController.navigate(CALL_FILTER_ROUTE) },
                     onOpenSubtitles = { navController.navigate(SUBTITLE_ROUTE) },
                 )
             }
@@ -279,6 +281,9 @@ fun MerkezApp() {
             composable(NOTIFICATION_FILTER_ROUTE) {
                 NotificationFilterScreen(onBack = { navController.popBackStack() })
             }
+            composable(CALL_FILTER_ROUTE) {
+                CallFilterScreen(onBack = { navController.popBackStack() })
+            }
             composable(SUBTITLE_ROUTE) {
                 SubtitleRoute(onBack = { navController.popBackStack() })
             }
@@ -297,6 +302,7 @@ private const val SYNC_ROUTE = "sync"
 private const val GESTURES_ROUTE = "gestures"
 private const val CURSOR_ROUTE = "cursor"
 private const val NOTIFICATION_FILTER_ROUTE = "bildirim_suzgeci"
+private const val CALL_FILTER_ROUTE = "arama_suzgeci"
 
 /**
  * Liste satırının simgesi: tonlu bir dairenin içinde.
@@ -344,6 +350,7 @@ private fun MoreScreen(
     onOpenGestures: () -> Unit,
     onOpenCursor: () -> Unit,
     onOpenNotificationFilter: () -> Unit,
+    onOpenCallFilter: () -> Unit,
     onOpenSubtitles: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -421,6 +428,12 @@ private fun MoreScreen(
             headlineContent = { Text("Bildirim süzgeci") },
             supportingContent = { Text("Kapatılamayan sistem bildirimlerini kendiliğinden gizler") },
             modifier = Modifier.clickable(onClick = onOpenNotificationFilter),
+        )
+        ListItem(
+            leadingContent = { MoreIcon(MerkezIcons.Shield) },
+            headlineContent = { Text("Arama süzgeci") },
+            supportingContent = { Text("0850 gibi numaralardan gelen aramaları çalmadan reddeder") },
+            modifier = Modifier.clickable(onClick = onOpenCallFilter),
         )
 
         SectionLabel("AYARLAR")
