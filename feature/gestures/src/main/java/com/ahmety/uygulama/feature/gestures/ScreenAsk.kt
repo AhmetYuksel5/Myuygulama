@@ -1,6 +1,7 @@
 package com.ahmety.uygulama.feature.gestures
 
 import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
 import android.view.MotionEvent
 import android.graphics.drawable.StateListDrawable
 import android.graphics.drawable.RippleDrawable
@@ -313,15 +314,31 @@ internal object ScreenAsk {
             }
         }
 
-        // Başlık
-        card.addView(
-            TextView(service).apply {
-                text = "Ekrana sor"
-                setTextColor(Color.WHITE)
-                textSize = 17f
-                typeface = Typeface.DEFAULT_BOLD
-            },
-        )
+        // Başlık: aynı zamanda tutamak. Kart altındaki yazıyı kapatıyordu
+        // (çeviride aslı görünmüyordu); başlıktan tutup her yöne, ekranın
+        // dışına doğru da çekilebiliyor.
+        val header = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(
+                TextView(service).apply {
+                    text = "Ekrana sor"
+                    setTextColor(Color.WHITE)
+                    textSize = 17f
+                    typeface = Typeface.DEFAULT_BOLD
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            addView(
+                TextView(service).apply {
+                    text = "⠿"
+                    setTextColor(MUTED)
+                    textSize = 20f
+                    contentDescription = "Kartı taşı"
+                },
+            )
+        }
+        card.addView(header)
 
         // Hazır eylemler
         val chips = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
@@ -544,21 +561,27 @@ internal object ScreenAsk {
         copiedPill = pill
         answer = answerView
 
+        // Pencere kart kadar ve sol üstten konumlanıyor: sürüklenince yeri
+        // değişebilsin. Sınır dışına çıkabilmesi için ekran sınırı kapalı.
+        val windowWidth = width + frame.paddingLeft + frame.paddingRight
         val params = WindowManager.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
+            windowWidth,
             ViewGroup.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             // Odaklanabilir: soru kutusuna yazılabilsin, geri tuşu karta gelsin.
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP
+            gravity = Gravity.TOP or Gravity.START
+            x = (metrics.widthPixels - windowWidth) / 2
             // Durum çubuğunun altından başlıyor: o şerit bildirim perdesine kalsın.
             y = statusBar(service)
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
         }
+        dragBy(header, frame, params, manager, metrics, dp(72f), statusBar(service))
         runCatching {
             manager.addView(frame, params)
             root = frame
@@ -570,6 +593,50 @@ internal object ScreenAsk {
             card.translationY = -16f * d
             card.animate().alpha(1f).translationY(0f).setDuration(200L)
                 .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        }
+    }
+
+    /**
+     * [handle]'dan tutulunca pencereyi parmakla birlikte taşır. Kart sağa,
+     * sola ve aşağı ekranın dışına itilebiliyor; yalnız başlığın [keep]
+     * kadarı ekranda kalıyor ki geri çekilebilsin. Yukarıda durum çubuğunda
+     * duruyor: o şerit bildirim perdesine ait.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun dragBy(
+        handle: View,
+        window: View,
+        params: WindowManager.LayoutParams,
+        manager: WindowManager,
+        metrics: android.util.DisplayMetrics,
+        keep: Int,
+        top: Int,
+    ) {
+        var startX = 0f
+        var startY = 0f
+        var fromX = 0
+        var fromY = 0
+        handle.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.rawX
+                    startY = event.rawY
+                    fromX = params.x
+                    fromY = params.y
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = (fromX + (event.rawX - startX).toInt())
+                        .coerceIn(keep - params.width, metrics.widthPixels - keep)
+                    params.y = (fromY + (event.rawY - startY).toInt())
+                        .coerceIn(top, metrics.heightPixels - keep)
+                    runCatching { manager.updateViewLayout(window, params) }
+                    true
+                }
+
+                else -> true
+            }
         }
     }
 
