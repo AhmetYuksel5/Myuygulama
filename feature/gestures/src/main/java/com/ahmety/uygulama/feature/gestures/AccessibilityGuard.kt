@@ -62,14 +62,10 @@ object AccessibilityGuard {
         cancelNotice(context)
     }
 
-    private var Context.guarded: Boolean
-        get() = prefs(this).getBoolean(KEY_GUARD, true)
-        set(value) = prefs(this).edit().putBoolean(KEY_GUARD, value).apply()
-
-    fun isGuarded(context: Context): Boolean = context.guarded
+    fun isGuarded(context: Context): Boolean = prefs(context).getBoolean(KEY_GUARD, true)
 
     fun setGuarded(context: Context, value: Boolean) {
-        context.guarded = value
+        prefs(context).edit().putBoolean(KEY_GUARD, value).apply()
         if (!value) cancelNotice(context)
     }
 
@@ -89,7 +85,7 @@ object AccessibilityGuard {
             cancelNotice(context)
             return
         }
-        if (!prefs(context).getBoolean(KEY_EXPECTED, false) || !context.guarded) return
+        if (!prefs(context).getBoolean(KEY_EXPECTED, false) || !isGuarded(context)) return
         if (restore(context)) return
         showNotice(context)
     }
