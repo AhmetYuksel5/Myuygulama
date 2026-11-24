@@ -185,15 +185,9 @@ fun permissionSpecs(): List<PermissionSpec> = buildList {
                     "olması gerekiyor: ayarlarda \"kullanılmıyorsa izinleri " +
                     "kaldır\" anahtarını kapat.",
                 kind = PermissionKind.SPECIAL,
-                // Android, arama süzme gibi telefon için önemli bir rolü tutan
-                // uygulamayı bu kuraldan kendisi muaf tutuyor: ayarlardaki
-                // anahtar kapalı ve gri görünüyor, dokunulamıyor. O durumda
-                // kullanıcının yapacağı bir şey yok; yalnız kendi anahtarına
-                // bakmak izni sonsuza kadar "bekliyor" gösteriyordu.
                 isGranted = { context ->
                     runCatching { context.packageManager.isAutoRevokeWhitelisted }
-                        .getOrDefault(false) ||
-                        com.ahmety.uygulama.feature.gestures.CallFilterStore.isEnabled(context)
+                        .getOrDefault(false)
                 },
                 settingsIntent = { context ->
                     Intent(
