@@ -86,13 +86,25 @@ class NotificationFilterService : NotificationListenerService() {
         store.prefs.registerOnSharedPreferenceChangeListener(prefsListener)
     }
 
+    // Bu servis sürekli bağlı kalıyor; erişilebilirlik servisinin bekçiliği
+    // de burada: o kapanınca haber veren başka bir şey yok.
+    private var guard: android.database.ContentObserver? = null
+
     override fun onDestroy() {
         store.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        AccessibilityGuard.stop(this, guard)
+        guard = null
         super.onDestroy()
     }
 
     override fun onListenerConnected() {
         sweep()
+        if (guard == null) guard = AccessibilityGuard.watch(this)
+    }
+
+    override fun onListenerDisconnected() {
+        AccessibilityGuard.stop(this, guard)
+        guard = null
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {

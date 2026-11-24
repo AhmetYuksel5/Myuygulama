@@ -107,6 +107,9 @@ class QuickCursorService : EdgeGestureService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // Çökerse sebebi kalsın; bağlandığı da bekçiye bildiriliyor.
+        AccessibilityGuard.recordCrashes(this)
+        AccessibilityGuard.onServiceConnected(this)
         settings = QuickCursorSettings(this)
         settings.prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         lock.start()

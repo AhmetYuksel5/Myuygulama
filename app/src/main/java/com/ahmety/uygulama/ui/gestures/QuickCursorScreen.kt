@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
+import com.ahmety.uygulama.feature.gestures.AccessibilityGuard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -97,6 +98,8 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
                 "gönderme yetkisi ister. Ekran içeriğini yine okumaz.",
             onOpen = { context.startActivity(QuickCursorSettings.accessibilitySettingsIntent()) },
         )
+
+        GuardSection()
 
         Toggle("Tek elle imleci göster", enabled) {
             enabled = it
@@ -330,5 +333,84 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Servisin kapanmasına karşı bekçinin ayarı, geri açma izni ve son çökme.
+ * Çökme kaydı kopyalanıp gönderilebiliyor: sebebi kökten düzeltmek için.
+ */
+@Composable
+private fun GuardSection() {
+    val context = LocalContext.current
+    var guarded by remember { mutableStateOf(AccessibilityGuard.isGuarded(context)) }
+    var canRestore by remember { mutableStateOf(AccessibilityGuard.canRestore(context)) }
+    var crash by remember { mutableStateOf(AccessibilityGuard.lastCrash(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                canRestore = AccessibilityGuard.canRestore(context)
+                crash = AccessibilityGuard.lastCrash(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    fun copy(label: String, text: String) {
+        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
+        android.widget.Toast.makeText(context, "Kopyalandı", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    Text("Kendiliğinden kapanırsa", style = MaterialTheme.typography.labelLarge)
+    Toggle("Uyar ya da geri aç", guarded) {
+        guarded = it
+        AccessibilityGuard.setGuarded(context, it)
+    }
+    Text(
+        text = if (canRestore) {
+            "Geri açma izni verilmiş: servis kapanırsa hemen kendiliğinden açılıyor " +
+                "(bugüne kadar ${AccessibilityGuard.restoredCount(context)} kez). Kasıtlı " +
+                "kapatmak istersen önce yukarıdaki anahtarı kapat."
+        } else {
+            "Servis kapanırsa \"Merkez erişilebilirlik kapandı\" bildirimi çıkar; dokununca " +
+                "ayar açılır. Bunun için bildirim süzgecinin izni açık olmalı.\n\n" +
+                "Kendiliğinden geri açılması için bilgisayardan bir kez izin ver: telefonda " +
+                "Geliştirici seçenekleri → USB hata ayıklama açık, telefonu bilgisayara " +
+                "bağla ve şu komutu çalıştır:"
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (!canRestore) {
+        Text(
+            text = AccessibilityGuard.ADB_COMMAND,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            ),
+            modifier = Modifier.clickable { copy("Komut", AccessibilityGuard.ADB_COMMAND) },
+        )
+        Text(
+            "Komuta dokununca kopyalanır.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    crash?.let { report ->
+        Text("Son çökme", style = MaterialTheme.typography.labelLarge)
+        Text(
+            report.lineSequence().take(3).joinToString("\n"),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.TextButton(onClick = { copy("Çökme kaydı", report) }) {
+                Text("Kaydı kopyala")
+            }
+            androidx.compose.material3.TextButton(onClick = {
+                AccessibilityGuard.clearCrash(context)
+                crash = null
+            }) { Text("Sil") }
+        }
     }
 }
