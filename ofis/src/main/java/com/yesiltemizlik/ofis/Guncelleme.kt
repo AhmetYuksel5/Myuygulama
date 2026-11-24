@@ -17,7 +17,7 @@ object Guncelleme {
         c.connectTimeout = 10_000
         c.readTimeout = 15_000
         c.setRequestProperty("Accept", "application/vnd.github+json")
-        c.setRequestProperty("User-Agent", "ofis-uygulama")
+        c.setRequestProperty("User-Agent", "my-asistan")
         val metin = c.inputStream.bufferedReader().use { it.readText() }
         c.disconnect()
         val a = JSONArray(metin)

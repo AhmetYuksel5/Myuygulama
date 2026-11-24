@@ -113,7 +113,7 @@ private fun AnaEkran(yenile: Int) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Ofis", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("My Asistan", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
             yeniSurum?.let { s ->
                 Kutu {
@@ -131,7 +131,7 @@ private fun AnaEkran(yenile: Int) {
                 Kutu {
                     Text("Panelle eşle", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "Panel › Log › Cihazlar › Ofis telefonu › Eşleştirme kodu",
+                        "Panel › Log › Cihazlar › My Asistan › Eşleştirme kodu",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

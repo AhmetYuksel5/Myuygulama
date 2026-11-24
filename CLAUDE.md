@@ -118,11 +118,13 @@ Merkez'in tarayıcı sürümü. Kaynak `web/` altında, derlenmiş çıktı
   Çevrimdışı desteği, o dosya kendi önbelleklerini ayırt eder hâle
   geldiğinde eklenecek.
 
-## Ofis uygulaması (`ofis/`)
+## My Asistan (`ofis/`)
 
-Yeşil Temizlik ofis telefonu (Esra Hanım, Redmi Note 12S / MIUI 14) için
-ayrı uygulama: paket `com.yesiltemizlik.ofis`, kişisel modüllerin hiçbirini
-taşımaz. CI onu `ofis-v0.N` etiketiyle, yalnız `ofis/` değişince yayınlar;
+Yeşil Temizlik'in ofis asistanı; ilk kullanıcı ofis telefonu (Esra Hanım,
+Redmi Note 12S / MIUI 14). İleride başka iş özellikleri de buraya eklenecek.
+Ad yalnız görünen addır; paket `com.yesiltemizlik.ofis`, kişisel modüllerin hiçbirini
+taşımaz, değiştirilmez (kurulu sürüm güncellenemez olur). CI onu
+`ofis-v0.N` etiketiyle (`my-asistan-0.N.apk`), yalnız `ofis/` değişince yayınlar;
 yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
 
 - Görüşme bitince kart: `AramaAlicisi` (PHONE_STATE, OFFHOOK → IDLE) →
@@ -131,7 +133,7 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
 - Kart: İş görüşmesi → yaka → ilçe → o ilçedeki işler (+ diğer işler,
   aynı yaka önce) → ad, not → Kaydet. Müşteri → ad, not → Kaydet.
 - İşler panelden: PersonelTakip deposundaki `Ofis.gs`. Anahtar yok; panelde
-  Log › Cihazlar › Ofis telefonu › Eşleştirme kodu (6 hane, 10 dk) bir kez
+  Log › Cihazlar › My Asistan › Eşleştirme kodu (6 hane, 10 dk) bir kez
   girilir, cihaz jetonu alınır. Kayıt panelde `aday_gorusme`e düşer.
 - Kayıt önce telefona (`Depo.kuyruk`) yazılır, sonra gönderilir; kimlik
   telefonda üretildiği için tekrar gönderim ikinci kayıt açmaz.

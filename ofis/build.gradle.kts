@@ -5,7 +5,7 @@ plugins {
 }
 
 /**
- * Ofis telefonu uygulaması (Yeşil Temizlik). Merkez'den ayrı bir uygulama:
+ * My Asistan: Yeşil Temizlik'in ofis asistanı uygulaması. Merkez'den ayrı bir uygulama:
  * ofisteki telefona kurulur, kişisel modüllerin hiçbirini taşımaz.
  * Sürüm numarası Merkez ile aynı sayaçtan gelir.
  */

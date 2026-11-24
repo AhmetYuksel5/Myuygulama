@@ -107,7 +107,7 @@ jobs:
           mkdir -p yayin
           cp app/build/outputs/apk/release/app-release.apk "yayin/merkez-0.${{ github.run_number }}.apk"
           cp okuyucu/build/outputs/apk/release/okuyucu-release.apk "yayin/arapca-kitap-okuyucu-0.${{ github.run_number }}.apk"
-          cp ofis/build/outputs/apk/release/ofis-release.apk "yayin/ofis-0.${{ github.run_number }}.apk"
+          cp ofis/build/outputs/apk/release/ofis-release.apk "yayin/my-asistan-0.${{ github.run_number }}.apk"
 
       # Okuyucu kabuğu nadiren değişiyor: sayfa GitHub Pages'ten geldiği için
       # kart, liste ve okuyucu değişiklikleri APK'ya dokunmuyor. Her Merkez
@@ -136,7 +136,7 @@ jobs:
             echo "degisti=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Ofis telefonu uygulaması (Yeşil Temizlik) ayrı bir uygulama: sürümü
+      # My Asistan (Yeşil Temizlik ofis asistanı) ayrı bir uygulama: sürümü
       # yalnız kendi klasörü değişince çıkar. Yalnız ofis'e dokunan gönderim
       # Merkez sürümü de çıkarmaz; yoksa Merkez'in güncelleme penceresine
       # onu ilgilendirmeyen bir not düşer.
@@ -203,10 +203,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ofis-v0.${{ github.run_number }}
-          name: Ofis 0.${{ github.run_number }}
+          name: My Asistan 0.${{ github.run_number }}
           body: |
             ${{ github.event.head_commit.message }}
-          files: yayin/ofis-0.${{ github.run_number }}.apk
+          files: yayin/my-asistan-0.${{ github.run_number }}.apk
           fail_on_unmatched_files: true
           # "En son sürüm" Merkez'de kalıyor: Merkez'in güncelleme denetimi
           # releases/latest'e bakıyor.
