@@ -124,8 +124,15 @@ Yeşil Temizlik'in ofis asistanı; ilk kullanıcı ofis telefonu (Esra Hanım,
 Redmi Note 12S / MIUI 14). İleride başka iş özellikleri de buraya eklenecek.
 Ad yalnız görünen addır; paket `com.yesiltemizlik.ofis`, kişisel modüllerin hiçbirini
 taşımaz, değiştirilmez (kurulu sürüm güncellenemez olur). CI onu
-`ofis-v0.N` etiketiyle (`my-asistan-0.N.apk`), yalnız `ofis/` değişince yayınlar;
+`ofis-v0.N` etiketiyle, yalnız `ofis/` değişince yayınlar;
 yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
+
+- **Sürüm numarası Merkez'den bağımsız** (kullanıcı 2026-11-24: "1.0'dan
+  başlasın"): görünen ad 1.0, 1.1… = 258. derlemeden sonraki `ofis-v0.*`
+  etiketi sayısı (CI `OFIS_SURUM`; sürüm başlığı "My Asistan 1.x", dosya
+  `my-asistan-1.x.apk`). Etiketteki N ve gizli sürüm kodu derleme numarası
+  olarak kalıyor: güncelleme karşılaştırması onunla, eski kurulumlar da
+  güncellemeyi buluyor. Uygulama görünen adı sürüm başlığından okur.
 
 - Görüşme bitince kart: `AramaAlicisi` (PHONE_STATE, OFFHOOK → IDLE) →
   `KartAcici` (pencere + yedek bildirim) → `KartActivity`. Numara/süre/yön

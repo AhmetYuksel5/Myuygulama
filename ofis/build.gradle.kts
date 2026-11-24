@@ -5,7 +5,12 @@ plugins {
 }
 
 /**
- * My Asistan: Yeşil Temizlik'in ofis asistanı uygulaması. Merkez'den ayrı bir uygulama:
+ * My Asistan: Yeşil Temizlik'in ofis asistanı uygulaması.
+ *
+ * Sürüm kodu (Android'in güncellemeyi tanıdığı gizli sayı) Merkez ile aynı
+ * CI sayacından gelir; görünen ad ise My Asistan'ın kendi sayacı (1.0, 1.1…),
+ * CI yazar (OFIS_SURUM). Böylece Merkez derlemeleri My Asistan'ın numarasını
+ * kaydırmaz. Merkez'den ayrı bir uygulama:
  * ofisteki telefona kurulur, kişisel modüllerin hiçbirini taşımaz.
  * Sürüm numarası Merkez ile aynı sayaçtan gelir.
  */
@@ -20,7 +25,7 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = 1 + buildNumber
-        versionName = "0.$buildNumber"
+        versionName = System.getenv("OFIS_SURUM") ?: "1.0"
     }
 
     // Merkez ile aynı anahtar: güncellemeler sorunsuz üstüne kurulsun.

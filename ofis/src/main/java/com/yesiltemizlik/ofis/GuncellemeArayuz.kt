@@ -77,7 +77,7 @@ fun GuncellemePenceresi(s: Guncelleme.Surum, onKapat: () -> Unit) {
         title = { Text("Yeni güncelleme var", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Sürüm 0.${s.numara} · kurulu ${kuruluAd(ctx)}")
+                Text("Sürüm ${s.ad} · kurulu ${kuruluAd(ctx)}")
                 when (g.durum) {
                     "iniyor" -> LinearProgressIndicator(
                         progress = { g.yuzde / 100f },
@@ -109,7 +109,7 @@ fun KartGuncellemeSeridi(s: Guncelleme.Surum) {
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp),
         ) {
             Text(
-                if (g.durum == "hata") "İndirilemedi" else "Yeni sürüm 0.${s.numara}",
+                if (g.durum == "hata") "İndirilemedi" else "Yeni sürüm ${s.ad}",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -137,7 +137,7 @@ fun GuncellemeSatiri() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             val s = surum
-            Text(if (s != null) "Yeni sürüm 0.${s.numara}" else "Sürüm $kurulu", fontWeight = FontWeight.Bold)
+            Text(if (s != null) "Yeni sürüm ${s.ad}" else "Sürüm $kurulu", fontWeight = FontWeight.Bold)
             val alt = when {
                 g.durum == "hata" -> "İndirilemedi"
                 g.durum == "kuruluyor" -> "Kuruluyor"

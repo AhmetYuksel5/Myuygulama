@@ -22,7 +22,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * numarası + 1 olduğu için N, kurulu sürümün koduyla karşılaştırılır.
  */
 object Guncelleme {
-    data class Surum(val numara: Int, val apk: String, val boyut: Long)
+    /** [numara] gizli sayaç (etiketteki derleme no), [ad] görünen sürüm (1.x). */
+    data class Surum(val numara: Int, val apk: String, val boyut: Long, val ad: String)
 
     fun kuruluNumara(c: Context): Long = try {
         c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode - 1
@@ -52,7 +53,9 @@ object Guncelleme {
             }
             if (apk == null) continue
             if (bulunan == null || n > bulunan.numara) {
-                bulunan = Surum(n, apk.optString("browser_download_url"), apk.optLong("size"))
+                // Görünen ad sürüm başlığından ("My Asistan 1.3"); eski düzende yoksa sayaç.
+                val ad = Regex("(\\d+\\.\\d+)\\s*$").find(r.optString("name"))?.groupValues?.get(1) ?: "0.$n"
+                bulunan = Surum(n, apk.optString("browser_download_url"), apk.optLong("size"), ad)
             }
         }
         bulunan
@@ -84,13 +87,13 @@ object Guncelleme {
             val s = sonSurum()
             if (s != null) {
                 p.edit().putLong("ts", simdi).putInt("numara", s.numara).putString("apk", s.apk)
-                    .putLong("boyut", s.boyut).apply()
+                    .putLong("boyut", s.boyut).putString("ad", s.ad).apply()
             }
         }
         val n = p.getInt("numara", 0)
         val apk = p.getString("apk", "") ?: ""
         if (n <= kuruluNumara(c) || apk.isEmpty()) return null
-        return Surum(n, apk, p.getLong("boyut", 0L))
+        return Surum(n, apk, p.getLong("boyut", 0L), p.getString("ad", null) ?: "0.$n")
     }
 
     /**
@@ -126,7 +129,7 @@ object Guncelleme {
             return
         }
         Thread {
-            val hedef = File(app.cacheDir, "my-asistan-${s.numara}.apk")
+            val hedef = File(app.cacheDir, "my-asistan-${s.ad}-${s.numara}.apk")
             val hata = try {
                 if (!(hedef.exists() && s.boyut > 0 && hedef.length() == s.boyut)) indir(s, hedef) { o -> ana.post { ilerleme(o) } }
                 ana.post { ilerleme(1f) }

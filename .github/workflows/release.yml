@@ -86,6 +86,17 @@ jobs:
           echo "Anahtar dosyası boyutu: $(stat -c%s "$RUNNER_TEMP/merkez-release.jks") bayt (beklenen 4376)"
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
+      # My Asistan'ın görünen sürümü kendi sayacı: 258. derlemeden (1.0'a
+      # geçiş) sonra çıkmış My Asistan sürümlerinin sayısı. Etiket ve gizli
+      # sürüm kodu derleme numarasında kalıyor; eski kurulumlar güncellemeyi
+      # yine buluyor.
+      - name: My Asistan sürüm adı
+        shell: bash
+        run: |
+          n=$(git tag -l 'ofis-v0.*' | sed 's/^ofis-v0\.//' | awk '$1 >= 258' | wc -l)
+          echo "OFIS_SURUM=1.$n" >> "$GITHUB_ENV"
+          echo "My Asistan sürümü: 1.$n"
+
       - name: İmzalı APK derle
         if: steps.keystore.outputs.ready == 'true'
         env:
@@ -107,7 +118,7 @@ jobs:
           mkdir -p yayin
           cp app/build/outputs/apk/release/app-release.apk "yayin/merkez-0.${{ github.run_number }}.apk"
           cp okuyucu/build/outputs/apk/release/okuyucu-release.apk "yayin/arapca-kitap-okuyucu-0.${{ github.run_number }}.apk"
-          cp ofis/build/outputs/apk/release/ofis-release.apk "yayin/my-asistan-0.${{ github.run_number }}.apk"
+          cp ofis/build/outputs/apk/release/ofis-release.apk "yayin/my-asistan-${{ env.OFIS_SURUM }}.apk"
 
       # Okuyucu kabuğu nadiren değişiyor: sayfa GitHub Pages'ten geldiği için
       # kart, liste ve okuyucu değişiklikleri APK'ya dokunmuyor. Her Merkez
@@ -203,10 +214,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ofis-v0.${{ github.run_number }}
-          name: My Asistan 0.${{ github.run_number }}
+          name: My Asistan ${{ env.OFIS_SURUM }}
           body: |
             ${{ github.event.head_commit.message }}
-          files: yayin/my-asistan-0.${{ github.run_number }}.apk
+          files: yayin/my-asistan-${{ env.OFIS_SURUM }}.apk
           fail_on_unmatched_files: true
           # "En son sürüm" Merkez'de kalıyor: Merkez'in güncelleme denetimi
           # releases/latest'e bakıyor.
