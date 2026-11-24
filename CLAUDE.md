@@ -148,4 +148,8 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   izinleri izin ekranında; durumları AppOps 10008/10021/10020'den okunur.
   Erişilebilirlik servisi bilerek boş: açık durması MIUI'nin süreci
   öldürmesini engelliyor.
-- Güncelleme: ana ekran GitHub'daki son `ofis-v0.N` sürümüne bakar.
+- Güncelleme uygulama içinde (`Guncelleme.kt`): Ayarlar'da sürüm satırı
+  Denetle → Güncelle → indirme yüzdesi → Android kurulum ekranı; ana ekran
+  yeni sürüm varsa aynı satırı gösterir. APK önbelleğe iner, FileProvider
+  (`${applicationId}.dosyalar`) ile verilir; ilk seferde "bilinmeyen
+  uygulama kurma" izni istenir.

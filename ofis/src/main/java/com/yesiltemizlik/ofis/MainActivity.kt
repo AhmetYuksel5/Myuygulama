@@ -11,6 +11,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -103,8 +108,7 @@ private fun AnaEkran(yenile: Int, onAyarlar: () -> Unit) {
         kurulumEksik = depo.jeton.isEmpty() || izinler().any { it.durum(ctx) == false }
     }
     LaunchedEffect(Unit) {
-        val s = withContext(Dispatchers.IO) { Guncelleme.sonSurum() }
-        if (s != null && s.numara > kuruluNumara(ctx)) yeniSurum = s
+        yeniSurum = withContext(Dispatchers.IO) { Guncelleme.yeniVarMi(ctx) }
     }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -128,8 +132,14 @@ private fun AnaEkran(yenile: Int, onAyarlar: () -> Unit) {
             }
             yeniSurum?.let { s ->
                 item {
-                    Uyari("Yeni sürüm 0.${s.numara}", "İndir", MaterialTheme.colorScheme.primaryContainer) {
-                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.apk)))
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Box(Modifier.padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp)) {
+                            GuncellemeSatiri(baslangic = s)
+                        }
                     }
                 }
             }
@@ -165,10 +175,75 @@ private fun AnaEkran(yenile: Int, onAyarlar: () -> Unit) {
     }
 }
 
-private fun kuruluNumara(ctx: Context): Long = try {
-    ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode - 1
-} catch (e: Exception) {
-    Long.MAX_VALUE
+/**
+ * Sürüm satırı ve tek düğme: Denetle → (yeni varsa) Güncelle → indirme yüzdesi
+ * → Android'in kurulum ekranı. [baslangic] verilirse denetlemeden "Güncelle" ile başlar.
+ */
+@Composable
+private fun GuncellemeSatiri(baslangic: Guncelleme.Surum?) {
+    val ctx = LocalContext.current
+    val kapsam = rememberCoroutineScope()
+    var surum by remember { mutableStateOf(baslangic) }
+    var durum by remember { mutableStateOf(if (baslangic != null) "var" else "") }
+    var yuzde by remember { mutableIntStateOf(0) }
+    val kurulu = remember {
+        try {
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    fun guncelle() {
+        val s = surum ?: return
+        if (!Guncelleme.kurmaIzniVar(ctx)) {
+            // İzin sayfasından dönünce aynı düğmeye bir kez daha basılır.
+            Toast.makeText(ctx, "My Asistan'a izin verip geri dönün", Toast.LENGTH_LONG).show()
+            ctx.startActivity(Guncelleme.kurmaIzniNiyeti(ctx))
+            return
+        }
+        durum = "iniyor"
+        yuzde = 0
+        Guncelleme.indirVeKur(ctx, s, { yuzde = (it * 100).toInt() }) { hata ->
+            durum = if (hata == null) "var" else "hata"
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (durum == "var" || durum == "iniyor") "Yeni sürüm 0.${surum?.numara}" else "Sürüm $kurulu",
+                fontWeight = FontWeight.Bold,
+            )
+            val alt = when (durum) {
+                "guncel" -> "Güncel"
+                "yok" -> "Denetlenemedi"
+                "hata" -> "İndirilemedi"
+                "var", "iniyor" -> "Kurulu: $kurulu"
+                else -> ""
+            }
+            if (alt.isNotEmpty()) {
+                Text(alt, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        when (durum) {
+            "denetleniyor" -> CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            "iniyor" -> Text("%$yuzde", fontWeight = FontWeight.Bold)
+            "var", "hata" -> Button(onClick = { guncelle() }) { Text("Güncelle") }
+            else -> OutlinedButton(onClick = {
+                durum = "denetleniyor"
+                kapsam.launch {
+                    val bulunan = withContext(Dispatchers.IO) { Guncelleme.sonSurum() }
+                    surum = bulunan?.takeIf { it.numara > Guncelleme.kuruluNumara(ctx) }
+                    durum = when {
+                        bulunan == null -> "yok"
+                        surum != null -> "var"
+                        else -> "guncel"
+                    }
+                }
+            }) { Text("Denetle") }
+        }
+    }
 }
 
 private fun gunBasligi(zaman: Long): String {
@@ -380,18 +455,7 @@ private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
 
             IzinListesi(izinTur)
 
-            val surumAdi = remember {
-                try {
-                    ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
-                } catch (e: Exception) {
-                    ""
-                }
-            }
-            Text(
-                "Sürüm $surumAdi",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Kutu { GuncellemeSatiri(baslangic = null) }
             if (jeton.isNotEmpty()) {
                 TextButton(onClick = {
                     depo.jeton = ""
