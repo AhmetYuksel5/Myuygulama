@@ -107,6 +107,7 @@ jobs:
           mkdir -p yayin
           cp app/build/outputs/apk/release/app-release.apk "yayin/merkez-0.${{ github.run_number }}.apk"
           cp okuyucu/build/outputs/apk/release/okuyucu-release.apk "yayin/arapca-kitap-okuyucu-0.${{ github.run_number }}.apk"
+          cp ofis/build/outputs/apk/release/ofis-release.apk "yayin/ofis-0.${{ github.run_number }}.apk"
 
       # Okuyucu kabuğu nadiren değişiyor: sayfa GitHub Pages'ten geldiği için
       # kart, liste ve okuyucu değişiklikleri APK'ya dokunmuyor. Her Merkez
@@ -135,8 +136,37 @@ jobs:
             echo "degisti=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Ofis telefonu uygulaması (Yeşil Temizlik) ayrı bir uygulama: sürümü
+      # yalnız kendi klasörü değişince çıkar. Yalnız ofis'e dokunan gönderim
+      # Merkez sürümü de çıkarmaz; yoksa Merkez'in güncelleme penceresine
+      # onu ilgilendirmeyen bir not düşer.
+      - name: Ofis ve Merkez değişti mi
+        id: ofis
+        shell: bash
+        run: |
+          onceki="${{ github.event.before }}"
+          bos="0000000000000000000000000000000000000000"
+          if [ -z "$onceki" ] || [ "$onceki" = "$bos" ] \
+             || ! git cat-file -e "$onceki^{commit}" 2>/dev/null; then
+            echo "degisti=true" >> "$GITHUB_OUTPUT"
+            echo "merkez=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          degisen=$(git diff --name-only "$onceki" "${{ github.sha }}")
+          if echo "$degisen" | grep -q '^ofis/'; then
+            echo "degisti=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "degisti=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$degisen" | grep -qvE '^(ofis/|okuyucu/|docs/|web/|\.github/|settings\.gradle\.kts$|[^/]*\.md$)'; then
+            echo "merkez=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Yalnız Merkez dışı dosyalar değişmiş; Merkez sürümü çıkmayacak."
+            echo "merkez=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Merkez sürümünü yayınla
-        if: steps.keystore.outputs.ready == 'true'
+        if: steps.keystore.outputs.ready == 'true' && steps.ofis.outputs.merkez == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.${{ github.run_number }}
@@ -166,6 +196,20 @@ jobs:
           # geçtiği için bir kez APK'sız bir sürüm çıktı.
           fail_on_unmatched_files: true
           # "En son sürüm" Merkez'de kalıyor; okuyucu kendi etiket dizisinde.
+          make_latest: false
+
+      - name: Ofis sürümünü yayınla
+        if: steps.keystore.outputs.ready == 'true' && steps.ofis.outputs.degisti == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ofis-v0.${{ github.run_number }}
+          name: Ofis 0.${{ github.run_number }}
+          body: |
+            ${{ github.event.head_commit.message }}
+          files: yayin/ofis-0.${{ github.run_number }}.apk
+          fail_on_unmatched_files: true
+          # "En son sürüm" Merkez'de kalıyor: Merkez'in güncelleme denetimi
+          # releases/latest'e bakıyor.
           make_latest: false
 
       # Kırılınca hataları log'un en sonuna yazıyoruz. Gradle'ın yığın izi

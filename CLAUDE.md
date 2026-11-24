@@ -8,8 +8,9 @@ bilinmeyen kelimeleri işaretleyip tekrar programıyla çalışmak.
 - Dağıtım: dala her gönderim GitHub Actions'ı çalıştırır; imzalı APK
   GitHub Releases'e düşer (`merkez-<sürüm>.apk`). Sürüm numarası çalıştırma
   numarasından gelir.
-- Yerel derleme yok: bu ortamdan `dl.google.com` kapalı, AGP çözülemiyor.
-  Doğrulama yalnızca CI'da.
+- Yerel derleme: 2026-11-24'te `dl.google.com` açıktı. SDK komut satırı
+  araçları geçici klasöre kurulup `ANDROID_HOME` ile `./gradlew
+  :ofis:assembleRelease` yerelde geçti. Kapalıysa doğrulama yalnızca CI'da.
 
 ## Değişikliği biriktirme
 
@@ -116,3 +117,26 @@ Merkez'in tarayıcı sürümü. Kaynak `web/` altında, derlenmiş çıktı
   siliyor ve aynı alan adında olduğumuz için Merkez'inkini de silerdi.
   Çevrimdışı desteği, o dosya kendi önbelleklerini ayırt eder hâle
   geldiğinde eklenecek.
+
+## Ofis uygulaması (`ofis/`)
+
+Yeşil Temizlik ofis telefonu (Esra Hanım, Redmi Note 12S / MIUI 14) için
+ayrı uygulama: paket `com.yesiltemizlik.ofis`, kişisel modüllerin hiçbirini
+taşımaz. CI onu `ofis-v0.N` etiketiyle, yalnız `ofis/` değişince yayınlar;
+yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
+
+- Görüşme bitince kart: `AramaAlicisi` (PHONE_STATE, OFFHOOK → IDLE) →
+  `KartAcici` (pencere + yedek bildirim) → `KartActivity`. Numara/süre/yön
+  arama kaydından okunur.
+- Kart: İş görüşmesi → yaka → ilçe → o ilçedeki işler (+ diğer işler,
+  aynı yaka önce) → ad, not → Kaydet. Müşteri → ad, not → Kaydet.
+- İşler panelden: PersonelTakip deposundaki `Ofis.gs`. Anahtar yok; panelde
+  Log › Cihazlar › Ofis telefonu › Eşleştirme kodu (6 hane, 10 dk) bir kez
+  girilir, cihaz jetonu alınır. Kayıt panelde `aday_gorusme`e düşer.
+- Kayıt önce telefona (`Depo.kuyruk`) yazılır, sonra gönderilir; kimlik
+  telefonda üretildiği için tekrar gönderim ikinci kayıt açmaz.
+- MIUI: otomatik başlatma, "arka planda açılır pencere", kilit ekranı
+  izinleri izin ekranında; durumları AppOps 10008/10021/10020'den okunur.
+  Erişilebilirlik servisi bilerek boş: açık durması MIUI'nin süreci
+  öldürmesini engelliyor.
+- Güncelleme: ana ekran GitHub'daki son `ofis-v0.N` sürümüne bakar.

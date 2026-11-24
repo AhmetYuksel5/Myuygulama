@@ -20,6 +20,7 @@ include(":app")
 // Tarayıcı sürümünü kendi penceresinde açan ayrı uygulama; Merkez'in
 // hiçbir modülüne bağlı değil.
 include(":okuyucu")
+include(":ofis")
 include(":core:model")
 include(":core:database")
 include(":core:designsystem")

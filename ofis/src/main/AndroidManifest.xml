@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Görüşmenin bittiği an: telefon durumu yayını yalnız bu izinle gelir. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Biten görüşmenin numarası, süresi ve yönü arama kaydından okunur. -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!-- Kart arka plandan açılıyor; Android buna yalnız üstte gösterme izni olan uygulamaya izin veriyor. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Kart açılamazsa bildirim yedek olarak kalır. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Tema.Ofis">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Görüşme sonu kartı. Ayrı görev: ana ekranı öne getirmesin, son
+            uygulamalarda ayrı satır olarak kalmasın.
+        -->
+        <activity
+            android:name=".KartActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:taskAffinity="com.yesiltemizlik.ofis.kart"
+            android:theme="@style/Tema.Ofis.Kart"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!--
+            Telefon durumu yayını manifest'ten alınabilen az sayıdaki yayından
+            biri: uygulama kapalıyken de gelir (MIUI'de otomatik başlatma açıksa).
+        -->
+        <receiver
+            android:name=".AramaAlicisi"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            Erişilebilirlik servisi şimdilik hiçbir şey okumuyor. Açık durması
+            MIUI'nin uygulamayı arka planda öldürmesini engelliyor; ileride
+            ekran okuma gerektiren özellikler buraya gelecek.
+        -->
+        <service
+            android:name=".OfisErisim"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/erisim" />
+        </service>
+    </application>
+
+</manifest>
