@@ -24,6 +24,20 @@ object KartAcici {
             .putExtra(EK_BAS, bas)
             .putExtra(EK_DENEME, deneme)
 
+    /** Ana ekrandaki listeden seçilen geçmiş bir aramanın kartı: bilgiler arama kaydından okunmaz, buradan gelir. */
+    fun niyet(context: Context, a: Arama): Intent =
+        niyet(context, a.zaman)
+            .putExtra("tel", a.tel).putExtra("ad", a.ad).putExtra("sure", a.sure)
+            .putExtra("yon", a.yon).putExtra("zaman", a.zaman)
+
+    fun aramaOku(i: Intent): Arama? {
+        if (!i.hasExtra("zaman")) return null
+        return Arama(
+            i.getStringExtra("tel") ?: "", i.getStringExtra("ad") ?: "", i.getLongExtra("sure", 0L),
+            i.getStringExtra("yon") ?: "gelen", i.getLongExtra("zaman", 0L),
+        )
+    }
+
     fun ac(context: Context, bas: Long) {
         val i = niyet(context, bas)
         bildir(context, i)

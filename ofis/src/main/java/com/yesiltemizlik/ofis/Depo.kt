@@ -54,6 +54,23 @@ class Depo(context: Context) {
         islerTs = System.currentTimeMillis()
     }
 
+    /** Kartı doldurulmuş aramalar: arama başlangıcı → tür (is/musteri). Ana ekrandaki etiket buradan. */
+    fun siniflar(): Map<Long, String> = try {
+        val o = JSONObject(p.getString("siniflar", "{}") ?: "{}")
+        o.keys().asSequence().associate { it.toLong() to o.getString(it) }
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
+    fun siniflandir(zaman: Long, tur: String) {
+        // Son 500 arama yeter; liste zaten son 80'i gösteriyor.
+        val m = siniflar().toMutableMap()
+        m[zaman] = tur
+        val o = JSONObject()
+        m.entries.sortedByDescending { it.key }.take(500).forEach { o.put(it.key.toString(), it.value) }
+        p.edit().putString("siniflar", o.toString()).apply()
+    }
+
     fun kuyruk(): List<JSONObject> = synchronized(KILIT) {
         try {
             val a = JSONArray(p.getString("kuyruk", "[]"))

@@ -130,8 +130,15 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
 - Görüşme bitince kart: `AramaAlicisi` (PHONE_STATE, OFFHOOK → IDLE) →
   `KartAcici` (pencere + yedek bildirim) → `KartActivity`. Numara/süre/yön
   arama kaydından okunur.
-- Kart: İş görüşmesi → yaka → ilçe → o ilçedeki işler (+ diğer işler,
-  aynı yaka önce) → ad, not → Kaydet. Müşteri → ad, not → Kaydet.
+- Kart: üç düğme, aynı çizgi simge dili (`res/drawable/s_*.xml`, 24 birim,
+  2 kalınlık). İş arayan → yaka → ilçe → o ilçedeki işler (+ diğer işler,
+  aynı yaka önce) → ad, not → Kaydet. Müşteri → ad, not → Kaydet. WhatsApp →
+  numarayla sohbet (önce Business, sonra WhatsApp). Kapat düğmesi yok,
+  pencerenin dışına dokununca kapanır (kullanıcı 2026-11-24).
+- Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
+  açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
+  başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana
+  ekranda yalnız "Kurulum eksik" satırı.
 - İşler panelden: PersonelTakip deposundaki `Ofis.gs`. Anahtar yok; panelde
   Log › Cihazlar › My Asistan › Eşleştirme kodu (6 hane, 10 dk) bir kez
   girilir, cihaz jetonu alınır. Kayıt panelde `aday_gorusme`e düşer.

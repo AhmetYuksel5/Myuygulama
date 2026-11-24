@@ -1,5 +1,15 @@
 package com.yesiltemizlik.ofis
 
+import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -56,7 +66,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { OfisTema { AnaEkran(yenile) } }
+        setContent { OfisTema { Uygulama(yenile) } }
     }
 
     override fun onResume() {
@@ -66,7 +76,174 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AnaEkran(yenile: Int) {
+private fun Uygulama(yenile: Int) {
+    var ayarlar by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = ayarlar) { ayarlar = false }
+    if (ayarlar) AyarlarEkrani(yenile) { ayarlar = false } else AnaEkran(yenile) { ayarlar = true }
+}
+
+/** Son aramalar. Bir aramaya dokununca o aramanın kartı açılır; kartı doldurulmuş olanlar etiketli. */
+@Composable
+private fun AnaEkran(yenile: Int, onAyarlar: () -> Unit) {
+    val ctx = LocalContext.current
+    val depo = remember { Depo(ctx) }
+    var aramalar by remember { mutableStateOf(emptyList<Arama>()) }
+    var siniflar by remember { mutableStateOf(emptyMap<Long, String>()) }
+    var izinVar by remember { mutableStateOf(ctx.aramaIzniVar()) }
+    var kurulumEksik by remember { mutableStateOf(false) }
+    var yeniSurum by remember { mutableStateOf<Guncelleme.Surum?>(null) }
+    val iste = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        izinVar = ctx.aramaIzniVar()
+    }
+
+    LaunchedEffect(yenile, izinVar) {
+        izinVar = ctx.aramaIzniVar()
+        aramalar = withContext(Dispatchers.IO) { sonAramalar(ctx) }
+        siniflar = depo.siniflar()
+        kurulumEksik = depo.jeton.isEmpty() || izinler().any { it.durum(ctx) == false }
+    }
+    LaunchedEffect(Unit) {
+        val s = withContext(Dispatchers.IO) { Guncelleme.sonSurum() }
+        if (s != null && s.numara > kuruluNumara(ctx)) yeniSurum = s
+    }
+
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.safeDrawingPadding(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "My Asistan",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onAyarlar) {
+                        Icon(painterResource(R.drawable.s_ayarlar), contentDescription = "Ayarlar")
+                    }
+                }
+            }
+            yeniSurum?.let { s ->
+                item {
+                    Uyari("Yeni sürüm 0.${s.numara}", "İndir", MaterialTheme.colorScheme.primaryContainer) {
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.apk)))
+                    }
+                }
+            }
+            if (kurulumEksik) {
+                item { Uyari("Kurulum eksik", "Ayarlar", MaterialTheme.colorScheme.errorContainer, onAyarlar) }
+            }
+            if (!izinVar) {
+                item {
+                    Uyari("Son aramalar için arama kaydı izni", "Ver", MaterialTheme.colorScheme.surfaceVariant) {
+                        iste.launch(arrayOf(android.Manifest.permission.READ_CALL_LOG))
+                    }
+                }
+            }
+            var oncekiGun = ""
+            aramalar.forEach { a ->
+                val gun = gunBasligi(a.zaman)
+                if (gun != oncekiGun) {
+                    oncekiGun = gun
+                    item(key = "g$gun") {
+                        Text(
+                            gun,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+                        )
+                    }
+                }
+                item(key = a.zaman) {
+                    AramaSatiri(a, siniflar[a.zaman]) { ctx.startActivity(KartAcici.niyet(ctx, a)) }
+                }
+            }
+        }
+    }
+}
+
+private fun kuruluNumara(ctx: Context): Long = try {
+    ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode - 1
+} catch (e: Exception) {
+    Long.MAX_VALUE
+}
+
+private fun gunBasligi(zaman: Long): String {
+    val tr = Locale("tr", "TR")
+    val g = SimpleDateFormat("yyyyMMdd", tr)
+    val bugun = g.format(Date())
+    val dun = g.format(Date(System.currentTimeMillis() - 86_400_000L))
+    return when (g.format(Date(zaman))) {
+        bugun -> "Bugün"
+        dun -> "Dün"
+        else -> SimpleDateFormat("d MMMM EEEE", tr).format(Date(zaman))
+    }
+}
+
+@Composable
+private fun Uyari(yazi: String, dugme: String, zemin: Color, onClick: () -> Unit) {
+    Surface(shape = RoundedCornerShape(14.dp), color = zemin, modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 14.dp, end = 6.dp)) {
+            Text(yazi, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            TextButton(onClick = onClick) { Text(dugme) }
+        }
+    }
+}
+
+@Composable
+private fun AramaSatiri(a: Arama, sinif: String?, onClick: () -> Unit) {
+    val renk = MaterialTheme.colorScheme
+    val (simge, simgeRengi) = when (a.yon) {
+        "giden" -> R.drawable.s_giden to renk.secondary
+        "cevapsiz" -> R.drawable.s_cevapsiz to renk.error
+        else -> R.drawable.s_gelen to renk.primary
+    }
+    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = renk.surface, tonalElevation = 1.dp) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Icon(painterResource(simge), contentDescription = null, tint = simgeRengi, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    a.ad.ifEmpty { telBicim(a.tel).ifEmpty { "Gizli numara" } },
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                val alt = listOf(
+                    SimpleDateFormat("HH:mm", Locale("tr", "TR")).format(Date(a.zaman)),
+                    if (a.ad.isNotEmpty()) telBicim(a.tel) else "",
+                    sureMetni(a.sure),
+                ).filter { it.isNotEmpty() }.joinToString(" · ")
+                Text(alt, style = MaterialTheme.typography.bodySmall, color = renk.onSurfaceVariant, maxLines = 1)
+            }
+            if (sinif != null) {
+                val (yazi, zemin, yaziRengi) = if (sinif == "musteri") {
+                    Triple("Müşteri", renk.secondaryContainer, renk.onSecondaryContainer)
+                } else {
+                    Triple("İş arayan", renk.primaryContainer, renk.onPrimaryContainer)
+                }
+                Surface(shape = RoundedCornerShape(8.dp), color = zemin) {
+                    Text(
+                        yazi,
+                        color = yaziRengi,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Eşleşme, iş listesi, izinler, kartın kendisi: kurulumdan sonra pek açılmayan her şey burada. */
+@Composable
+private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
     val ctx = LocalContext.current
     val depo = remember { Depo(ctx) }
     var jeton by remember { mutableStateOf(depo.jeton) }
@@ -76,7 +253,6 @@ private fun AnaEkran(yenile: Int) {
     var kartAcik by remember { mutableStateOf(depo.kartAcik) }
     var mesaj by remember { mutableStateOf("") }
     var mesgul by remember { mutableStateOf(false) }
-    var yeniSurum by remember { mutableStateOf<Guncelleme.Surum?>(null) }
     var izinTur by remember { mutableIntStateOf(0) }
 
     fun isleriAl() {
@@ -95,16 +271,6 @@ private fun AnaEkran(yenile: Int) {
         if (jeton.isNotEmpty() && System.currentTimeMillis() - depo.islerTs > 6 * 3_600_000L) isleriAl()
         if (bekleyen > 0) Arkaplan.kuyruguGonder(ctx) { kalan, _ -> bekleyen = kalan }
     }
-    LaunchedEffect(Unit) {
-        val s = withContext(Dispatchers.IO) { Guncelleme.sonSurum() }
-        val kurulu = try {
-            ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode - 1
-        } catch (e: Exception) {
-            Long.MAX_VALUE
-        }
-        if (s != null && s.numara > kurulu) yeniSurum = s
-    }
-
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -113,17 +279,11 @@ private fun AnaEkran(yenile: Int) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("My Asistan", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-
-            yeniSurum?.let { s ->
-                Kutu {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Yeni sürüm 0.${s.numara}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Button(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.apk))) }) {
-                            Text("İndir")
-                        }
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onGeri) {
+                    Icon(painterResource(R.drawable.s_geri), contentDescription = "Geri")
                 }
+                Text("Ayarlar", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
 
             if (jeton.isEmpty()) {

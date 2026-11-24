@@ -1,11 +1,8 @@
 package com.yesiltemizlik.ofis
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
-import android.provider.CallLog
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -23,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +29,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -48,9 +47,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -59,49 +60,19 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Arama(val tel: String, val ad: String, val sure: Long, val yon: String, val zaman: Long)
-
 private enum class Adim { SECIM, ILCE, ISLER, MUSTERI }
-
-/**
- * Biten görüşmeyi arama kaydından bulur. Kayıt, telefon IDLE'a geçtikten biraz
- * sonra yazılıyor; o yüzden en son satırın bu görüşme olup olmadığına bakılır:
- * görüşmenin bitişi açılma anından sonraysa ya da başlangıcı o ana denk
- * geliyorsa (cevapsız giden arama, süre 0) bu görüşmedir.
- */
-private fun sonArama(c: Context, bas: Long): Arama? {
-    if (c.checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) return null
-    val sutun = arrayOf(
-        CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME, CallLog.Calls.DURATION, CallLog.Calls.TYPE, CallLog.Calls.DATE,
-    )
-    return try {
-        c.contentResolver.query(CallLog.Calls.CONTENT_URI, sutun, null, null, CallLog.Calls.DATE + " DESC")?.use { k ->
-            if (!k.moveToFirst()) return@use null
-            val zaman = k.getLong(4)
-            val sure = k.getLong(2)
-            val buGorusme = zaman >= bas - 3_000 || zaman + sure * 1000 > bas + 1_000
-            if (!buGorusme) return@use null
-            Arama(
-                tel = k.getString(0) ?: "",
-                ad = k.getString(1) ?: "",
-                sure = sure,
-                yon = if (k.getInt(3) == CallLog.Calls.OUTGOING_TYPE) "giden" else "gelen",
-                zaman = zaman,
-            )
-        }
-    } catch (e: Exception) {
-        null
-    }
-}
 
 class KartActivity : ComponentActivity() {
     private var bas by mutableLongStateOf(0L)
     private var deneme by mutableStateOf(false)
+    private var verilen by mutableStateOf<Arama?>(null)
     private var tur by mutableIntStateOf(0)
     private var isler by mutableStateOf(emptyList<Is>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Kapat düğmesi yok: pencerenin dışına dokununca kapanır.
+        setFinishOnTouchOutside(true)
         oku(intent)
         KartAcici.bildirimiSil(this)
         val d = Depo(this)
@@ -114,7 +85,7 @@ class KartActivity : ComponentActivity() {
         setContent {
             OfisTema {
                 key(tur) {
-                    Kart(bas = bas, deneme = deneme, isler = isler, onKapat = { finish() })
+                    Kart(bas = bas, deneme = deneme, verilen = verilen, isler = isler, onKapat = { finish() })
                 }
             }
         }
@@ -132,31 +103,32 @@ class KartActivity : ComponentActivity() {
     private fun oku(i: Intent) {
         bas = i.getLongExtra(KartAcici.EK_BAS, System.currentTimeMillis())
         deneme = i.getBooleanExtra(KartAcici.EK_DENEME, false)
+        verilen = KartAcici.aramaOku(i)
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun Kart(bas: Long, deneme: Boolean, isler: List<Is>, onKapat: () -> Unit) {
+private fun Kart(bas: Long, deneme: Boolean, verilen: Arama?, isler: List<Is>, onKapat: () -> Unit) {
     val ctx = LocalContext.current
     val depo = remember { Depo(ctx) }
     val kimlik = remember { "o" + System.currentTimeMillis().toString(36) + (1000..9999).random() }
     var arama by remember {
-        mutableStateOf(if (deneme) Arama("05321234567", "", 125, "gelen", System.currentTimeMillis()) else null)
+        mutableStateOf(verilen ?: if (deneme) Arama("05321234567", "", 125, "gelen", System.currentTimeMillis()) else null)
     }
     var adim by remember { mutableStateOf(Adim.SECIM) }
     var yaka by remember { mutableStateOf(depo.sonYaka) }
     var ilce by remember { mutableStateOf("") }
     val secili = remember { mutableStateListOf<String>() }
-    var ad by remember { mutableStateOf("") }
+    var ad by remember { mutableStateOf(verilen?.ad ?: "") }
     var not by remember { mutableStateOf("") }
     var digerAcik by remember { mutableStateOf(false) }
     var ara by remember { mutableStateOf("") }
 
     LaunchedEffect(bas) {
-        if (deneme) return@LaunchedEffect
+        if (deneme || verilen != null) return@LaunchedEffect
         repeat(8) {
-            val a = withContext(Dispatchers.IO) { sonArama(ctx, bas) }
+            val a = withContext(Dispatchers.IO) { bitenArama(ctx, bas) }
             if (a != null) {
                 arama = a
                 if (ad.isEmpty()) ad = a.ad
@@ -177,7 +149,7 @@ private fun Kart(bas: Long, deneme: Boolean, isler: List<Is>, onKapat: () -> Uni
             .put("ts", a?.zaman ?: bas)
             .put("tel", a?.tel ?: "")
             .put("rehberAd", a?.ad ?: "")
-            .put("yon", a?.yon ?: "gelen")
+            .put("yon", if (a?.yon == "giden") "giden" else "gelen")
             .put("sure", a?.sure ?: 0L)
             .put("tur", tur)
             .put("ad", ad.trim())
@@ -188,6 +160,7 @@ private fun Kart(bas: Long, deneme: Boolean, isler: List<Is>, onKapat: () -> Uni
             j.put("ilce", ilce).put("isler", dizi)
         }
         if (!deneme) {
+            if (a != null) depo.siniflandir(a.zaman, tur)
             depo.kuyrugaEkle(j)
             Arkaplan.kuyruguGonder(ctx)
         }
@@ -231,17 +204,25 @@ private fun Kart(bas: Long, deneme: Boolean, isler: List<Is>, onKapat: () -> Uni
                         Text(alt, style = MaterialTheme.typography.bodySmall, color = renk.onSurfaceVariant)
                     }
                 }
-                TextButton(onClick = onKapat) { Text("Kapat") }
             }
 
             when (adim) {
                 Adim.SECIM -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        BuyukSecim("İş görüşmesi", renk.primaryContainer, renk.onPrimaryContainer, Modifier.weight(1f)) {
-                            adim = Adim.ILCE
-                        }
-                        BuyukSecim("Müşteri", renk.secondaryContainer, renk.onSecondaryContainer, Modifier.weight(1f)) {
-                            adim = Adim.MUSTERI
+                        BuyukSecim(
+                            "İş arayan", R.drawable.s_is_arayan, renk.primaryContainer, renk.onPrimaryContainer,
+                            Modifier.weight(1f),
+                        ) { adim = Adim.ILCE }
+                        BuyukSecim(
+                            "Müşteri", R.drawable.s_musteri, renk.secondaryContainer, renk.onSecondaryContainer,
+                            Modifier.weight(1f),
+                        ) { adim = Adim.MUSTERI }
+                        val tel = arama?.tel ?: ""
+                        BuyukSecim(
+                            "WhatsApp", R.drawable.s_whatsapp, renk.tertiaryContainer, renk.onTertiaryContainer,
+                            Modifier.weight(1f), etkin = waNumara(tel).length >= 10,
+                        ) {
+                            if (!whatsappAc(ctx, tel)) Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -372,10 +353,29 @@ private fun Kart(bas: Long, deneme: Boolean, isler: List<Is>, onKapat: () -> Uni
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BuyukSecim(yazi: String, zemin: Color, yaziRengi: Color, modifier: Modifier, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = zemin, modifier = modifier.height(92.dp)) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(yazi, color = yaziRengi, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+private fun BuyukSecim(
+    yazi: String,
+    simge: Int,
+    zemin: Color,
+    yaziRengi: Color,
+    modifier: Modifier,
+    etkin: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        enabled = etkin,
+        shape = RoundedCornerShape(16.dp),
+        color = zemin,
+        modifier = modifier.height(96.dp).alpha(if (etkin) 1f else 0.4f),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(painterResource(simge), contentDescription = null, tint = yaziRengi, modifier = Modifier.size(30.dp))
+            Spacer(Modifier.height(8.dp))
+            Text(yazi, color = yaziRengi, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         }
     }
 }
