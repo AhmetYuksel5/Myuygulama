@@ -148,8 +148,13 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   izinleri izin ekranında; durumları AppOps 10008/10021/10020'den okunur.
   Erişilebilirlik servisi bilerek boş: açık durması MIUI'nin süreci
   öldürmesini engelliyor.
-- Güncelleme uygulama içinde (`Guncelleme.kt`): Ayarlar'da sürüm satırı
-  Denetle → Güncelle → indirme yüzdesi → Android kurulum ekranı; ana ekran
-  yeni sürüm varsa aynı satırı gösterir. APK önbelleğe iner, FileProvider
-  (`${applicationId}.dosyalar`) ile verilir; ilk seferde "bilinmeyen
-  uygulama kurma" izni istenir.
+- Güncelleme uygulama içinde (`Guncelleme.kt`, `GuncellemeArayuz.kt`):
+  açılışta yeni sürüm varsa "Yeni güncelleme var" penceresi (Güncelle/Sonra),
+  görüşme kartının üstünde şerit (saatlik önbellek, GitHub'ın girişsiz
+  60/saat sınırı), Ayarlar'da Denetle/Güncelle satırı. Kurulum
+  PackageInstaller oturumuyla: uygulama kendi kurucusu olunca Android 12+
+  sonraki güncellemeleri sormadan kurar (`USER_ACTION_NOT_REQUIRED`). İlk
+  güncelleme (dosya yöneticisinden kurulmuş) bir kez onay ister. Sessiz
+  güncelleme kart kapanınca / uygulamadan çıkınca tetiklenir, görüşme
+  sırasında değil (kurulum süreci öldürür). Onay gerekirse `KurulumAlicisi`
+  bildirim düşer. Oturum açılamazsa eski yol: FileProvider + kurulum ekranı.

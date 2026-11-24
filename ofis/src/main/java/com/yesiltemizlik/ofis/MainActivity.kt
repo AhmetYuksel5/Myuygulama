@@ -78,6 +78,12 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         yenile++
     }
+
+    // Uygulamadan çıkılınca, sormadan kurulabiliyorsa güncelleme arka planda iner ve kurulur.
+    override fun onStop() {
+        super.onStop()
+        Guncelleme.arkaplandaGuncelle(this)
+    }
 }
 
 @Composable
@@ -108,8 +114,11 @@ private fun AnaEkran(yenile: Int, onAyarlar: () -> Unit) {
         kurulumEksik = depo.jeton.isEmpty() || izinler().any { it.durum(ctx) == false }
     }
     LaunchedEffect(Unit) {
-        yeniSurum = withContext(Dispatchers.IO) { Guncelleme.yeniVarMi(ctx) }
+        // Uygulama açılınca taze bakılır (önbellek yaşı 0); kart ise saatlik önbelleği kullanır.
+        yeniSurum = withContext(Dispatchers.IO) { Guncelleme.bilinenYeni(ctx, azamiYas = 0L) }
     }
+
+    yeniSurum?.let { s -> GuncellemePenceresi(s) { yeniSurum = null } }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -127,19 +136,6 @@ private fun AnaEkran(yenile: Int, onAyarlar: () -> Unit) {
                     )
                     IconButton(onClick = onAyarlar) {
                         Icon(painterResource(R.drawable.s_ayarlar), contentDescription = "Ayarlar")
-                    }
-                }
-            }
-            yeniSurum?.let { s ->
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Box(Modifier.padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp)) {
-                            GuncellemeSatiri(baslangic = s)
-                        }
                     }
                 }
             }
@@ -175,76 +171,6 @@ private fun AnaEkran(yenile: Int, onAyarlar: () -> Unit) {
     }
 }
 
-/**
- * Sürüm satırı ve tek düğme: Denetle → (yeni varsa) Güncelle → indirme yüzdesi
- * → Android'in kurulum ekranı. [baslangic] verilirse denetlemeden "Güncelle" ile başlar.
- */
-@Composable
-private fun GuncellemeSatiri(baslangic: Guncelleme.Surum?) {
-    val ctx = LocalContext.current
-    val kapsam = rememberCoroutineScope()
-    var surum by remember { mutableStateOf(baslangic) }
-    var durum by remember { mutableStateOf(if (baslangic != null) "var" else "") }
-    var yuzde by remember { mutableIntStateOf(0) }
-    val kurulu = remember {
-        try {
-            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
-        } catch (e: Exception) {
-            ""
-        }
-    }
-
-    fun guncelle() {
-        val s = surum ?: return
-        if (!Guncelleme.kurmaIzniVar(ctx)) {
-            // İzin sayfasından dönünce aynı düğmeye bir kez daha basılır.
-            Toast.makeText(ctx, "My Asistan'a izin verip geri dönün", Toast.LENGTH_LONG).show()
-            ctx.startActivity(Guncelleme.kurmaIzniNiyeti(ctx))
-            return
-        }
-        durum = "iniyor"
-        yuzde = 0
-        Guncelleme.indirVeKur(ctx, s, { yuzde = (it * 100).toInt() }) { hata ->
-            durum = if (hata == null) "var" else "hata"
-        }
-    }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                if (durum == "var" || durum == "iniyor") "Yeni sürüm 0.${surum?.numara}" else "Sürüm $kurulu",
-                fontWeight = FontWeight.Bold,
-            )
-            val alt = when (durum) {
-                "guncel" -> "Güncel"
-                "yok" -> "Denetlenemedi"
-                "hata" -> "İndirilemedi"
-                "var", "iniyor" -> "Kurulu: $kurulu"
-                else -> ""
-            }
-            if (alt.isNotEmpty()) {
-                Text(alt, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        when (durum) {
-            "denetleniyor" -> CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-            "iniyor" -> Text("%$yuzde", fontWeight = FontWeight.Bold)
-            "var", "hata" -> Button(onClick = { guncelle() }) { Text("Güncelle") }
-            else -> OutlinedButton(onClick = {
-                durum = "denetleniyor"
-                kapsam.launch {
-                    val bulunan = withContext(Dispatchers.IO) { Guncelleme.sonSurum() }
-                    surum = bulunan?.takeIf { it.numara > Guncelleme.kuruluNumara(ctx) }
-                    durum = when {
-                        bulunan == null -> "yok"
-                        surum != null -> "var"
-                        else -> "guncel"
-                    }
-                }
-            }) { Text("Denetle") }
-        }
-    }
-}
 
 private fun gunBasligi(zaman: Long): String {
     val tr = Locale("tr", "TR")
@@ -455,7 +381,7 @@ private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
 
             IzinListesi(izinTur)
 
-            Kutu { GuncellemeSatiri(baslangic = null) }
+            Kutu { GuncellemeSatiri() }
             if (jeton.isNotEmpty()) {
                 TextButton(onClick = {
                     depo.jeton = ""

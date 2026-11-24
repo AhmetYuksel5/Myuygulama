@@ -76,6 +76,11 @@
                 android:resource="@xml/erisim" />
         </service>
 
+        <!-- Güncelleme kurulumunun sonucu (onay gerekirse ekran ya da bildirim). -->
+        <receiver
+            android:name=".KurulumAlicisi"
+            android:exported="false" />
+
         <!-- İndirilen güncelleme APK'sı kurulum ekranına bu yolla verilir. -->
         <provider
             android:name="androidx.core.content.FileProvider"

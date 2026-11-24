@@ -68,6 +68,7 @@ class KartActivity : ComponentActivity() {
     private var verilen by mutableStateOf<Arama?>(null)
     private var tur by mutableIntStateOf(0)
     private var isler by mutableStateOf(emptyList<Is>())
+    private var guncel by mutableStateOf<Guncelleme.Surum?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,14 +83,25 @@ class KartActivity : ComponentActivity() {
         if (d.jeton.isNotEmpty() && System.currentTimeMillis() - d.islerTs > 6 * 3_600_000L) {
             Arkaplan.isleriYenile(this) { hata -> if (hata == null) isler = Depo(this).isler() }
         }
+        // Yeni sürüm varsa kartın üstünde şerit; saatlik önbellek, her görüşmede GitHub'a gidilmez.
+        Thread {
+            val s = Guncelleme.bilinenYeni(applicationContext)
+            runOnUiThread { guncel = s }
+        }.start()
         setContent {
             OfisTema {
                 key(tur) {
-                    Kart(bas = bas, deneme = deneme, verilen = verilen, isler = isler, onKapat = { finish() })
+                    Kart(bas = bas, deneme = deneme, verilen = verilen, isler = isler, guncel = guncel, onKapat = { finish() })
                 }
             }
         }
         window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
+    }
+
+    // Kart kapanınca, sormadan kurulabiliyorsa güncelleme arka planda kurulur (görüşme sırasında değil).
+    override fun onStop() {
+        super.onStop()
+        if (isFinishing) Guncelleme.arkaplandaGuncelle(this)
     }
 
     // Kart açıkken yeni bir görüşme biterse kart sıfırdan başlar.
@@ -109,7 +121,14 @@ class KartActivity : ComponentActivity() {
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun Kart(bas: Long, deneme: Boolean, verilen: Arama?, isler: List<Is>, onKapat: () -> Unit) {
+private fun Kart(
+    bas: Long,
+    deneme: Boolean,
+    verilen: Arama?,
+    isler: List<Is>,
+    guncel: Guncelleme.Surum?,
+    onKapat: () -> Unit,
+) {
     val ctx = LocalContext.current
     val depo = remember { Depo(ctx) }
     val kimlik = remember { "o" + System.currentTimeMillis().toString(36) + (1000..9999).random() }
@@ -182,6 +201,7 @@ private fun Kart(bas: Long, deneme: Boolean, verilen: Arama?, isler: List<Is>, o
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            guncel?.let { KartGuncellemeSeridi(it) }
             // Başlık: kim, ne kadar konuşuldu.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
