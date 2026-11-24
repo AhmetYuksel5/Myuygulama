@@ -185,4 +185,56 @@ object AccessibilityGuard {
     fun clearCrash(context: Context) {
         runCatching { File(context.filesDir, CRASH_FILE).delete() }
     }
+
+    // ---- Kapanma geçmişi ----
+
+    /**
+     * Android'in Merkez'in her kapanışı için tuttuğu kayıt: ne zaman ve
+     * neden (çökme, bellek, zorla durdurma, güç yönetimi…). Servisin
+     * kapanma sebebi tahminle bulunamadı; bu kayıt kesin söylüyor.
+     */
+    fun exitHistory(context: Context, limit: Int = 12): String {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return ""
+        val manager = context.getSystemService(android.app.ActivityManager::class.java) ?: return ""
+        val format = SimpleDateFormat("d MMM HH:mm:ss", Locale.forLanguageTag("tr"))
+        return runCatching {
+            manager.getHistoricalProcessExitReasons(context.packageName, 0, limit).joinToString("\n") { info ->
+                buildString {
+                    append(format.format(Date(info.timestamp))).append(" · ")
+                    append(reasonName(info.reason))
+                    append(" · ").append(importanceName(info.importance))
+                    append(" · ").append(info.pss / 1024).append(" MB")
+                    if (info.status != 0) append(" · kod ").append(info.status)
+                    info.description?.takeIf { it.isNotBlank() }?.let { append(" · ").append(it.take(160)) }
+                }
+            }
+        }.getOrDefault("")
+    }
+
+    private fun reasonName(reason: Int): String = when (reason) {
+        android.app.ApplicationExitInfo.REASON_CRASH -> "çökme"
+        android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "yerel çökme"
+        android.app.ApplicationExitInfo.REASON_ANR -> "yanıt vermedi"
+        android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "bellek az"
+        android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "fazla kaynak"
+        android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "zorla durduruldu"
+        android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "kullanıcı durdurdu"
+        android.app.ApplicationExitInfo.REASON_SIGNALED -> "sistem öldürdü"
+        android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "kendisi çıktı"
+        android.app.ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "bağlı süreç öldü"
+        android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "izin değişti"
+        android.app.ApplicationExitInfo.REASON_PACKAGE_UPDATED -> "güncellendi"
+        android.app.ApplicationExitInfo.REASON_PACKAGE_STATE_CHANGE -> "paket durumu değişti"
+        android.app.ApplicationExitInfo.REASON_FREEZER -> "donduruldu"
+        android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "başlatılamadı"
+        android.app.ApplicationExitInfo.REASON_OTHER -> "diğer"
+        else -> "bilinmiyor ($reason)"
+    }
+
+    private fun importanceName(importance: Int): String = when {
+        importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND -> "önde"
+        importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_PERCEPTIBLE -> "görünür servis"
+        importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_SERVICE -> "servis"
+        else -> "arka plan"
+    }
 }

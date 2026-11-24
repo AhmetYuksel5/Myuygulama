@@ -346,12 +346,14 @@ private fun GuardSection() {
     var guarded by remember { mutableStateOf(AccessibilityGuard.isGuarded(context)) }
     var canRestore by remember { mutableStateOf(AccessibilityGuard.canRestore(context)) }
     var crash by remember { mutableStateOf(AccessibilityGuard.lastCrash(context)) }
+    var exits by remember { mutableStateOf(AccessibilityGuard.exitHistory(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 canRestore = AccessibilityGuard.canRestore(context)
                 crash = AccessibilityGuard.lastCrash(context)
+                exits = AccessibilityGuard.exitHistory(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -396,6 +398,19 @@ private fun GuardSection() {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+    if (exits.isNotBlank()) {
+        Text("Kapanma geçmişi", style = MaterialTheme.typography.labelLarge)
+        Text(
+            "Android'in kaydı: Merkez'in son kapanışları, en yenisi üstte.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(exits, style = MaterialTheme.typography.bodySmall)
+        androidx.compose.material3.TextButton(onClick = {
+            val report = exits + (crash?.let { "\n\nSon çökme:\n$it" } ?: "")
+            copy("Kapanma geçmişi", report)
+        }) { Text("Geçmişi kopyala") }
     }
     crash?.let { report ->
         Text("Son çökme", style = MaterialTheme.typography.labelLarge)
