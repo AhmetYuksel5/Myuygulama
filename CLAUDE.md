@@ -143,7 +143,8 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   numarayla sohbet (önce Business, sonra WhatsApp). Pencerenin dışına
   dokununca kapanır (kullanıcı 2026-11-24). Sağ üstte küçük ×: dokununca
   kapatır, uzun basınca "bu numarada kart çıkmasın mı" (kullanıcı
-  2026-11-25). Liste `Depo.engelliler` (son 10 hane), Ayarlar'da Kaldır.
+  2026-11-25). Liste `Depo.engelliler` (son 10 hane); Ayarlar'da numaraya dokununca
+  "yeniden çıksın mı" penceresi (satırda düğme yok).
   Alıcı kartı açmadan önce arama kaydına en çok 3 sn bakar (`goAsync`);
   listedeki numarada kart da bildirim de çıkmaz.
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı

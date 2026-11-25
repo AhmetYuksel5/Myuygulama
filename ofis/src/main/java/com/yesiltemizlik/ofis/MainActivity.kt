@@ -11,6 +11,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import android.content.Intent
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.draw.clip
 import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.CircularProgressIndicator
@@ -451,17 +454,35 @@ private fun EngelliListesi(yenile: Int) {
     val ctx = LocalContext.current
     val depo = remember { Depo(ctx) }
     var liste by remember(yenile) { mutableStateOf(depo.engelliler()) }
+    var sorulan by remember { mutableStateOf<String?>(null) }
     if (liste.isEmpty()) return
+    // Satırda düğme yok: numaraya dokununca sorulur (kullanıcı 2026-11-25).
+    sorulan?.let { n ->
+        AlertDialog(
+            onDismissRequest = { sorulan = null },
+            title = { Text("Bu numarada kart yeniden çıksın mı?") },
+            text = { Text(telBicim(n)) },
+            confirmButton = {
+                Button(onClick = {
+                    depo.engelKaldir(n)
+                    liste = depo.engelliler()
+                    sorulan = null
+                }) { Text("Çıksın") }
+            },
+            dismissButton = { TextButton(onClick = { sorulan = null }) { Text("Vazgeç") } },
+        )
+    }
     Kutu {
         Text("Kart çıkmayan numaralar", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         liste.forEach { n ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(telBicim(n), modifier = Modifier.weight(1f))
-                TextButton(onClick = {
-                    depo.engelKaldir(n)
-                    liste = depo.engelliler()
-                }) { Text("Kaldır") }
-            }
+            Text(
+                telBicim(n),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { sorulan = n }
+                    .padding(vertical = 10.dp, horizontal = 4.dp),
+            )
         }
     }
 }
