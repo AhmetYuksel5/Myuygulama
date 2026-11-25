@@ -1086,9 +1086,9 @@ internal object ScreenAgent {
             )
             put(
                 "generationConfig",
-                JSONObject()
-                    .put("temperature", 0.2)
-                    .put("responseMimeType", "application/json"),
+                // Yeni Gemini Flash (3.6+) ve Claude (4.7+/5.5) modelleri temperature
+                // parametresini kaldırdı; gönderilince hata veya döngü üretiyor.
+                JSONObject().put("responseMimeType", "application/json"),
             )
         }
         val request = Request.Builder()
@@ -1135,8 +1135,10 @@ internal object ScreenAgent {
 
         val payload = JSONObject().apply {
             put("model", model.trim())
-            put("max_tokens", 1024)
-            put("temperature", 0.2)
+            // Claude Opus 5.5'te iç düşünme belirteçleri max_tokens'tan düşüyor;
+            // küçük sınır JSON yanıtı çıkmadan kesilmeye yol açabiliyor.
+            put("max_tokens", 4096)
+            // Claude 4.7+ ve 5.5 modelleri temperature parametresini HTTP 400 ile reddediyor.
             put("system", systemPrompt)
             put(
                 "messages",
