@@ -25,7 +25,29 @@ class AramaAlicisi : BroadcastReceiver() {
             }
             TelephonyManager.EXTRA_STATE_IDLE -> if (d.konusuldu) {
                 d.konusuldu = false
-                if (d.kartAcik) KartAcici.ac(context, d.aramaBas)
+                if (!d.kartAcik) return
+                // Kart çıkmayan numara listesine bakabilmek için numara gerekiyor;
+                // arama kaydı IDLE'dan biraz sonra yazılıyor, en çok 3 sn beklenir.
+                // Bulunan arama karta hazır verilir, kart yeniden aramaz.
+                val bas = d.aramaBas
+                val bekle = goAsync()
+                Thread {
+                    try {
+                        var a: Arama? = null
+                        for (i in 0 until 6) {
+                            a = bitenArama(context, bas)
+                            if (a != null) break
+                            Thread.sleep(500)
+                        }
+                        when {
+                            a == null -> KartAcici.ac(context, bas)
+                            d.engelliMi(a.tel) -> {}
+                            else -> KartAcici.ac(context, a)
+                        }
+                    } finally {
+                        bekle.finish()
+                    }
+                }.start()
             }
         }
     }

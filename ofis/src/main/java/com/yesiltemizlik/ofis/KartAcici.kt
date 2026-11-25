@@ -38,8 +38,11 @@ object KartAcici {
         )
     }
 
-    fun ac(context: Context, bas: Long) {
-        val i = niyet(context, bas)
+    fun ac(context: Context, a: Arama) = goster(context, niyet(context, a))
+
+    fun ac(context: Context, bas: Long) = goster(context, niyet(context, bas))
+
+    private fun goster(context: Context, i: Intent) {
         bildir(context, i)
         try {
             context.startActivity(i)

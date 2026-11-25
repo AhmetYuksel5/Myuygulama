@@ -140,8 +140,12 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
 - Kart: üç düğme, aynı çizgi simge dili (`res/drawable/s_*.xml`, 24 birim,
   2 kalınlık). İş arayan → yaka → ilçe → o ilçedeki işler (+ diğer işler,
   aynı yaka önce) → ad, not → Kaydet. Müşteri → ad, not → Kaydet. WhatsApp →
-  numarayla sohbet (önce Business, sonra WhatsApp). Kapat düğmesi yok,
-  pencerenin dışına dokununca kapanır (kullanıcı 2026-11-24).
+  numarayla sohbet (önce Business, sonra WhatsApp). Pencerenin dışına
+  dokununca kapanır (kullanıcı 2026-11-24). Sağ üstte küçük ×: dokununca
+  kapatır, uzun basınca "bu numarada kart çıkmasın mı" (kullanıcı
+  2026-11-25). Liste `Depo.engelliler` (son 10 hane), Ayarlar'da Kaldır.
+  Alıcı kartı açmadan önce arama kaydına en çok 3 sn bakar (`goAsync`);
+  listedeki numarada kart da bildirim de çıkmaz.
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana

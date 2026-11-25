@@ -71,6 +71,36 @@ class Depo(context: Context) {
         p.edit().putString("siniflar", o.toString()).apply()
     }
 
+    /**
+     * Kart çıkmayan numaralar (kartta × uzun basış). Son 10 hane saklanır:
+     * aynı numara +90, 0 ya da çıplak gelebiliyor.
+     */
+    fun engelliler(): List<String> = try {
+        val a = JSONArray(p.getString("engelli", "[]"))
+        List(a.length()) { a.getString(it) }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    fun engelliMi(tel: String): Boolean {
+        val k = numaraAnahtari(tel)
+        return k.isNotEmpty() && k in engelliler()
+    }
+
+    fun engelle(tel: String) {
+        val k = numaraAnahtari(tel)
+        if (k.isEmpty()) return
+        val a = JSONArray()
+        (engelliler() - k + k).forEach { a.put(it) }
+        p.edit().putString("engelli", a.toString()).apply()
+    }
+
+    fun engelKaldir(anahtar: String) {
+        val a = JSONArray()
+        (engelliler() - anahtar).forEach { a.put(it) }
+        p.edit().putString("engelli", a.toString()).apply()
+    }
+
     fun kuyruk(): List<JSONObject> = synchronized(KILIT) {
         try {
             val a = JSONArray(p.getString("kuyruk", "[]"))

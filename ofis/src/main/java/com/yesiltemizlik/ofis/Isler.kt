@@ -72,6 +72,12 @@ fun sureMetni(saniye: Long): String = when {
     else -> "${saniye / 60} dk" + (if (saniye % 60 != 0L) " ${saniye % 60} sn" else "")
 }
 
+/** Numaranın son 10 hanesi; kısa ya da gizli numarada boş. */
+fun numaraAnahtari(tel: String): String {
+    val d = tel.filter { it.isDigit() }
+    return if (d.length >= 10) d.takeLast(10) else ""
+}
+
 /** 05321234567 → 0532 123 45 67; tanınmayan biçim olduğu gibi kalır. */
 fun telBicim(tel: String): String {
     var d = tel.filter { it.isDigit() }

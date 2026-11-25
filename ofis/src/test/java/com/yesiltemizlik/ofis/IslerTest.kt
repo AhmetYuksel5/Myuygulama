@@ -36,6 +36,15 @@ class IslerTest {
     }
 
     @Test
+    fun numaraAnahtariAyniNumarayiBirlestirir() {
+        assertEquals("5321234567", numaraAnahtari("+90 532 123 45 67"))
+        assertEquals("5321234567", numaraAnahtari("05321234567"))
+        assertEquals("5321234567", numaraAnahtari("5321234567"))
+        assertEquals("", numaraAnahtari("1234"))
+        assertEquals("", numaraAnahtari(""))
+    }
+
+    @Test
     fun telefonVeSure() {
         assertEquals("0532 123 45 67", telBicim("+905321234567"))
         assertEquals("0532 123 45 67", telBicim("5321234567"))

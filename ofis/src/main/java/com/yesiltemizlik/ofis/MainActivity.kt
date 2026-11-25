@@ -379,6 +379,8 @@ private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
                 ) { Text("Kartı dene") }
             }
 
+            EngelliListesi(yenile)
+
             IzinListesi(izinTur)
 
             Kutu { GuncellemeSatiri() }
@@ -438,6 +440,27 @@ private fun IzinListesi(tur: Int) {
                         }
                     }) { Text(if (durum == null) "Ayarla" else "Ver") }
                 }
+            }
+        }
+    }
+}
+
+/** Kartta × uzun basılarak eklenen numaralar; buradan geri alınır. Boşsa hiç görünmez. */
+@Composable
+private fun EngelliListesi(yenile: Int) {
+    val ctx = LocalContext.current
+    val depo = remember { Depo(ctx) }
+    var liste by remember(yenile) { mutableStateOf(depo.engelliler()) }
+    if (liste.isEmpty()) return
+    Kutu {
+        Text("Kart çıkmayan numaralar", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        liste.forEach { n ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(telBicim(n), modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    depo.engelKaldir(n)
+                    liste = depo.engelliler()
+                }) { Text("Kaldır") }
             }
         }
     }

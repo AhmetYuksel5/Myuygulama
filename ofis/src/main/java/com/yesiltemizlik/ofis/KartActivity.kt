@@ -9,6 +9,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -143,12 +149,18 @@ private fun Kart(
     var not by remember { mutableStateOf("") }
     var digerAcik by remember { mutableStateOf(false) }
     var ara by remember { mutableStateOf("") }
+    var engelSor by remember { mutableStateOf(false) }
 
     LaunchedEffect(bas) {
         if (deneme || verilen != null) return@LaunchedEffect
         repeat(8) {
             val a = withContext(Dispatchers.IO) { bitenArama(ctx, bas) }
             if (a != null) {
+                // Listeye alınmış numara: kart hiç görünmesin.
+                if (depo.engelliMi(a.tel)) {
+                    onKapat()
+                    return@LaunchedEffect
+                }
                 arama = a
                 if (ad.isEmpty()) ad = a.ad
                 return@LaunchedEffect
@@ -224,6 +236,27 @@ private fun Kart(
                         Text(alt, style = MaterialTheme.typography.bodySmall, color = renk.onSurfaceVariant)
                     }
                 }
+                KapatDugmesi(
+                    onKapat = onKapat,
+                    onUzun = if (numaraAnahtari(arama?.tel ?: "").isNotEmpty()) ({ engelSor = true }) else null,
+                )
+            }
+            if (engelSor) {
+                val tel = arama?.tel ?: ""
+                AlertDialog(
+                    onDismissRequest = { engelSor = false },
+                    title = { Text("Bu numarada kart çıkmasın mı?") },
+                    text = { Text(telBicim(tel)) },
+                    confirmButton = {
+                        Button(onClick = {
+                            if (!deneme) depo.engelle(tel)
+                            engelSor = false
+                            Toast.makeText(ctx, "Bu numarada kart çıkmayacak", Toast.LENGTH_SHORT).show()
+                            onKapat()
+                        }) { Text("Çıkmasın") }
+                    },
+                    dismissButton = { TextButton(onClick = { engelSor = false }) { Text("Vazgeç") } },
+                )
             }
 
             when (adim) {
@@ -368,6 +401,37 @@ private fun Kart(
                 }
             }
         }
+    }
+}
+
+/** Küçük ×: dokununca kapatır, uzun basınca "bu numarada çıkmasın" sorusu. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun KapatDugmesi(onKapat: () -> Unit, onUzun: (() -> Unit)?) {
+    val titresim = LocalHapticFeedback.current
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+                onClick = onKapat,
+                onLongClick = onUzun?.let { u ->
+                    {
+                        titresim.performHapticFeedback(HapticFeedbackType.LongPress)
+                        u()
+                    }
+                },
+                onClickLabel = "Kapat",
+                onLongClickLabel = "Bu numarada çıkmasın",
+            ),
+    ) {
+        Icon(
+            painterResource(R.drawable.s_kapat),
+            contentDescription = "Kapat",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
