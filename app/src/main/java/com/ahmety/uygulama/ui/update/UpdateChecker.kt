@@ -1,17 +1,24 @@
 package com.ahmety.uygulama.ui.update
 
 import android.content.Context
+import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.PackageInstaller
+import android.os.Build
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,21 +54,33 @@ class UpdateChecker @Inject constructor(
     }.getOrDefault("")
 
     /** @return yeni sürüm varsa bilgisi, yoksa null */
-    suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
-        val json = fetch(RELEASES_URL) ?: return@withContext null
-        val release = runCatching { JSONObject(json) }.getOrNull() ?: return@withContext null
+    suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) { checkLatest()?.update }
 
+    /**
+     * Son sürüme bakar. null: GitHub'a ulaşılamadı; [Latest.update] null ise
+     * ulaşıldı ama yeni sürüm yok. Önbellek ikisini ayırt etsin diye sarılı:
+     * bağlantı yokken "yeni sürüm yok" diye önbelleği silmesin.
+     */
+    private class Latest(val update: UpdateInfo?)
+
+    private fun checkLatest(): Latest? {
+        val json = fetch(RELEASES_URL) ?: return null
+        val release = runCatching { JSONObject(json) }.getOrNull() ?: return null
+        return Latest(latestFrom(release))
+    }
+
+    private fun latestFrom(release: JSONObject): UpdateInfo? {
         val tag = release.optString("tag_name")
-        val remoteBuild = tag.substringAfterLast('.').toIntOrNull() ?: return@withContext null
+        val remoteBuild = tag.substringAfterLast('.').toIntOrNull() ?: return null
         val remoteVersionCode = (1 + remoteBuild).toLong()
-        if (remoteVersionCode <= currentVersionCode()) return@withContext null
+        if (remoteVersionCode <= currentVersionCode()) return null
 
-        val assets = release.optJSONArray("assets") ?: return@withContext null
+        val assets = release.optJSONArray("assets") ?: return null
         for (index in 0 until assets.length()) {
             val asset = assets.optJSONObject(index) ?: continue
             val name = asset.optString("name")
             if (!name.endsWith(".apk")) continue
-            return@withContext UpdateInfo(
+            return UpdateInfo(
                 versionName = tag.removePrefix("v"),
                 versionCode = remoteVersionCode,
                 downloadUrl = asset.optString("browser_download_url"),
@@ -69,7 +88,7 @@ class UpdateChecker @Inject constructor(
                 sizeBytes = asset.optLong("size"),
             )
         }
-        null
+        return null
     }
 
     /**
@@ -110,8 +129,42 @@ class UpdateChecker @Inject constructor(
         }
     }
 
-    /** Sistem kurulum ekranını açar. */
-    fun install(file: File) {
+    /**
+     * Kurulum oturumuyla kurar. Böylece Merkez paketin kurucusu oluyor ve
+     * Android 12+ sonraki güncellemeleri sormadan kuruyor (My Asistan'daki
+     * düzen). İlk güncelleme, dosya yöneticisinden kurulmuş olduğu için bir
+     * kez onay ister. Oturum açılamazsa eski yol: kurulum ekranı.
+     *
+     * [background] doğruysa onay gerektiğinde ekrana bir şey açılmıyor,
+     * bildirim düşüyor; kurulum ekranına düşme yolu da kapalı.
+     */
+    fun install(file: File, background: Boolean = false) {
+        val opened = runCatching {
+            val installer = context.packageManager.packageInstaller
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+            params.setAppPackageName(context.packageName)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            }
+            val id = installer.createSession(params)
+            installer.openSession(id).use { session ->
+                session.openWrite("merkez.apk", 0, file.length()).use { out ->
+                    file.inputStream().use { it.copyTo(out) }
+                    session.fsync(out)
+                }
+                val result = Intent(context, InstallResultReceiver::class.java)
+                    .putExtra(InstallResultReceiver.EXTRA_BACKGROUND, background)
+                // Sistem sonuca bilgi ekliyor; değiştirilebilir olmak zorunda.
+                val pending = PendingIntent.getBroadcast(
+                    context,
+                    id,
+                    result,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                )
+                session.commit(pending.intentSender)
+            }
+        }.isSuccess
+        if (opened || background) return
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
@@ -119,6 +172,70 @@ class UpdateChecker @Inject constructor(
         }
         runCatching { context.startActivity(intent) }
     }
+
+    /**
+     * Sormadan kurulabilir mi: Android 12+ bir uygulamanın kendini onaysız
+     * güncellemesine, paketin son kurucusu kendisiyse izin veriyor.
+     */
+    fun silentInstallable(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && canInstallPackages() && runCatching {
+            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName ==
+                context.packageName
+        }.getOrDefault(false)
+
+    /**
+     * Önbellekli denetim: her açılışta GitHub'a gitmesin (girişsiz istekte
+     * saatte 60 sınırı var). [maxAgeMs] kadar eski sonuç yeniden kullanılıyor.
+     */
+    suspend fun knownUpdate(maxAgeMs: Long = 3_600_000L): UpdateInfo? = withContext(Dispatchers.IO) {
+        val prefs = context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong("ts", 0L) > maxAgeMs) {
+            val fresh = runCatching { checkLatest() }.getOrNull()
+            if (fresh != null) {
+                val edit = prefs.edit().putLong("ts", now)
+                val info = fresh.update
+                if (info == null) {
+                    edit.remove("code")
+                } else {
+                    edit.putLong("code", info.versionCode)
+                        .putString("name", info.versionName)
+                        .putString("url", info.downloadUrl)
+                        .putString("notes", info.notes)
+                        .putLong("size", info.sizeBytes)
+                }
+                edit.apply()
+            }
+        }
+        val code = prefs.getLong("code", 0L)
+        val url = prefs.getString("url", null).orEmpty()
+        if (code <= currentVersionCode() || url.isEmpty()) return@withContext null
+        UpdateInfo(
+            versionName = prefs.getString("name", null).orEmpty(),
+            versionCode = code,
+            downloadUrl = url,
+            notes = prefs.getString("notes", null).orEmpty(),
+            sizeBytes = prefs.getLong("size", 0L),
+        )
+    }
+
+    /** Uygulamadan çıkılınca: yeni sürüm varsa ve sormadan kurulabiliyorsa indir ve kur. */
+    fun updateInBackground() {
+        if (!silentInstallable()) return
+        if (!busy.compareAndSet(false, true)) return
+        backgroundScope.launch {
+            try {
+                val info = knownUpdate() ?: return@launch
+                val file = download(info) {} ?: return@launch
+                install(file, background = true)
+            } finally {
+                busy.set(false)
+            }
+        }
+    }
+
+    private val busy = AtomicBoolean(false)
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Android, bir uygulamanın başka bir uygulama kurmasına ancak kullanıcı
@@ -148,6 +265,7 @@ class UpdateChecker @Inject constructor(
     }.getOrNull()
 
     private companion object {
+        const val CACHE_PREFS = "guncelleme_onbellek"
         const val RELEASES_URL =
             "https://api.github.com/repos/AhmetYuksel5/Myuygulama/releases/latest"
     }

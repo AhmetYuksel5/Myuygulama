@@ -44,18 +44,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun UpdateDialog(
     onDismiss: () -> Unit,
     viewModel: UpdateViewModel = hiltViewModel(),
+    /** Açılışta yeni sürüm bulunduğu için kendiliğinden açıldı: yeniden bakmaya gerek yok. */
+    fromLaunch: Boolean = false,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) { viewModel.check() }
+    LaunchedEffect(Unit) {
+        viewModel.refreshInstallPermission()
+        if (!fromLaunch) viewModel.check()
+    }
 
     val downloading = state.downloadProgress != null
     val available = state.available
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Güncelleme") },
+        title = { Text(if (fromLaunch) "Yeni güncelleme var" else "Güncelleme") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
@@ -69,6 +74,12 @@ fun UpdateDialog(
                         Text("Kontrol ediliyor…", style = MaterialTheme.typography.bodyMedium)
                         CircularProgressIndicator()
                     }
+
+                    state.installing -> Text(
+                        "Kuruluyor…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
 
                     downloading -> {
                         Text("İndiriliyor…", style = MaterialTheme.typography.bodyMedium)
@@ -115,10 +126,10 @@ fun UpdateDialog(
                     Text("İzin ver")
                 }
 
-                available != null && !downloading -> TextButton(
+                available != null && !downloading && !state.installing -> TextButton(
                     onClick = { viewModel.downloadAndInstall() },
                 ) {
-                    Text("İndir ve kur")
+                    Text(if (fromLaunch) "Güncelle" else "İndir ve kur")
                 }
 
                 !state.checking && !downloading -> TextButton(onClick = { viewModel.check() }) {
@@ -133,7 +144,13 @@ fun UpdateDialog(
         // pencereyi kapatmak indirmeyi iptal etmiyor.
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(if (downloading) "Arka planda sürsün" else "Kapat")
+                Text(
+                    when {
+                        downloading -> "Arka planda sürsün"
+                        fromLaunch -> "Sonra"
+                        else -> "Kapat"
+                    },
+                )
             }
         },
     )

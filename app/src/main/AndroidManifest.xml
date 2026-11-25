@@ -130,6 +130,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- Güncelleme kurulum oturumunun sonucu: onay gerekirse ekranı ya da bildirimi açar. -->
+        <receiver
+            android:name=".ui.update.InstallResultReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

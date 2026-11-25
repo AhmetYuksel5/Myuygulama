@@ -16,6 +16,10 @@ data class UpdateUiState(
     val available: UpdateInfo? = null,
     val canInstall: Boolean = true,
     val message: String? = null,
+    /** İndirme bitti, kurulum Android'e verildi. */
+    val installing: Boolean = false,
+    /** Açılışta yeni sürüm bulundu: pencere kendiliğinden açılsın. */
+    val promptOnLaunch: Boolean = false,
 )
 
 @HiltViewModel
@@ -33,6 +37,18 @@ class UpdateViewModel @Inject constructor(
 
     fun refreshInstallPermission() {
         _uiState.value = _uiState.value.copy(canInstall = checker.canInstallPackages())
+    }
+
+    /** Açılışta taze bakılır (önbellek yaşı 0); yeni sürüm varsa pencere açılıyor. */
+    fun checkOnLaunch() {
+        viewModelScope.launch {
+            val info = checker.knownUpdate(maxAgeMs = 0L) ?: return@launch
+            _uiState.value = _uiState.value.copy(available = info, promptOnLaunch = true)
+        }
+    }
+
+    fun dismissLaunchPrompt() {
+        _uiState.value = _uiState.value.copy(promptOnLaunch = false)
     }
 
     fun check() {
@@ -60,6 +76,7 @@ class UpdateViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(message = "İndirme başarısız oldu.")
             } else {
                 checker.install(file)
+                _uiState.value = _uiState.value.copy(installing = true)
             }
         }
     }

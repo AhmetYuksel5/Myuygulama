@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.Badge
@@ -59,6 +60,7 @@ import com.ahmety.uygulama.ui.gestures.NotificationFilterScreen
 import com.ahmety.uygulama.ui.permissions.PermissionsScreen
 import com.ahmety.uygulama.ui.sync.SyncScreen
 import com.ahmety.uygulama.ui.update.UpdateDialog
+import com.ahmety.uygulama.ui.update.UpdateViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -117,8 +119,19 @@ fun MerkezApp() {
     var showUpdate by remember { mutableStateOf(false) }
     var showSaveArticle by remember { mutableStateOf(false) }
 
+    // Açılışta yeni sürüm varsa pencere kendiliğinden açılıyor (My Asistan'daki gibi).
+    val updateViewModel: UpdateViewModel = hiltViewModel()
+    val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { updateViewModel.checkOnLaunch() }
+
     if (showUpdate) {
-        UpdateDialog(onDismiss = { showUpdate = false })
+        UpdateDialog(onDismiss = { showUpdate = false }, viewModel = updateViewModel)
+    } else if (updateState.promptOnLaunch) {
+        UpdateDialog(
+            onDismiss = { updateViewModel.dismissLaunchPrompt() },
+            viewModel = updateViewModel,
+            fromLaunch = true,
+        )
     }
 
     if (showSaveArticle) {
