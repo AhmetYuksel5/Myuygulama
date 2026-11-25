@@ -25,6 +25,11 @@ class Depo(context: Context) {
         get() = p.getInt("kartY", -1)
         set(v) = p.edit().putInt("kartY", v).apply()
 
+    /** Görüşme sonu kartının kendiliğinden kapanma süresi (sn); 0 = kapanmasın. */
+    var kartSure: Int
+        get() = p.getInt("kartSure", 5)
+        set(v) = p.edit().putInt("kartSure", v).apply()
+
     var sonYaka: String
         get() = p.getString("sonYaka", "avrupa") ?: "avrupa"
         set(v) = p.edit().putString("sonYaka", v).apply()

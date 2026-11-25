@@ -11,6 +11,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import android.content.Intent
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.draw.clip
@@ -246,6 +250,7 @@ private fun AramaSatiri(a: Arama, sinif: String?, onClick: () -> Unit) {
 }
 
 /** Eşleşme, iş listesi, izinler, kartın kendisi: kurulumdan sonra pek açılmayan her şey burada. */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
     val ctx = LocalContext.current
@@ -375,6 +380,20 @@ private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
                         kartAcik = it
                         depo.kartAcik = it
                     })
+                }
+                Text("Kendiliğinden kapanma", style = MaterialTheme.typography.bodyMedium)
+                var sure by remember { mutableIntStateOf(depo.kartSure) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(3 to "3 sn", 5 to "5 sn", 10 to "10 sn", 0 to "Kapanmasın").forEach { (sn, yazi) ->
+                        FilterChip(
+                            selected = sure == sn,
+                            onClick = {
+                                sure = sn
+                                depo.kartSure = sn
+                            },
+                            label = { Text(yazi) },
+                        )
+                    }
                 }
                 OutlinedButton(
                     onClick = { ctx.startActivity(KartAcici.niyet(ctx, System.currentTimeMillis(), deneme = true)) },

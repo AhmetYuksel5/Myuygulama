@@ -148,11 +148,15 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   Alıcı kartı açmadan önce arama kaydına en çok 3 sn bakar (`goAsync`);
   listedeki numarada kart da bildirim de çıkmaz.
 - Kart sürüklenir (kullanıcı 2026-11-25): üstteki tutamak ya da isim
-  satırı, ham ekran koordinatıyla (`pointerInteropFilter`), yalnız dikey;
-  pencere `Gravity.TOP` + `y`, son yer `Depo.kartY`. Görüşme sonu kendiliğinden
-  açılan kart (`EK_OTOMATIK`) 3 sn dokunulmazsa kapanır, süre çizgisi
-  gösterir; herhangi bir dokunuş sayacı durdurur. Listeden/bildirimden
-  açılan kart kapanmaz; "Kartı dene" kapanmayı da gösterir.
+  satırı, ham ekran koordinatıyla (`pointerInteropFilter`). Aşağı ve iki
+  yana ekran dışına taşabilir (`FLAG_LAYOUT_NO_LIMITS`), kenarda 96 dp hep
+  görünür; yukarı taşmaz (tutamak kaybolur). Dikey yer `Depo.kartY`'de
+  hatırlanır, yana kaydırma her kartta ortaya döner. Görüşme sonu
+  kendiliğinden açılan kart (`EK_OTOMATIK`) `Depo.kartSure` sn (varsayılan 5;
+  Ayarlar'da 3/5/10/Kapanmasın) dokunulmazsa kapanır, süre çizgisi gösterir;
+  herhangi bir dokunuş sayacı durdurur. Listeden/bildirimden açılan kart
+  kapanmaz; "Kartı dene" kapanmayı da gösterir. Ana ekranın sağ üstünde
+  dişli (`s_ayarlar`) Ayarlar'ı açar.
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana

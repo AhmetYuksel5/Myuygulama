@@ -125,24 +125,41 @@ class KartActivity : ComponentActivity() {
             }
         }
         window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
-        // Konum üstten ölçülür ki sürükleme ilk dokunuşta zıplamasın; son bırakılan yer hatırlanır.
+        // Kart ekranın dışına taşabilsin (kullanıcı 2026-11-25); sistem pencereyi ekrana sığdırmasın.
+        window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+        // Konum üstten ölçülür ki sürükleme ilk dokunuşta zıplamasın. Dikey yer
+        // hatırlanır; yana kaydırma her kartta ortaya döner, yoksa sonraki kart
+        // yarısı ekran dışında açılır.
         val lp = window.attributes
         lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         val kayitli = d.kartY
         lp.y = if (kayitli >= 0) kayitli else (resources.displayMetrics.heightPixels * 0.18f).toInt()
+        lp.x = 0
         window.attributes = lp
-        // Kart uzayınca (iş listesi açılınca) alt kenarı ekrandan taşmasın.
+        // Kart uzayınca (iş listesi açılınca) sınırlar yeniden uygulanır.
         window.decorView.addOnLayoutChangeListener { _, _, ust, _, alt, _, eskiUst, _, eskiAlt ->
-            if (alt - ust != eskiAlt - eskiUst) surukle(0f)
+            if (alt - ust != eskiAlt - eskiUst) surukle(0f, 0f)
         }
     }
 
-    /** Kart ekran genişliğinde; yalnız dikey kaydırılır, ekrandan taşmaz. */
-    private fun surukle(dy: Float) {
+    /**
+     * Kart aşağı ve iki yana ekran dışına taşabilir; tutulabilsin diye kenarda
+     * [GORUNUR_DP] kadarı hep kalır. Yukarı taşmaz: tutamak üstte, kaybolursa
+     * kart geri çekilemez.
+     */
+    private fun surukle(dx: Float, dy: Float) {
         val lp = window.attributes
-        val azami = (resources.displayMetrics.heightPixels - window.decorView.height).coerceAtLeast(0)
-        lp.y = (lp.y + dy.toInt()).coerceIn(0, azami)
+        val ekran = resources.displayMetrics
+        val kalan = (GORUNUR_DP * ekran.density).toInt()
+        val genis = window.decorView.width.takeIf { it > 0 } ?: ekran.widthPixels
+        val yanAzami = (genis - kalan).coerceAtLeast(0)
+        lp.x = (lp.x + dx.toInt()).coerceIn(-yanAzami, yanAzami)
+        lp.y = (lp.y + dy.toInt()).coerceIn(0, (ekran.heightPixels - kalan).coerceAtLeast(0))
         window.attributes = lp
+    }
+
+    companion object {
+        private const val GORUNUR_DP = 96
     }
 
     // Kart kapanınca, sormadan kurulabiliyorsa güncelleme arka planda kurulur (görüşme sırasında değil).
@@ -178,7 +195,7 @@ private fun Kart(
     isler: List<Is>,
     guncel: Guncelleme.Surum?,
     onKapat: () -> Unit,
-    onSurukle: (Float) -> Unit,
+    onSurukle: (Float, Float) -> Unit,
     onSurukleBitti: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -245,27 +262,32 @@ private fun Kart(
         onKapat()
     }
 
-    // KENDİLİĞİNDEN KAPANMA (kullanıcı 2026-11-25): görüşme sonu kartına 3 sn
-    // dokunulmazsa kapanır. Herhangi bir dokunuş (sürükleme dahil) sayacı durdurur.
-    var dokunuldu by remember { mutableStateOf(!otomatik) }
+    // KENDİLİĞİNDEN KAPANMA (kullanıcı 2026-11-25): görüşme sonu kartına süre
+    // boyunca (Ayarlar, varsayılan 5 sn; 0 = kapanmasın) dokunulmazsa kapanır.
+    // Herhangi bir dokunuş (sürükleme dahil) sayacı durdurur.
+    val sure = remember { depo.kartSure }
+    var dokunuldu by remember { mutableStateOf(!otomatik || sure <= 0) }
     val kalan = remember { Animatable(1f) }
     LaunchedEffect(dokunuldu) {
         if (dokunuldu) return@LaunchedEffect
-        kalan.animateTo(0f, tween(durationMillis = 3_000, easing = LinearEasing))
+        kalan.animateTo(0f, tween(durationMillis = sure * 1000, easing = LinearEasing))
         onKapat()
     }
 
     // Sürükleme ham ekran koordinatıyla: pencere parmakla birlikte kaydığı için
     // pencereye göre konum işe yaramıyor.
+    var sonX by remember { mutableFloatStateOf(0f) }
     var sonY by remember { mutableFloatStateOf(0f) }
     val tutamac = Modifier.pointerInteropFilter { e ->
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                sonX = e.rawX
                 sonY = e.rawY
                 true
             }
             MotionEvent.ACTION_MOVE -> {
-                onSurukle(e.rawY - sonY)
+                onSurukle(e.rawX - sonX, e.rawY - sonY)
+                sonX = e.rawX
                 sonY = e.rawY
                 true
             }
