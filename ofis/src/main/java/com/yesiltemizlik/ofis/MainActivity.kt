@@ -401,6 +401,8 @@ private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
                 ) { Text("Kartı dene") }
             }
 
+            TanitimAyari()
+
             EngelliListesi(yenile)
 
             IzinListesi(izinTur)
@@ -463,6 +465,61 @@ private fun IzinListesi(tur: Int) {
                     }) { Text(if (durum == null) "Ayarla" else "Ver") }
                 }
             }
+        }
+    }
+}
+
+/** WhatsApp tanıtımının yazısı ve dosyaları; kartta Tanıtım düğmesi bunları gönderir. */
+@Composable
+private fun TanitimAyari() {
+    val ctx = LocalContext.current
+    var mesaj by remember { mutableStateOf(Tanitim.mesaj(ctx)) }
+    var dosyalar by remember { mutableStateOf(Tanitim.dosyalar(ctx)) }
+    var silinecek by remember { mutableStateOf<java.io.File?>(null) }
+    val sec = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { urler ->
+        val olmayan = urler.count { !Tanitim.ekle(ctx, it) }
+        if (olmayan > 0) Toast.makeText(ctx, "$olmayan dosya eklenemedi", Toast.LENGTH_SHORT).show()
+        dosyalar = Tanitim.dosyalar(ctx)
+    }
+    silinecek?.let { f ->
+        AlertDialog(
+            onDismissRequest = { silinecek = null },
+            title = { Text("Dosya kaldırılsın mı?") },
+            text = { Text(Tanitim.ad(f)) },
+            confirmButton = {
+                Button(onClick = {
+                    Tanitim.sil(f)
+                    dosyalar = Tanitim.dosyalar(ctx)
+                    silinecek = null
+                }) { Text("Kaldır") }
+            },
+            dismissButton = { TextButton(onClick = { silinecek = null }) { Text("Vazgeç") } },
+        )
+    }
+    Kutu {
+        Text("WhatsApp tanıtımı", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        OutlinedTextField(
+            value = mesaj,
+            onValueChange = {
+                mesaj = it
+                Tanitim.mesajYaz(ctx, it)
+            },
+            label = { Text("Yazı") },
+            minLines = 3,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        dosyalar.forEach { f ->
+            Text(
+                Tanitim.ad(f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { silinecek = f }
+                    .padding(vertical = 10.dp, horizontal = 4.dp),
+            )
+        }
+        OutlinedButton(onClick = { sec.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            Text("Dosya ekle")
         }
     }
 }

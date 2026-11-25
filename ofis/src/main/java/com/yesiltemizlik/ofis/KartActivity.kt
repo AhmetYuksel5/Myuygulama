@@ -393,6 +393,9 @@ private fun Kart(
 
             when (adim) {
                 Adim.SECIM -> {
+                    // 2×2: üstte görüşmenin türü, altta WhatsApp'tan dönüş.
+                    val tel = arama?.tel ?: ""
+                    val numaraVar = waNumara(tel).length >= 10
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         BuyukSecim(
                             "İş arayan", R.drawable.s_is_arayan, renk.primaryContainer, renk.onPrimaryContainer,
@@ -402,12 +405,19 @@ private fun Kart(
                             "Müşteri", R.drawable.s_musteri, renk.secondaryContainer, renk.onSecondaryContainer,
                             Modifier.weight(1f),
                         ) { adim = Adim.MUSTERI }
-                        val tel = arama?.tel ?: ""
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         BuyukSecim(
                             "WhatsApp", R.drawable.s_whatsapp, renk.tertiaryContainer, renk.onTertiaryContainer,
-                            Modifier.weight(1f), etkin = waNumara(tel).length >= 10,
+                            Modifier.weight(1f), etkin = numaraVar,
                         ) {
                             if (!whatsappAc(ctx, tel)) Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
+                        }
+                        BuyukSecim(
+                            "Tanıtım", R.drawable.s_tanitim, renk.tertiaryContainer, renk.onTertiaryContainer,
+                            Modifier.weight(1f), etkin = numaraVar,
+                        ) {
+                            if (!Tanitim.gonder(ctx, tel)) Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -584,7 +594,7 @@ private fun BuyukSecim(
         enabled = etkin,
         shape = RoundedCornerShape(16.dp),
         color = zemin,
-        modifier = modifier.height(96.dp).alpha(if (etkin) 1f else 0.4f),
+        modifier = modifier.height(84.dp).alpha(if (etkin) 1f else 0.4f),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,

@@ -157,6 +157,14 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   herhangi bir dokunuş sayacı durdurur. Listeden/bildirimden açılan kart
   kapanmaz; "Kartı dene" kapanmayı da gösterir. Ana ekranın sağ üstünde
   dişli (`s_ayarlar`) Ayarlar'ı açar.
+- Kartta 2×2 düğme: İş arayan, Müşteri / WhatsApp, **Tanıtım** (kullanıcı
+  2026-11-25). Tanıtım (`Tanitim.kt`) WhatsApp'ı (önce Business) o numaranın
+  sohbetinde, Ayarlar'daki yazı ve dosyalar ekli açar (`ACTION_SEND(_MULTIPLE)`
+  + resmî olmayan `jid` eki; tanımazsa kişi seçme ekranı). Gönder'e kullanıcı
+  basar: WhatsApp başka uygulamanın onun adına göndermesine izin vermiyor.
+  Dosya yoksa `wa.me?text=`. Dosyalar `filesDir/tanitim/`e kopyalanır
+  (FileProvider `tanitim/`); Ayarlar'da dosyaya dokununca "kaldırılsın mı".
+  Paneldeki WhatsApp botu bu işe karışmaz (kullanıcı: "onu karıştırma").
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana

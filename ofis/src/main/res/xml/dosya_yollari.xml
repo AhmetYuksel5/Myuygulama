@@ -3,4 +3,8 @@
     <cache-path
         name="guncelleme"
         path="." />
+    <!-- WhatsApp tanıtımında giden dosyalar. -->
+    <files-path
+        name="tanitim"
+        path="tanitim/" />
 </paths>
