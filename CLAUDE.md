@@ -147,6 +147,12 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   "yeniden çıksın mı" penceresi (satırda düğme yok).
   Alıcı kartı açmadan önce arama kaydına en çok 3 sn bakar (`goAsync`);
   listedeki numarada kart da bildirim de çıkmaz.
+- Kart sürüklenir (kullanıcı 2026-11-25): üstteki tutamak ya da isim
+  satırı, ham ekran koordinatıyla (`pointerInteropFilter`), yalnız dikey;
+  pencere `Gravity.TOP` + `y`, son yer `Depo.kartY`. Görüşme sonu kendiliğinden
+  açılan kart (`EK_OTOMATIK`) 3 sn dokunulmazsa kapanır, süre çizgisi
+  gösterir; herhangi bir dokunuş sayacı durdurur. Listeden/bildirimden
+  açılan kart kapanmaz; "Kartı dene" kapanmayı da gösterir.
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana

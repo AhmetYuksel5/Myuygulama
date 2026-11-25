@@ -3,6 +3,18 @@ package com.yesiltemizlik.ofis
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.Gravity
+import android.view.MotionEvent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -71,6 +83,7 @@ private enum class Adim { SECIM, ILCE, ISLER, MUSTERI }
 class KartActivity : ComponentActivity() {
     private var bas by mutableLongStateOf(0L)
     private var deneme by mutableStateOf(false)
+    private var otomatik by mutableStateOf(false)
     private var verilen by mutableStateOf<Arama?>(null)
     private var tur by mutableIntStateOf(0)
     private var isler by mutableStateOf(emptyList<Is>())
@@ -97,11 +110,39 @@ class KartActivity : ComponentActivity() {
         setContent {
             OfisTema {
                 key(tur) {
-                    Kart(bas = bas, deneme = deneme, verilen = verilen, isler = isler, guncel = guncel, onKapat = { finish() })
+                    Kart(
+                        bas = bas,
+                        deneme = deneme,
+                        otomatik = otomatik,
+                        verilen = verilen,
+                        isler = isler,
+                        guncel = guncel,
+                        onKapat = { finish() },
+                        onSurukle = ::surukle,
+                        onSurukleBitti = { Depo(this).kartY = window.attributes.y },
+                    )
                 }
             }
         }
         window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
+        // Konum üstten ölçülür ki sürükleme ilk dokunuşta zıplamasın; son bırakılan yer hatırlanır.
+        val lp = window.attributes
+        lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        val kayitli = d.kartY
+        lp.y = if (kayitli >= 0) kayitli else (resources.displayMetrics.heightPixels * 0.18f).toInt()
+        window.attributes = lp
+        // Kart uzayınca (iş listesi açılınca) alt kenarı ekrandan taşmasın.
+        window.decorView.addOnLayoutChangeListener { _, _, ust, _, alt, _, eskiUst, _, eskiAlt ->
+            if (alt - ust != eskiAlt - eskiUst) surukle(0f)
+        }
+    }
+
+    /** Kart ekran genişliğinde; yalnız dikey kaydırılır, ekrandan taşmaz. */
+    private fun surukle(dy: Float) {
+        val lp = window.attributes
+        val azami = (resources.displayMetrics.heightPixels - window.decorView.height).coerceAtLeast(0)
+        lp.y = (lp.y + dy.toInt()).coerceIn(0, azami)
+        window.attributes = lp
     }
 
     // Kart kapanınca, sormadan kurulabiliyorsa güncelleme arka planda kurulur (görüşme sırasında değil).
@@ -121,19 +162,24 @@ class KartActivity : ComponentActivity() {
     private fun oku(i: Intent) {
         bas = i.getLongExtra(KartAcici.EK_BAS, System.currentTimeMillis())
         deneme = i.getBooleanExtra(KartAcici.EK_DENEME, false)
+        // Deneme kartı da kendiliğinden kapanmayı göstersin.
+        otomatik = i.getBooleanExtra(KartAcici.EK_OTOMATIK, false) || deneme
         verilen = KartAcici.aramaOku(i)
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun Kart(
     bas: Long,
     deneme: Boolean,
+    otomatik: Boolean,
     verilen: Arama?,
     isler: List<Is>,
     guncel: Guncelleme.Surum?,
     onKapat: () -> Unit,
+    onSurukle: (Float) -> Unit,
+    onSurukleBitti: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val depo = remember { Depo(ctx) }
@@ -199,24 +245,88 @@ private fun Kart(
         onKapat()
     }
 
+    // KENDİLİĞİNDEN KAPANMA (kullanıcı 2026-11-25): görüşme sonu kartına 3 sn
+    // dokunulmazsa kapanır. Herhangi bir dokunuş (sürükleme dahil) sayacı durdurur.
+    var dokunuldu by remember { mutableStateOf(!otomatik) }
+    val kalan = remember { Animatable(1f) }
+    LaunchedEffect(dokunuldu) {
+        if (dokunuldu) return@LaunchedEffect
+        kalan.animateTo(0f, tween(durationMillis = 3_000, easing = LinearEasing))
+        onKapat()
+    }
+
+    // Sürükleme ham ekran koordinatıyla: pencere parmakla birlikte kaydığı için
+    // pencereye göre konum işe yaramıyor.
+    var sonY by remember { mutableFloatStateOf(0f) }
+    val tutamac = Modifier.pointerInteropFilter { e ->
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                sonY = e.rawY
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                onSurukle(e.rawY - sonY)
+                sonY = e.rawY
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                onSurukleBitti()
+                true
+            }
+            else -> false
+        }
+    }
+
     val renk = MaterialTheme.colorScheme
     Surface(
         shape = RoundedCornerShape(22.dp),
         color = renk.surface,
         tonalElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp)
+            // İlk geçişte (çocuklardan önce) bakılır, olay tüketilmez: düğmeler yine çalışır.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val olay = awaitPointerEvent(PointerEventPass.Initial)
+                        if (olay.changes.any { it.pressed }) dokunuldu = true
+                    }
+                }
+            },
     ) {
+        Column(Modifier.heightIn(max = 660.dp)) {
+            // Sürükleme tutamağı; kendiliğinden kapanacaksa altında azalan süre çizgisi.
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxWidth().height(22.dp).then(tutamac),
+            ) {
+                Box(
+                    Modifier
+                        .size(width = 36.dp, height = 4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(renk.outlineVariant),
+                )
+            }
+            if (!dokunuldu) {
+                LinearProgressIndicator(
+                    progress = { kalan.value },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).height(2.dp),
+                    color = renk.primary,
+                    trackColor = Color.Transparent,
+                    drawStopIndicator = {},
+                )
+            }
         Column(
             Modifier
-                .heightIn(max = 640.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(18.dp),
+                .padding(start = 18.dp, end = 18.dp, bottom = 18.dp, top = 6.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             guncel?.let { KartGuncellemeSeridi(it) }
-            // Başlık: kim, ne kadar konuşuldu.
+            // Başlık: kim, ne kadar konuşuldu. Bu satırdan da sürüklenir.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).then(tutamac)) {
                     val a = arama
                     Text(
                         text = when {
@@ -400,6 +510,7 @@ private fun Kart(
                     }
                 }
             }
+        }
         }
     }
 }

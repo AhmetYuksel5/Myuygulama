@@ -17,6 +17,8 @@ object KartAcici {
     const val BILDIRIM_ID = 7
     const val EK_BAS = "bas"
     const val EK_DENEME = "deneme"
+    /** Görüşme bitince kendiliğinden açıldı: dokunulmazsa 3 sn sonra kapanır. */
+    const val EK_OTOMATIK = "otomatik"
 
     fun niyet(context: Context, bas: Long, deneme: Boolean = false): Intent =
         Intent(context, KartActivity::class.java)
@@ -43,7 +45,9 @@ object KartAcici {
     fun ac(context: Context, bas: Long) = goster(context, niyet(context, bas))
 
     private fun goster(context: Context, i: Intent) {
-        bildir(context, i)
+        // Bildirimden açılan kart bilerek açılmıştır, kendiliğinden kapanmaz.
+        bildir(context, Intent(i).putExtra(EK_OTOMATIK, false))
+        i.putExtra(EK_OTOMATIK, true)
         try {
             context.startActivity(i)
         } catch (_: Exception) {

@@ -20,6 +20,11 @@ class Depo(context: Context) {
         get() = p.getBoolean("kartAcik", true)
         set(v) = p.edit().putBoolean("kartAcik", v).apply()
 
+    /** Kartın sürüklenip bırakıldığı yer (pencerenin üstten uzaklığı, piksel); -1 = hiç sürüklenmedi. */
+    var kartY: Int
+        get() = p.getInt("kartY", -1)
+        set(v) = p.edit().putInt("kartY", v).apply()
+
     var sonYaka: String
         get() = p.getString("sonYaka", "avrupa") ?: "avrupa"
         set(v) = p.edit().putString("sonYaka", v).apply()
