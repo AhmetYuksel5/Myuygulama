@@ -167,6 +167,7 @@ class QuickCursorService : EdgeGestureService() {
         lock.stop()
         shortcuts.hide()
         voice.release()
+        ScreenAgent.stop(this)
         handler.removeCallbacksAndMessages(null)
         removeViews()
         super.onDestroy()

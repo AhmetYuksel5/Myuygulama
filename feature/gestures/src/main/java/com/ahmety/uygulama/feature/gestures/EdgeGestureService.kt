@@ -373,6 +373,7 @@ open class EdgeGestureService : AccessibilityService() {
             GestureAction.SCREENSHOT -> performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
             GestureAction.POWER_DIALOG -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
             GestureAction.ASK_SCREEN -> ScreenAsk.open(this)
+            GestureAction.SCREEN_AGENT -> ScreenAgent.open(this)
             GestureAction.TEXT_SHOT -> TextSnapshot.take(this)
             GestureAction.NONE -> false
         }

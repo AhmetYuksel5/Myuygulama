@@ -89,6 +89,7 @@ class ShortcutStore(context: Context) {
         val SYSTEM: Map<String, String> = linkedMapOf(
             "last_app" to "Önceki uygulama",
             "ask_screen" to "Ekrana sor",
+            "screen_agent" to "Ekran ajanı",
             "text_shot" to "Yazı görüntüsü",
             "notifications" to "Bildirimler",
             "quick_settings" to "Hızlı ayarlar",
@@ -155,6 +156,11 @@ internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean
         // kendisi görünüyor sayılabiliyor.
         android.os.Handler(android.os.Looper.getMainLooper())
             .postDelayed({ ScreenAsk.open(service) }, 250L)
+        true
+    } else if (item.value == "screen_agent") {
+        // Panel kapandıktan sonra açılıyor ki ajan kendi kısayol panelimizi okumasın.
+        android.os.Handler(android.os.Looper.getMainLooper())
+            .postDelayed({ ScreenAgent.open(service) }, 250L)
         true
     } else {
         val action = when (item.value) {

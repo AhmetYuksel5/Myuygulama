@@ -5,10 +5,22 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Ekran ajanının hangi sağlayıcıyla çalışacağı. */
+enum class AgentProvider(val id: String, val label: String) {
+    GEMINI("gemini", "Gemini Flash"),
+    CLAUDE("claude", "Claude Opus"),
+    ;
+
+    companion object {
+        fun fromId(id: String?): AgentProvider =
+            entries.firstOrNull { it.id == id } ?: GEMINI
+    }
+}
+
 /**
- * OpenAI anahtarı **yalnızca cihazda** durur.
+ * Yapay zekâ anahtarları **yalnızca cihazda** durur.
  *
- * Depo herkese açık olduğu için anahtar kaynağa, ayarlara ya da derleme
+ * Depo herkese açık olduğu için anahtarlar kaynağa, ayarlara ya da derleme
  * betiklerine hiçbir şekilde yazılmıyor; kullanıcı uygulamadan giriyor ve
  * uygulamanın kendi özel alanında saklanıyor (başka uygulamalar okuyamaz).
  * Yedeklerde de taşınmasın diye `allowBackup=false`.
@@ -41,14 +53,55 @@ class AiSettings @Inject constructor(
     val configured: Boolean get() = apiKey.isNotBlank()
 
     /** Ekranda gösterirken anahtarın tamamını asla yazmıyoruz. */
-    fun maskedKey(): String {
-        val key = apiKey
-        if (key.isBlank()) return ""
-        return if (key.length <= 10) "•".repeat(key.length) else key.take(6) + "…" + key.takeLast(4)
-    }
+    fun maskedKey(): String = mask(apiKey)
 
     fun clear() {
         prefs.edit().remove(KEY_API).apply()
+    }
+
+    // ---- Ekran ajanı sağlayıcıları (Gemini / Claude) ----
+    // Aynı SharedPreferences dosyasında tutuluyor çünkü feature/gestures modülü
+    // Hilt ve core:ai bağımlılığı olmadan doğrudan bu dosyayı okuyor.
+
+    var geminiApiKey: String
+        get() = prefs.getString(KEY_GEMINI_API, null).orEmpty()
+        set(value) = prefs.edit().putString(KEY_GEMINI_API, value.trim()).apply()
+
+    var geminiModel: String
+        get() = prefs.getString(KEY_GEMINI_MODEL, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_GEMINI_MODEL
+        set(value) = prefs.edit().putString(KEY_GEMINI_MODEL, value.trim()).apply()
+
+    val geminiConfigured: Boolean get() = geminiApiKey.isNotBlank()
+
+    fun maskedGeminiKey(): String = mask(geminiApiKey)
+
+    fun clearGemini() {
+        prefs.edit().remove(KEY_GEMINI_API).apply()
+    }
+
+    var claudeApiKey: String
+        get() = prefs.getString(KEY_CLAUDE_API, null).orEmpty()
+        set(value) = prefs.edit().putString(KEY_CLAUDE_API, value.trim()).apply()
+
+    var claudeModel: String
+        get() = prefs.getString(KEY_CLAUDE_MODEL, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_CLAUDE_MODEL
+        set(value) = prefs.edit().putString(KEY_CLAUDE_MODEL, value.trim()).apply()
+
+    val claudeConfigured: Boolean get() = claudeApiKey.isNotBlank()
+
+    fun maskedClaudeKey(): String = mask(claudeApiKey)
+
+    fun clearClaude() {
+        prefs.edit().remove(KEY_CLAUDE_API).apply()
+    }
+
+    var agentProvider: AgentProvider
+        get() = AgentProvider.fromId(prefs.getString(KEY_AGENT_PROVIDER, null))
+        set(value) = prefs.edit().putString(KEY_AGENT_PROVIDER, value.id).apply()
+
+    private fun mask(key: String): String {
+        if (key.isBlank()) return ""
+        return if (key.length <= 10) "•".repeat(key.length) else key.take(6) + "…" + key.takeLast(4)
     }
 
     companion object {
@@ -58,6 +111,9 @@ class AiSettings @Inject constructor(
          */
         const val DEFAULT_MODEL = "gpt-6-luna"
 
+        const val DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+        const val DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
+
         /** Kapanan model → yerine geçen (OpenAI'nin kaldırma listesinden). */
         private val RETIRED = mapOf(
             "gpt-4o-mini" to "gpt-6-luna",
@@ -66,15 +122,21 @@ class AiSettings @Inject constructor(
             "gpt-4.1" to "gpt-6.1-terra",
         )
 
-
         /**
-         * Hazır seçenekler. Liste kapalı değil: OpenAI yeni bir model
+         * Hazır seçenekler. Liste kapalı değil: sağlayıcı yeni bir model
          * çıkardığında adını elle yazabilesin diye kutu da düzenlenebilir.
          */
         val MODELS = listOf("gpt-6-luna", "gpt-6.1-terra")
+        val GEMINI_MODELS = listOf("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite")
+        val CLAUDE_MODELS = listOf("claude-opus-5-5", "claude-sonnet-5-5")
 
-        private const val PREFS_NAME = "merkez_yapay_zeka"
+        const val PREFS_NAME = "merkez_yapay_zeka"
         private const val KEY_API = "openai_key"
         private const val KEY_MODEL = "model"
+        const val KEY_GEMINI_API = "gemini_key"
+        const val KEY_GEMINI_MODEL = "gemini_model"
+        const val KEY_CLAUDE_API = "claude_key"
+        const val KEY_CLAUDE_MODEL = "claude_model"
+        const val KEY_AGENT_PROVIDER = "agent_provider"
     }
 }

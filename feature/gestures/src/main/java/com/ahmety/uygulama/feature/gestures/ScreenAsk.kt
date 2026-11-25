@@ -221,11 +221,11 @@ internal object ScreenAsk {
     }
 
     /** IBAN ve kart numarası sunucuya gitmesin. */
-    private fun mask(text: String): String = text
+    internal fun mask(text: String): String = text
         .replace(IBAN, "[IBAN]")
         .replace(CARD, "[KART NO]")
 
-    private fun isSensitive(pkg: String): Boolean {
+    internal fun isSensitive(pkg: String): Boolean {
         val parts = pkg.lowercase(Locale.ROOT).split('.', '_')
         return parts.any { part -> part in SHORT_NAMES || LONG_NAMES.any { part.contains(it) } }
     }
@@ -344,6 +344,12 @@ internal object ScreenAsk {
         val chips = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
         ACTIONS.forEachIndexed { index, (label, prompt) ->
             val chip = chip(service, label, d) {
+                if (prompt == AGENT) {
+                    close(service)
+                    // Kartın kapanış animasyonundan sonra ajan penceresini açıyoruz.
+                    handler.postDelayed({ ScreenAgent.open(service) }, 180L)
+                    return@chip
+                }
                 selectChip(index)
                 if (prompt == CALENDAR) addToCalendar(service) else ask(service, prompt)
             }
@@ -1102,6 +1108,7 @@ internal object ScreenAsk {
     }
 
     private const val CALENDAR = "takvim"
+    private const val AGENT = "ajan"
 
     /** Sonraki soruya eklenen en fazla soru-cevap sayısı. */
     private const val MAX_TURNS = 6
@@ -1109,6 +1116,7 @@ internal object ScreenAsk {
         "Çevir" to "Ekrandaki yabancı dildeki yazıyı Türkçeye çevir. Yalnız çeviriyi yaz.",
         "Cevap yaz" to "Bu bir yazışmaysa son gelen mesaja kısa, kibar, doğal bir Türkçe cevap taslağı yaz. Yalnız cevabı yaz.",
         "Takvime ekle" to CALENDAR,
+        "Ekran ajanı" to AGENT,
     )
 
     // Kartın renkleri; diğer katmanlarla aynı koyu zemin.
