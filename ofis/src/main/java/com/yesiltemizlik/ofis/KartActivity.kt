@@ -431,8 +431,12 @@ private fun Kart(
                             val tamam = if (ikinci) Tanitim.dosyaGonder(ctx, tel) else Tanitim.yaziGonder(ctx, tel)
                             if (!tamam) {
                                 Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
+                            } else if (!ikinci && dosyaVar) {
+                                // İkinci adım WhatsApp'ın üstündeki balonda; balon
+                                // gösterilemezse (izin yok) kartta "Dosyalar 2/2".
+                                tanitimAsama = if (TanitimBalonu.goster(ctx, tel)) 0 else 1
                             } else {
-                                tanitimAsama = if (!ikinci && dosyaVar) 1 else 0
+                                tanitimAsama = 0
                             }
                         }
                     }
