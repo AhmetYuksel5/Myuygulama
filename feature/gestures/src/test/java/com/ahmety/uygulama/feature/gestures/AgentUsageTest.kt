@@ -32,3 +32,18 @@ class AgentUsageTest {
         assertEquals("Haiku 9 adım · Opus 2 adım · ~0,051 $", AgentUsage.summary(session))
     }
 }
+
+class BankLockTest {
+
+    @Test
+    fun `para cikaran dugmeler kilitli`() {
+        listOf("Onayla", "GÖNDER", "Ödemeyi Tamamla", "Öde", "Satın Al", "İşlemi Onayla", "Para Gönder", "", null)
+            .forEach { assertTrue("$it", BankAccess.isMoneyButton(it)) }
+    }
+
+    @Test
+    fun `gezinme dugmeleri serbest`() {
+        listOf("Hesaplarım", "Hesap Hareketleri", "Ödemeler", "Kartlarım", "Dekont", "Geri", "Ara")
+            .forEach { assertFalse("$it", BankAccess.isMoneyButton(it)) }
+    }
+}

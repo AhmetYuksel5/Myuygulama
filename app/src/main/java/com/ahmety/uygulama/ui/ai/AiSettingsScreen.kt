@@ -207,6 +207,9 @@ fun AiSettingsScreen(
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        AgentBankSection()
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AgentUsageSection(viewModel)
 
         Text(
@@ -408,6 +411,47 @@ private fun AgentLogSection() {
                     com.ahmety.uygulama.feature.gestures.AgentLog.clear(context)
                     log = ""
                 }) { Text("Sil") }
+            }
+        }
+    }
+}
+
+/**
+ * Ekran ajanının çalışabileceği bankalar. Varsayılan hepsi kapalı; açılan
+ * bankada ajan okur, gezinir, form doldurur ama para çıkaran düğmeye basmaz.
+ */
+@Composable
+private fun AgentBankSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val banks = remember { com.ahmety.uygulama.feature.gestures.BankAccess.installedBanks(context) }
+    var allowed by remember { mutableStateOf(com.ahmety.uygulama.feature.gestures.BankAccess.allowed(context)) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Ajanın çalışabileceği bankalar", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Açtığın bankada ajan bakiye ve hareketleri okur, gezinir, form doldurur. Onayla, " +
+                "Gönder, Öde gibi para çıkaran düğmelere asla kendisi basmaz; orada durur, son " +
+                "dokunuşu sen yaparsın. Bankada Claude seçiliyse her adımı Opus yapar. Ekrandaki " +
+                "yazılar (IBAN ve kart numarası maskelenmiş olarak) yapay zekâ sağlayıcısına gider.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (banks.isEmpty()) {
+            Text(
+                "Telefonda banka uygulaması bulunamadı.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        banks.forEach { (pkg, label) ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Switch(
+                    checked = pkg in allowed,
+                    onCheckedChange = { on ->
+                        com.ahmety.uygulama.feature.gestures.BankAccess.setAllowed(context, pkg, on)
+                        allowed = com.ahmety.uygulama.feature.gestures.BankAccess.allowed(context)
+                    },
+                )
             }
         }
     }

@@ -922,10 +922,13 @@ internal object ScreenAgent {
                 // fazladan görüntü gönderilmez (ağaç zayıfsa, ekran değişmediyse,
                 // model istediyse ya da kullanıcı "Her adım" seçtiyse alınır).
                 val sameScreen = lastSignature.isNotEmpty() && snapshot.signature == lastSignature
-                val needShot = session.alwaysScreenshot || forceShotNext ||
-                    (!resumed && localStep == 1) ||
-                    snapshot.nodeCount < SPARSE_NODE_THRESHOLD ||
-                    sameScreen
+                // Bankalar ekran görüntüsünü engelliyor (siyah çıkıyor); boşuna gönderilmiyor.
+                val needShot = !snapshot.bank && (
+                    session.alwaysScreenshot || forceShotNext ||
+                        (!resumed && localStep == 1) ||
+                        snapshot.nodeCount < SPARSE_NODE_THRESHOLD ||
+                        sameScreen
+                    )
                 forceShotNext = false
                 lastSignature = snapshot.signature
 
@@ -943,7 +946,12 @@ internal object ScreenAgent {
                 }
                 if (!isAlive(sessionId)) return
 
-                val stepModel = ladder.modelForStep()
+                // Bankada yanlış adım pahalı: Claude seçiliyse her adımı Opus yapıyor.
+                val stepModel = if (snapshot.bank && config.provider == PROVIDER_CLAUDE) {
+                    ESCALATION_MODEL
+                } else {
+                    ladder.modelForStep()
+                }
                 val who = modelLabel(config.provider, stepModel)
                 updateStopPill("$displayStep · $who düşünüyor…")
 
@@ -957,7 +965,7 @@ internal object ScreenAgent {
                     history = session.history,
                     hasScreenshot = screenshotBase64 != null,
                     sameScreen = sameScreen,
-                )
+                ) + if (snapshot.bank) BANK_NOTE else ""
 
                 val callStart = System.currentTimeMillis()
                 val rawReply = callModel(
@@ -1074,11 +1082,36 @@ internal object ScreenAgent {
                     return
                 }
 
+                // Para kilidi: bankada basılacak düğmenin yazısı telefonun kendisinden
+                // okunuyor; para çıkaran bir düğmeyse ya da okunamıyorsa ajan basmıyor.
+                if (snapshot.bank && (decision.action == "tap" || decision.action == "long_press")) {
+                    val label = onMainBlocking { labelAt(service, decision.x, decision.y) }
+                    if (BankAccess.isMoneyButton(label)) {
+                        val shown = label?.takeIf { it.isNotBlank() }?.let { "\"$it\"" } ?: "yazısı okunamayan"
+                        AgentLog.add(session, "$stepHead\n   para kilidi: $shown düğmeye basılmadı")
+                        finish(
+                            service,
+                            sessionId,
+                            session,
+                            AgentOutcome(
+                                kind = OutcomeKind.ASK,
+                                message = "Para kilidi: $shown düğmeye ajan basmaz. " +
+                                    "Ekrandaki alıcı ve tutarı kontrol edip son dokunuşu sen yap. " +
+                                    "Sonra istersen \"Devam et\" diyebilirsin." +
+                                    decision.thought.takeIf { it.isNotBlank() }?.let { "\n\nAjanın notu: $it" }.orEmpty(),
+                            ),
+                        )
+                        return
+                    }
+                }
+                // Bankada yazılan metin "gönder" tuşuyla yollanmıyor.
+                val action = if (snapshot.bank && decision.submit) decision.copy(submit = false) else decision
+
                 session.totalSteps = displayStep
                 val stepLabel = decision.thought.ifBlank { actionLabel(decision) }
                 updateStopPill("$displayStep · $stepLabel")
 
-                val outcomeText = executeAction(service, sessionId, decision, snapshot)
+                val outcomeText = executeAction(service, sessionId, action, snapshot)
                 AgentLog.add(
                     session,
                     stepHead +
@@ -1233,12 +1266,12 @@ internal object ScreenAgent {
 
     private fun findSensitivePackage(service: AccessibilityService): String? {
         val activePkg = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
-        if (activePkg != null && ScreenAsk.isSensitive(activePkg)) return activePkg
+        if (activePkg != null && BankAccess.blocked(service, activePkg)) return activePkg
         val windows = runCatching { service.windows }.getOrNull().orEmpty()
         for (w in windows) {
             if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
             val pkg = runCatching { w.root?.packageName?.toString() }.getOrNull() ?: continue
-            if (ScreenAsk.isSensitive(pkg)) return pkg
+            if (BankAccess.blocked(service, pkg)) return pkg
         }
         return null
     }
@@ -1261,7 +1294,7 @@ internal object ScreenAgent {
             }
 
         val packages = roots.mapNotNull { it.packageName?.toString() }.distinct()
-        if (packages.any { ScreenAsk.isSensitive(it) }) {
+        if (packages.any { BankAccess.blocked(service, it) }) {
             return ScreenSnapshot(
                 width = w,
                 height = h,
@@ -1289,6 +1322,7 @@ internal object ScreenAgent {
             nodeCount = entries.size,
             signature = "$pkg|${tree.hashCode()}|${entries.size}",
             sensitive = false,
+            bank = packages.any { BankAccess.isAllowedBank(service, it) },
         )
     }
 
@@ -1484,7 +1518,7 @@ internal object ScreenAgent {
             val pkg = action.packageName.trim()
             if (pkg.isEmpty()) {
                 "paket adı boş"
-            } else if (ScreenAsk.isSensitive(pkg)) {
+            } else if (BankAccess.blocked(service, pkg)) {
                 "güvenlik nedeniyle açılmadı"
             } else {
                 val ok = onMainBlocking { launchPackage(service, pkg) } == true
@@ -1618,6 +1652,46 @@ internal object ScreenAgent {
         } == true
 
         return if (ok) "metin yazıldı" else "yazma kutusu bulunamadı"
+    }
+
+    /**
+     * Ekranda (x, y)'deki düğmenin yazısı: o noktayı içeren en küçük
+     * tıklanabilir düğüm, yazısı yoksa içindeki yazılar. Para kilidi buna
+     * bakıyor. Hiç düğüm bulunamazsa boş metin döner (kilit onu da tutar).
+     */
+    private fun labelAt(service: AccessibilityService, x: Int, y: Int): String {
+        val roots = runCatching { service.windows }.getOrNull().orEmpty()
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .mapNotNull { runCatching { it.root }.getOrNull() }
+            .filter { it.packageName?.toString() != service.packageName }
+        var best: AccessibilityNodeInfo? = null
+        var bestArea = Long.MAX_VALUE
+        var visited = 0
+        val rect = Rect()
+        fun walk(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > MAX_DEPTH || visited >= MAX_WALK) return
+            visited++
+            if (!node.isVisibleToUser) return
+            node.getBoundsInScreen(rect)
+            if (!rect.contains(x, y)) return
+            val area = rect.width().toLong() * rect.height().toLong()
+            if (node.isClickable && area in 1 until bestArea) {
+                best = node
+                bestArea = area
+            }
+            for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1)
+        }
+        roots.forEach { walk(it, 0) }
+        val target = best ?: return ""
+        fun textOf(node: AccessibilityNodeInfo?, depth: Int): String {
+            if (node == null || depth > 3) return ""
+            val own = node.text?.toString()?.trim().orEmpty()
+                .ifEmpty { node.contentDescription?.toString()?.trim().orEmpty() }
+            if (own.isNotEmpty()) return own
+            return (0 until node.childCount).map { textOf(node.getChild(it), depth + 1) }
+                .filter { it.isNotEmpty() }.joinToString(" ")
+        }
+        return textOf(target, 0).take(80)
     }
 
     private fun findEditableTarget(service: AccessibilityService, x: Int, y: Int): AccessibilityNodeInfo? {
@@ -2213,6 +2287,11 @@ internal object ScreenAgent {
     private const val STUCK_LIMIT = 2
     private const val MAX_WALK = 800
 
+    /** Bankada adım isteğine eklenen not; asıl kilit kodda, bu modeli yönlendirmek için. */
+    private const val BANK_NOTE = "\n\nBANKA MODU: Bu bir banka uygulaması. Bilgi okuyabilir, gezinebilir ve form " +
+        "doldurabilirsin. Onayla, Gönder, Öde, Tamamla gibi para çıkaran düğmelere basma: o noktaya " +
+        "gelince ask ile alıcıyı ve tutarı yazıp son dokunuşu kullanıcıya bırak."
+
     private const val MAX_STEPS_PER_RUN = 20
     private const val MAX_HISTORY = 6
     private const val MAX_USER_NOTES = 4
@@ -2300,6 +2379,8 @@ internal data class ScreenSnapshot(
     val nodeCount: Int,
     val signature: String,
     val sensitive: Boolean,
+    /** Kullanıcının ajana açtığı bir bankadayız: para kilidi ve Opus devrede. */
+    val bank: Boolean = false,
 )
 
 /** Modelin bir adımda verdiği karar. */
