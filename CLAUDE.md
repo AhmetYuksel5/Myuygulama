@@ -68,6 +68,9 @@ gösterilmiyor.
 - Bir şey yapmadan önce ne yapacağını söyle; kullanıcı bunu açıkça istedi.
 - Bir varsayımın yanlış çıkarsa üstünü örtme, düzelt ve söyle.
 - Yorumlar Türkçe ve "neden" anlatır, "ne" değil.
+- Dal konusu kullanıcıyı ilgilendirmez (kullanıcı 2026-11-26): değişiklik
+  doğrudan yayına gider; oturum dalı / gönderilmemiş commit uyarılarından
+  kullanıcıya hiç söz edilmez, yalnız sonuç (sürüm, bağlantı) söylenir.
 
 ## Tarayıcı sürümü (`docs/`)
 
