@@ -213,6 +213,7 @@ private fun Kart(
     var digerAcik by remember { mutableStateOf(false) }
     var ara by remember { mutableStateOf("") }
     var engelSor by remember { mutableStateOf(false) }
+    var tanitimAsama by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(bas) {
         if (deneme || verilen != null) return@LaunchedEffect
@@ -413,11 +414,26 @@ private fun Kart(
                         ) {
                             if (!whatsappAc(ctx, tel)) Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
                         }
+                        // Aşamalı: önce selam yazısı, WhatsApp'tan dönünce dosyalar.
+                        val dosyaVar = remember { Tanitim.dosyalar(ctx).isNotEmpty() }
+                        val ikinci = tanitimAsama == 1
                         BuyukSecim(
-                            "Tanıtım", R.drawable.s_tanitim, renk.tertiaryContainer, renk.onTertiaryContainer,
+                            when {
+                                !dosyaVar -> "Tanıtım"
+                                ikinci -> "Dosyalar 2/2"
+                                else -> "Tanıtım 1/2"
+                            },
+                            R.drawable.s_tanitim,
+                            if (ikinci) renk.primary else renk.tertiaryContainer,
+                            if (ikinci) renk.onPrimary else renk.onTertiaryContainer,
                             Modifier.weight(1f), etkin = numaraVar,
                         ) {
-                            if (!Tanitim.gonder(ctx, tel)) Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
+                            val tamam = if (ikinci) Tanitim.dosyaGonder(ctx, tel) else Tanitim.yaziGonder(ctx, tel)
+                            if (!tamam) {
+                                Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
+                            } else {
+                                tanitimAsama = if (!ikinci && dosyaVar) 1 else 0
+                            }
                         }
                     }
                 }

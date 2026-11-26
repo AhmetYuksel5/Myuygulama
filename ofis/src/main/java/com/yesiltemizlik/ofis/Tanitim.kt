@@ -61,22 +61,29 @@ object Tanitim {
         MimeTypeMap.getSingleton().getMimeTypeFromExtension(f.extension.lowercase()) ?: "application/octet-stream"
 
     /**
-     * WhatsApp'ı o numaranın sohbetinde, yazı ve dosyalar ekli açar. "jid"
-     * WhatsApp'ın resmî olmayan ama yıllardır çalışan eki: kişi seçme ekranını
-     * atlatıp doğrudan sohbete düşürür. Tanımazsa kişi seçme ekranı çıkar.
+     * İKİ AŞAMA (kullanıcı 2026-11-26): WhatsApp dosyayla birlikte gelen yazıyı
+     * ayrı mesaj yapmıyor, ilk dosyanın açıklamasına koyuyor ya da PDF'te
+     * düşürüyor. Bu yüzden önce selam yazısı, sonra ayrı bir basışla dosyalar.
      */
-    fun gonder(c: Context, tel: String): Boolean {
+    fun yaziGonder(c: Context, tel: String): Boolean {
         val n = waNumara(tel)
         if (n.length < 10) return false
-        val metin = mesaj(c)
-        val dosya = dosyalar(c)
-        if (dosya.isEmpty()) {
-            // Dosya yoksa yalnız yazı: wa.me bağlantısı sohbeti yazı dolu açar.
-            val uri = Uri.parse("https://wa.me/$n?text=" + URLEncoder.encode(metin, "UTF-8"))
-            return paketlerleDene(c) { paket ->
-                Intent(Intent.ACTION_VIEW, uri).also { if (paket != null) it.setPackage(paket) }
-            }
+        // wa.me sohbeti yazı dolu açar; Gönder'e kullanıcı basar.
+        val uri = Uri.parse("https://wa.me/$n?text=" + URLEncoder.encode(mesaj(c), "UTF-8"))
+        return paketlerleDene(c) { paket ->
+            Intent(Intent.ACTION_VIEW, uri).also { if (paket != null) it.setPackage(paket) }
         }
+    }
+
+    /**
+     * Dosyaları aynı sohbete, yazısız gönderir. "jid" WhatsApp'ın resmî
+     * olmayan ama yıllardır çalışan eki: kişi seçme ekranını atlatıp doğrudan
+     * sohbete düşürür. Tanımazsa kişi seçme ekranı çıkar.
+     */
+    fun dosyaGonder(c: Context, tel: String): Boolean {
+        val n = waNumara(tel)
+        val dosya = dosyalar(c)
+        if (n.length < 10 || dosya.isEmpty()) return false
         val urler = ArrayList(dosya.map { FileProvider.getUriForFile(c, "${c.packageName}.dosyalar", it) })
         val turler = dosya.map { tur(it) }
         val ortak = when {
@@ -90,7 +97,6 @@ object Tanitim {
             } else {
                 Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, urler).setType(ortak)
             }
-            i.putExtra(Intent.EXTRA_TEXT, metin)
             i.putExtra("jid", "$n@s.whatsapp.net")
             // Birden çok dosyada okuma izni yalnız ClipData ile geçiyor.
             val clip = ClipData.newRawUri(null, urler[0])
