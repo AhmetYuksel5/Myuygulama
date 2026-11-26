@@ -16,6 +16,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -30,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import com.ahmety.uygulama.core.ai.AgentProvider
 import com.ahmety.uygulama.core.ai.AiSettings
+import com.ahmety.uygulama.core.ai.AgentUsageRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -67,6 +70,12 @@ class AiSettingsViewModel @Inject constructor(
         settings.claudeModel = value.ifBlank { AiSettings.DEFAULT_CLAUDE_MODEL }
     }
     val claudeModels: List<String> get() = AiSettings.CLAUDE_MODELS
+
+    fun claudeEscalate(): Boolean = settings.claudeEscalate
+    fun saveClaudeEscalate(value: Boolean) { settings.claudeEscalate = value }
+    fun agentUsage(): List<AgentUsageRow> = settings.agentUsage()
+    fun agentUsageSince(): Long = settings.agentUsageSince()
+    fun resetAgentUsage() = settings.resetAgentUsage()
 }
 
 /**
@@ -179,6 +188,26 @@ fun AiSettingsScreen(
             onClearKey = { viewModel.clearClaude() },
             onSaveModel = { viewModel.saveClaudeModel(it) },
         )
+
+        var escalate by remember { mutableStateOf(viewModel.claudeEscalate()) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f)) {
+                Text("Takılınca Opus devralsın", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Ekran ajanı Haiku ile çalışır; ekran değişmez, aynı hareketi tekrarlar ya da " +
+                        "anlamsız yanıt verirse 3 adım Opus 5.5 devreye girer (turda en çok 5 adım).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = escalate, onCheckedChange = {
+                escalate = it
+                viewModel.saveClaudeEscalate(it)
+            })
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        AgentUsageSection(viewModel)
 
         Text(
             text = "Güvenlik: anahtarını bir sohbete veya mesaja yapıştırdıysan, " +
@@ -299,5 +328,53 @@ private fun ProviderKeySection(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** Ekran ajanının harcama sayacı: model başına adım, token ve yaklaşık dolar. */
+@Composable
+private fun AgentUsageSection(viewModel: AiSettingsViewModel) {
+    var rows by remember { mutableStateOf(viewModel.agentUsage()) }
+    val since = viewModel.agentUsageSince()
+    val tr = java.util.Locale.forLanguageTag("tr")
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Ekran ajanı harcaması", style = MaterialTheme.typography.titleSmall)
+        if (rows.isEmpty()) {
+            Text(
+                "Henüz harcama yok.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+        if (since > 0) {
+            Text(
+                java.text.SimpleDateFormat("d MMMM", tr).format(java.util.Date(since)) + " tarihinden beri",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        rows.forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                Text(row.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text(
+                    "${row.steps} adım · ${(row.inputTokens + row.outputTokens) / 1000} bin token" +
+                        if (row.usd > 0) " · ~" + String.format(tr, "%.2f", row.usd) + " $" else "",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+        val total = rows.sumOf { it.usd }
+        if (total > 0) {
+            Text(
+                "Toplam ~" + String.format(tr, "%.2f", total) + " $ (liste fiyatıyla yaklaşık)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = {
+            viewModel.resetAgentUsage()
+            rows = emptyList()
+        }) { Text("Sayacı sıfırla") }
     }
 }

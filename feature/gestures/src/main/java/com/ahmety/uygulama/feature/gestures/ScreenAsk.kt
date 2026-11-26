@@ -1178,6 +1178,9 @@ Bilmediğini uydurma: mahalle, telefon, m², oda, tutar gibi eksik ya da emin ol
         "bank", "banka", "ziraat", "enpara", "katilim", "finans", "garanti", "akbank",
         "isbank", "yapikredi", "vakif", "halkbank", "denizbank", "kuveyt", "albaraka",
         "papara", "paycell", "odeabank", "sekerbank", "fibabanka", "wallet",
+        // İş Bankası'nın İşCep'i paket adında "isbank" taşımıyor (com.pozitron.iscep
+        // olduğu tahmin ediliyor); cep/mobil şube adları da ekleniyor.
+        "iscep", "pozitron", "cepsube", "mobilsube",
     )
     private val SHORT_NAMES = setOf("teb", "ing", "qnb", "ykb", "pay")
 

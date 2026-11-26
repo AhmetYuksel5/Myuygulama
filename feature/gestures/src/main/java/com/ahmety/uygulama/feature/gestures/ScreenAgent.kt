@@ -486,6 +486,19 @@ internal object ScreenAgent {
             )
         }
 
+        // Hangi model kaç adım çalıştı ve yaklaşık ne tuttu: kredinin nereye
+        // gittiği her görevde görünsün.
+        AgentUsage.summary(session).takeIf { it.isNotEmpty() }?.let { line ->
+            bodyContainer.addView(
+                TextView(service).apply {
+                    text = line
+                    setTextColor(MUTED)
+                    textSize = 12f
+                    setPadding(0, dp(8f), 0, 0)
+                },
+            )
+        }
+
         val maxBodyHeight = (metrics.heightPixels * 0.30f).toInt()
         val scroll = object : ScrollView(service) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -565,6 +578,28 @@ internal object ScreenAgent {
                                 service,
                                 session,
                                 userReply = "Kaldığın yerden devam et.",
+                            )
+                        },
+                        280L,
+                    )
+                },
+            )
+        }
+        // Haiku takıldıysa ya da yanlış yoldaysa: sonraki tur Opus ile başlasın.
+        val cfgNow = loadConfig(service)
+        if (session.provider == PROVIDER_CLAUDE && cfgNow.escalate &&
+            !cfgNow.claudeModel.contains("opus") && outcome.kind != OutcomeKind.SENSITIVE
+        ) {
+            actionRow.addView(
+                optionChip(service, "Daha akıllı dene", d, accent = false) {
+                    session.forceSmart = true
+                    closeResult(service)
+                    handler.postDelayed(
+                        {
+                            resumeSession(
+                                service,
+                                session,
+                                userReply = "Önceki deneme işe yaramadı; başka bir yol dene.",
                             )
                         },
                         280L,
@@ -793,13 +828,35 @@ internal object ScreenAgent {
     ) {
         var lastSignature = ""
         var forceShotNext = false
+        // Takılma izleri: Haiku zorlanınca birkaç adımlığına Opus devralıyor.
+        val ladder = ModelLadder(config, forceSmart = session.forceSmart)
+        session.forceSmart = false
+        var invalidInRow = 0
+        var stuckInRow = 0
+        var lastActed = false
+        val recentMoves = ArrayDeque<String>()
 
         try {
             for (localStep in 1..MAX_STEPS_PER_RUN) {
                 if (!isAlive(sessionId)) return
                 val displayStep = session.totalSteps + 1
 
-                if (onMainBlocking { findSensitivePackage(service) } != null) {
+                // Boş metin "hassas uygulama yok", null "telefon yanıt vermedi".
+                // Kontrol yapılamadıysa ajan durur: güvenlik açık kalmasın.
+                val sensitiveNow = onMainBlocking { findSensitivePackage(service).orEmpty() }
+                if (sensitiveNow == null) {
+                    finish(
+                        service,
+                        sessionId,
+                        session,
+                        AgentOutcome(
+                            kind = OutcomeKind.ERROR,
+                            message = "Telefon ekran bilgisini zamanında vermedi; güvenlik kontrolü yapılamadığı için ajan durdu. \"Devam et\" ile tekrar deneyebilirsin.",
+                        ),
+                    )
+                    return
+                }
+                if (sensitiveNow.isNotEmpty()) {
                     finish(
                         service,
                         sessionId,
@@ -814,7 +871,20 @@ internal object ScreenAgent {
 
                 updateStopPill("$displayStep · Ekran okunuyor…")
                 val snapshot = onMainBlocking { readScreen(service) }
-                if (snapshot == null || !isAlive(sessionId)) return
+                if (!isAlive(sessionId)) return
+                if (snapshot == null) {
+                    // Önceden burada sessizce çıkılıyordu; "Durdur" hapı ekranda kalıyordu.
+                    finish(
+                        service,
+                        sessionId,
+                        session,
+                        AgentOutcome(
+                            kind = OutcomeKind.ERROR,
+                            message = "Ekran okunamadı (telefon yanıt vermedi). \"Devam et\" ile tekrar deneyebilirsin.",
+                        ),
+                    )
+                    return
+                }
 
                 if (snapshot.sensitive) {
                     finish(
@@ -841,6 +911,13 @@ internal object ScreenAgent {
                 forceShotNext = false
                 lastSignature = snapshot.signature
 
+                // Dokunduğu hâlde ekran değişmiyorsa hareket işe yaramıyor demek.
+                stuckInRow = if (sameScreen && lastActed) stuckInRow + 1 else 0
+                if (stuckInRow >= STUCK_LIMIT) {
+                    stuckInRow = 0
+                    if (!escalate(service, sessionId, session, ladder, "ekran değişmiyor")) return
+                }
+
                 val screenshotBase64 = if (needShot && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     captureSync(service)
                 } else {
@@ -848,8 +925,9 @@ internal object ScreenAgent {
                 }
                 if (!isAlive(sessionId)) return
 
-                val providerLabel = if (config.provider == PROVIDER_CLAUDE) "Claude" else "Gemini"
-                updateStopPill("$displayStep · $providerLabel düşünüyor…")
+                val stepModel = ladder.modelForStep()
+                val who = modelLabel(config.provider, stepModel)
+                updateStopPill("$displayStep · $who düşünüyor…")
 
                 val userPrompt = AgentProtocol.buildStepPrompt(
                     goal = session.goal,
@@ -863,16 +941,32 @@ internal object ScreenAgent {
                     sameScreen = sameScreen,
                 )
 
-                val rawReply = callModel(config, AgentProtocol.systemPrompt(), userPrompt, screenshotBase64)
+                val rawReply = callModel(
+                    service,
+                    session,
+                    config,
+                    stepModel,
+                    AgentProtocol.systemPrompt(),
+                    userPrompt,
+                    screenshotBase64,
+                )
+                ladder.stepDone()
                 if (!isAlive(sessionId)) return
 
                 val decision = AgentProtocol.parseAction(rawReply)
                 if (decision == null) {
                     session.history += "Adım $displayStep: Model geçersiz yanıt verdi, tekrar deneniyor."
                     while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
+                    lastActed = false
+                    invalidInRow++
+                    if (invalidInRow >= INVALID_LIMIT) {
+                        invalidInRow = 0
+                        if (!escalate(service, sessionId, session, ladder, "anlamsız yanıt")) return
+                    }
                     sleepInterruptible(sessionId, 600L)
                     continue
                 }
+                invalidInRow = 0
 
                 if (decision.state.isNotBlank()) {
                     session.stateSummary = decision.state.take(200)
@@ -910,15 +1004,32 @@ internal object ScreenAgent {
                     return
                 }
 
+                // Aynı hareketi üçüncü kez yapmak döngü: uygulamadan önce güçlü modele sor.
+                val move = decision.describe()
+                if (recentMoves.size >= 2 && recentMoves.all { it == move } &&
+                    decision.action != "wait" && decision.action != "screenshot"
+                ) {
+                    recentMoves.clear()
+                    session.history += "Adım $displayStep: Aynı hareket tekrarlanıyor ($move); başka yol aranmalı."
+                    while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
+                    lastActed = false
+                    if (!escalate(service, sessionId, session, ladder, "aynı hareket tekrarı")) return
+                    continue
+                }
+                recentMoves.addLast(move)
+                while (recentMoves.size > 2) recentMoves.removeFirst()
+
                 if (decision.action == "screenshot") {
+                    lastActed = false
                     forceShotNext = true
                     session.history += "Adım $displayStep: Ekran görüntüsü istendi."
                     while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
                     continue
                 }
 
-                // Eylemi uygulamadan hemen önce bir kez daha hassas ekran kontrolü.
-                if (onMainBlocking { findSensitivePackage(service) } != null) {
+                // Eylemi uygulamadan hemen önce bir kez daha hassas ekran kontrolü;
+                // yanıt gelmezse de durur.
+                if (onMainBlocking { findSensitivePackage(service).orEmpty() } != "") {
                     finish(
                         service,
                         sessionId,
@@ -936,7 +1047,8 @@ internal object ScreenAgent {
                 updateStopPill("$displayStep · $stepLabel")
 
                 val outcomeText = executeAction(service, sessionId, decision, snapshot)
-                session.history += "Adım $displayStep: ${decision.describe()} → $outcomeText"
+                lastActed = decision.action != "wait"
+                session.history += "Adım $displayStep · $who: ${decision.describe()} → $outcomeText"
                 while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
                 session.updatedAtMs = System.currentTimeMillis()
 
@@ -958,7 +1070,9 @@ internal object ScreenAgent {
                     message = "Bu turda $MAX_STEPS_PER_RUN adım sınırına ulaşıldı. Devam etmek istersen \"Devam et\"e dokunabilir veya yönlendirme yazabilirsin.",
                 ),
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Error (ör. bellek yetmezliği) de yakalanıyor: bu iş parçacığında
+            // yakalanmayan hata bütün Merkez'i, erişilebilirlikle birlikte düşürüyordu.
             if (!isAlive(sessionId)) return
             finish(
                 service,
@@ -970,6 +1084,78 @@ internal object ScreenAgent {
                 ),
             )
         }
+    }
+
+    /**
+     * Takılınca güçlü modele geçiş. Turdaki Opus adımı sınırı dolduysa ajan
+     * durup soruyor: pahalı model sessizce para yakmasın. false: tur bitti.
+     */
+    private fun escalate(
+        service: AccessibilityService,
+        sessionId: Int,
+        session: AgentSession,
+        ladder: ModelLadder,
+        reason: String,
+    ): Boolean {
+        if (ladder.escalate()) {
+            session.history += "Takıldı ($reason): birkaç adım ${modelLabel(PROVIDER_CLAUDE, ESCALATION_MODEL)} devralıyor."
+            while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
+            return true
+        }
+        if (!ladder.canEscalateAtAll) return true
+        finish(
+            service,
+            sessionId,
+            session,
+            AgentOutcome(
+                kind = OutcomeKind.STOPPED,
+                message = "Takıldım ($reason) ve güçlü modelin bu turdaki $MAX_ESCALATED_STEPS adımlık sınırı doldu. " +
+                    "Yön göstermek için bir şey yazabilir ya da \"Devam et\" diyebilirsin.",
+            ),
+        )
+        return false
+    }
+
+    /**
+     * Adım başına hangi modelin çalışacağı. Normalde seçili Claude modeli
+     * (varsayılan Haiku 5.5); takılınca [ESCALATED_RUN] adım Opus 5.5, sonra
+     * geri. Bir turda en fazla [MAX_ESCALATED_STEPS] Opus adımı. Her adım ayrı
+     * bir istek olduğu için model değiştirmek önceki adımları bozmuyor.
+     */
+    private class ModelLadder(config: AgentConfig, forceSmart: Boolean) {
+        private val base = config.claudeModel
+        val canEscalateAtAll = config.provider == PROVIDER_CLAUDE &&
+            config.escalate && !base.contains("opus")
+        private var remaining = 0
+        private var used = 0
+
+        init {
+            if (forceSmart && canEscalateAtAll) remaining = ESCALATED_RUN
+        }
+
+        fun modelForStep(): String = if (remaining > 0) ESCALATION_MODEL else base
+
+        fun stepDone() {
+            if (remaining > 0) {
+                remaining--
+                used++
+            }
+        }
+
+        /** Opus'a geç; sınır dolduysa ya da geçiş kapalıysa false. */
+        fun escalate(): Boolean {
+            if (!canEscalateAtAll || used >= MAX_ESCALATED_STEPS) return false
+            remaining = minOf(ESCALATED_RUN, MAX_ESCALATED_STEPS - used)
+            return true
+        }
+    }
+
+    private fun modelLabel(provider: String, model: String): String = when {
+        provider != PROVIDER_CLAUDE -> "Gemini"
+        model.contains("haiku") -> "Haiku"
+        model.contains("sonnet") -> "Sonnet"
+        model.contains("opus") -> "Opus"
+        else -> "Claude"
     }
 
     private fun finish(
@@ -1070,7 +1256,10 @@ internal object ScreenAgent {
         seen: MutableSet<String>,
     ) {
         if (node == null || depth > MAX_DEPTH || out.size >= MAX_NODES) return
-        if (node.isVisibleToUser) {
+        // Görünmeyen dalın çocukları da görünmüyor; ağır sayfalarda bütün
+        // ağacı gezmek servisi kilitleyebiliyordu.
+        if (!node.isVisibleToUser) return
+        run {
             val rect = Rect()
             node.getBoundsInScreen(rect)
             val onScreen = rect.width() > 0 && rect.height() > 0 &&
@@ -1157,8 +1346,16 @@ internal object ScreenAgent {
                     }.getOrNull()
                     buffer.close()
                     Thread {
-                        resultRef.set(bitmap?.let { encodeScreenshot(it) })
-                        latch.countDown()
+                        // Bellek darken kodlama hata atabiliyor; yakalanmazsa
+                        // bütün süreç (erişilebilirlik dahil) düşüyordu.
+                        try {
+                            resultRef.set(bitmap?.let { encodeScreenshot(it) })
+                        } catch (_: Throwable) {
+                            resultRef.set(null)
+                        } finally {
+                            bitmap?.recycle()
+                            latch.countDown()
+                        }
                     }.start()
                 }
 
@@ -1188,7 +1385,11 @@ internal object ScreenAgent {
             source
         }
         val bytes = ByteArrayOutputStream()
-        scaled.compress(Bitmap.CompressFormat.JPEG, 72, bytes)
+        try {
+            scaled.compress(Bitmap.CompressFormat.JPEG, 72, bytes)
+        } finally {
+            if (scaled !== source) scaled.recycle()
+        }
         return Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
     }
 
@@ -1387,41 +1588,51 @@ internal object ScreenAgent {
 
         var best: AccessibilityNodeInfo? = null
         var bestArea = Long.MAX_VALUE
+        val editables = mutableListOf<AccessibilityNodeInfo>()
+        var visited = 0
         val rect = Rect()
 
         fun walk(node: AccessibilityNodeInfo?, depth: Int) {
-            if (node == null || depth > MAX_DEPTH) return
-            if (node.isVisibleToUser && node.isEditable) {
+            if (node == null || depth > MAX_DEPTH || visited >= MAX_WALK) return
+            visited++
+            if (!node.isVisibleToUser) return
+            if (node.isEditable) {
                 node.getBoundsInScreen(rect)
-                val contains = x > 0 && y > 0 && rect.contains(x, y)
                 val area = rect.width().toLong() * rect.height().toLong()
-                if (contains && area in 1 until bestArea) {
+                if (area > 0) editables += node
+                if (x > 0 && y > 0 && rect.contains(x, y) && area in 1 until bestArea) {
                     best = node
                     bestArea = area
-                } else if (best == null && area > 0) {
-                    best = node
                 }
             }
             for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1)
         }
 
         roots.forEach { walk(it, 0) }
-        return best
+        // Dokunulan yerde kutu yoksa yalnız ekranda tek kutu varsa ona yazılıyor.
+        // Önceden ilk bulunan kutuya yazılıyordu; yazı istenmeyen bir arama ya da
+        // sohbet kutusuna gidip "gönder"e basılabiliyordu.
+        return best ?: editables.singleOrNull()
     }
 
     // ---- Gemini Flash ve Anthropic Claude API çağrıları ----
 
     private fun callModel(
+        context: Context,
+        session: AgentSession,
         config: AgentConfig,
+        claudeModel: String,
         systemPrompt: String,
         userPrompt: String,
         screenshotBase64: String?,
     ): String = when (config.provider) {
-        PROVIDER_CLAUDE -> callClaude(config.claudeKey, config.claudeModel, systemPrompt, userPrompt, screenshotBase64)
-        else -> callGemini(config.geminiKey, config.geminiModel, systemPrompt, userPrompt, screenshotBase64)
+        PROVIDER_CLAUDE -> callClaude(context, session, config.claudeKey, claudeModel, systemPrompt, userPrompt, screenshotBase64)
+        else -> callGemini(context, session, config.geminiKey, config.geminiModel, systemPrompt, userPrompt, screenshotBase64)
     }
 
     private fun callGemini(
+        context: Context,
+        session: AgentSession,
         key: String,
         model: String,
         systemPrompt: String,
@@ -1473,12 +1684,15 @@ internal object ScreenAgent {
             if (!response.isSuccessful) {
                 throw ApiException(response.code, extractErrorMessage(body) ?: "HTTP ${response.code}")
             }
+            AgentUsage.recordGemini(context, session, model.trim(), body)
             return AgentProtocol.extractGeminiText(body)
                 ?: throw IllegalStateException("Gemini yanıtı boş döndü.")
         }
     }
 
     private fun callClaude(
+        context: Context,
+        session: AgentSession,
         key: String,
         model: String,
         systemPrompt: String,
@@ -1507,7 +1721,21 @@ internal object ScreenAgent {
             // küçük sınır JSON yanıtı çıkmadan kesilmeye yol açabiliyor.
             put("max_tokens", 4096)
             // Claude 4.7+ ve 5.5 modelleri temperature parametresini HTTP 400 ile reddediyor.
-            put("system", systemPrompt)
+            // Düşünme düşük: ekranda düğme bulmak uzun akıl yürütme istemiyor ve
+            // düşünme çıktı fiyatından ödeniyor. Eski modeller bu alanı tanımıyor.
+            if (AgentUsage.supportsEffort(model)) {
+                put("output_config", JSONObject().put("effort", "low"))
+            }
+            // Yönerge her adımda aynı: önbelleğe alınınca onda bir fiyata okunuyor.
+            put(
+                "system",
+                JSONArray().put(
+                    JSONObject()
+                        .put("type", "text")
+                        .put("text", systemPrompt)
+                        .put("cache_control", JSONObject().put("type", "ephemeral")),
+                ),
+            )
             put(
                 "messages",
                 JSONArray().put(
@@ -1531,6 +1759,7 @@ internal object ScreenAgent {
             if (!response.isSuccessful) {
                 throw ApiException(response.code, extractErrorMessage(body) ?: "HTTP ${response.code}")
             }
+            AgentUsage.recordClaude(context, session, model.trim(), body)
             return AgentProtocol.extractClaudeText(body)
                 ?: throw IllegalStateException("Claude yanıtı boş döndü.")
         }
@@ -1564,12 +1793,23 @@ internal object ScreenAgent {
         val geminiModel: String,
         val claudeKey: String,
         val claudeModel: String,
+        /** Takılınca Opus'a geçilsin mi (Yapay zekâ ayarları). */
+        val escalate: Boolean,
     ) {
         val hasAnyKey: Boolean get() = geminiKey.isNotBlank() || claudeKey.isNotBlank()
     }
 
     private fun loadConfig(context: Context): AgentConfig {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // Varsayılan Opus'tan Haiku'ya geçti. Önceden kaydedilmiş Opus tercihi
+        // de bir kez Haiku'ya çevriliyor; Opus artık takılınca devralıyor.
+        if (!prefs.getBoolean(KEY_HAIKU_MIGRATED, false)) {
+            val edit = prefs.edit().putBoolean(KEY_HAIKU_MIGRATED, true)
+            if (prefs.getString(KEY_CLAUDE_MODEL, null)?.trim() == ESCALATION_MODEL) {
+                edit.putString(KEY_CLAUDE_MODEL, DEFAULT_CLAUDE_MODEL)
+            }
+            edit.apply()
+        }
         return AgentConfig(
             provider = prefs.getString(KEY_AGENT_PROVIDER, PROVIDER_GEMINI).orEmpty()
                 .ifBlank { PROVIDER_GEMINI },
@@ -1579,6 +1819,7 @@ internal object ScreenAgent {
             claudeKey = prefs.getString(KEY_CLAUDE_API, null).orEmpty().trim(),
             claudeModel = prefs.getString(KEY_CLAUDE_MODEL, null)?.trim()
                 ?.takeIf { it.isNotBlank() } ?: DEFAULT_CLAUDE_MODEL,
+            escalate = prefs.getBoolean(KEY_CLAUDE_ESCALATE, true),
         )
     }
 
@@ -1915,7 +2156,17 @@ internal object ScreenAgent {
     private const val PROVIDER_GEMINI = "gemini"
     private const val PROVIDER_CLAUDE = "claude"
     private const val DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
-    private const val DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
+    private const val KEY_CLAUDE_ESCALATE = "claude_escalate"
+    private const val KEY_HAIKU_MIGRATED = "claude_haiku_migrated"
+    private const val DEFAULT_CLAUDE_MODEL = "claude-haiku-5-5"
+
+    /** Takılınca devralan model ve sınırları. */
+    private const val ESCALATION_MODEL = "claude-opus-5-5"
+    private const val ESCALATED_RUN = 3
+    private const val MAX_ESCALATED_STEPS = 5
+    private const val INVALID_LIMIT = 2
+    private const val STUCK_LIMIT = 2
+    private const val MAX_WALK = 800
 
     private const val MAX_STEPS_PER_RUN = 20
     private const val MAX_HISTORY = 6
@@ -1980,6 +2231,11 @@ internal data class AgentSession(
     val userNotes: MutableList<String> = mutableListOf(),
     var totalSteps: Int = 0,
     var lastOutcome: AgentOutcome? = null,
+    /** "Daha akıllı dene": sonraki tur Opus ile başlasın. */
+    var forceSmart: Boolean = false,
+    /** Bu görevde model başına adım sayısı ve yaklaşık dolar; kartta gösteriliyor. */
+    val modelSteps: MutableMap<String, Int> = linkedMapOf(),
+    var costUsd: Double = 0.0,
     var updatedAtMs: Long = System.currentTimeMillis(),
 )
 
