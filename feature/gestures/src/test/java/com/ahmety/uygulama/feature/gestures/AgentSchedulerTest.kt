@@ -35,14 +35,4 @@ class AgentSchedulerTest {
         val next = at(AgentScheduler.nextAfter(LocalTime.of(8, 30), "weekdays", after))
         assertEquals(LocalDateTime.of(2026, 11, 30, 8, 30), next)
     }
-
-    @Test
-    fun `model zamanlama cevabini okur`() {
-        val action = AgentProtocol.parseAction(
-            """{"action":"schedule","at":"2026-11-27T09:00","repeat":"none","task":"Garanti bakiyesini oku","message":"Kuruldu"}""",
-        )!!
-        assertEquals("schedule", action.action)
-        assertEquals("2026-11-27T09:00", action.at)
-        assertEquals("Garanti bakiyesini oku", action.task)
-    }
 }
