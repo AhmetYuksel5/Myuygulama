@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -45,35 +46,74 @@ object TanitimBalonu {
         val d = app.resources.displayMetrics.density
         fun dp(x: Int) = (x * d).toInt()
 
+        // Boyut yazıya göre: sabit 72 dp'lik kutuda yazı kayıyordu (kullanıcı 2026-11-26).
         val kutu = LinearLayout(app).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            minimumWidth = dp(76)
+            minimumHeight = dp(68)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
             background = GradientDrawable().apply {
                 cornerRadius = dp(16).toFloat()
                 setColor(0xFF1F6B3A.toInt())
             }
             elevation = dp(8).toFloat()
-            contentDescription = "Tanıtım dosyalarını gönder"
+            contentDescription = "Referansları gönder"
         }
         kutu.addView(
             ImageView(app).apply {
                 setImageResource(R.drawable.s_tanitim)
                 setColorFilter(Color.WHITE)
             },
-            LinearLayout.LayoutParams(dp(26), dp(26)),
+            LinearLayout.LayoutParams(dp(24), dp(24)),
         )
         kutu.addView(
             TextView(app).apply {
-                text = "Tanıtım 2"
+                text = "Referanslar"
                 setTextColor(Color.WHITE)
-                textSize = 10f
+                textSize = 12f
                 typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, dp(3), 0, 0)
+                maxLines = 1
+                gravity = Gravity.CENTER
+                setPadding(0, dp(4), 0, 0)
+            },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT),
+        )
+
+        // Köşede küçük ×: balonu kapatır. Kutunun dışına taşsın diye dış çerçeve
+        // biraz boşluklu; × çerçevenin sağ üst köşesinde.
+        val cerceve = FrameLayout(app)
+        cerceve.addView(
+            kutu,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(dp(10), dp(10), dp(10), dp(10))
+            },
+        )
+        val kapat = TextView(app).apply {
+            text = "×"
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xFF3C4A42.toInt())
+                setStroke(dp(2), Color.WHITE)
+            }
+            elevation = dp(10).toFloat()
+            contentDescription = "Kapat"
+            setOnClickListener { kaldir(app) }
+        }
+        cerceve.addView(
+            kapat,
+            FrameLayout.LayoutParams(dp(22), dp(22)).apply {
+                gravity = Gravity.TOP or Gravity.END
             },
         )
 
         val lp = WindowManager.LayoutParams(
-            dp(72), dp(72),
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
@@ -119,7 +159,7 @@ object TanitimBalonu {
                         lp.x = ilkX - dx.toInt()
                         lp.y = (ilkY + dy.toInt()).coerceAtLeast(0)
                         try {
-                            wm.updateViewLayout(kutu, lp)
+                            wm.updateViewLayout(cerceve, lp)
                         } catch (_: Exception) {
                         }
                     }
@@ -139,8 +179,8 @@ object TanitimBalonu {
         }
 
         return try {
-            wm.addView(kutu, lp)
-            gorunum = kutu
+            wm.addView(cerceve, lp)
+            gorunum = cerceve
             ana.postDelayed(zamanAsimi, OMUR_MS)
             true
         } catch (e: Exception) {

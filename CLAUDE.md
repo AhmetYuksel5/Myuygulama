@@ -171,11 +171,14 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   oluyor ya da PDF'te düşüyor). "Tanıtım 1/2" → `wa.me?text=` selam yazısı;
   düğme "Dosyalar 2/2" olur (vurgulu) → `ACTION_SEND(_MULTIPLE)` + resmî
   olmayan `jid` eki, yazısız (tanımazsa kişi seçme ekranı). Dosya yoksa tek
-  aşama. İkinci adım WhatsApp'ın üstünde kare balon (`TanitimBalonu`, düz
-  View + `TYPE_APPLICATION_OVERLAY`; kullanıcı 2026-11-26: "geri gelip tekrar
-  basmak zorunda kalıyoruz"): basınca dosyalar gider, sürüklenir, uzun basış
-  kapatır, 3 dk sonra kendiliğinden gider. Üstte gösterme izni yoksa ikinci
-  adım kartta "Dosyalar 2/2" olarak kalır. Gönder'e kullanıcı basar: WhatsApp başka uygulamanın onun adına
+  aşama. Adlar (kullanıcı 2026-11-26): kart düğmesi **İlk mesaj** (yana
+  bakan gönder oku `s_ilk_mesaj`), ikinci adım **Referanslar**. İkinci adım
+  WhatsApp'ın üstünde balon (`TanitimBalonu`, düz View +
+  `TYPE_APPLICATION_OVERLAY`; "geri gelip tekrar basmak zorunda kalıyoruz"):
+  boyu yazıya göre (sabit kutuda yazı kayıyordu), köşede küçük × kapatır,
+  basınca dosyalar gider, sürüklenir, uzun basış da kapatır, 3 dk sonra
+  kendiliğinden gider. Üstte gösterme izni yoksa ikinci adım kartta
+  "Referanslar" olarak kalır. Gönder'e kullanıcı basar: WhatsApp başka uygulamanın onun adına
   göndermesine izin vermiyor. Dosyalar `filesDir/tanitim/<eklenme anı>/<ad>`a
   kopyalanır (her dosya kendi klasöründe: WhatsApp belgeyi dosya adıyla
   gösterir, ad önekli olmasın; eski önekli dosyalar `dosyalar()` içinde

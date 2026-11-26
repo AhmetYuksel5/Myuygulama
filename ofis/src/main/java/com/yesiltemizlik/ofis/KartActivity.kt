@@ -420,11 +420,10 @@ private fun Kart(
                         val ikinci = tanitimAsama == 1
                         BuyukSecim(
                             when {
-                                !dosyaVar -> "Tanıtım"
-                                ikinci -> "Dosyalar 2/2"
-                                else -> "Tanıtım 1/2"
+                                ikinci -> "Referanslar"
+                                else -> "İlk mesaj"
                             },
-                            R.drawable.s_tanitim,
+                            if (ikinci) R.drawable.s_tanitim else R.drawable.s_ilk_mesaj,
                             if (ikinci) renk.primary else renk.tertiaryContainer,
                             if (ikinci) renk.onPrimary else renk.onTertiaryContainer,
                             Modifier.weight(1f), etkin = numaraVar,
@@ -434,7 +433,7 @@ private fun Kart(
                                 Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
                             } else if (!ikinci && dosyaVar) {
                                 // İkinci adım WhatsApp'ın üstündeki balonda; balon
-                                // gösterilemezse (izin yok) kartta "Dosyalar 2/2".
+                                // gösterilemezse (izin yok) kartta "Referanslar".
                                 tanitimAsama = if (TanitimBalonu.goster(ctx, tel)) 0 else 1
                             } else {
                                 tanitimAsama = 0
