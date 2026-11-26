@@ -202,7 +202,9 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   "İnşaat sonrası", genel "Diğer" (eski düzende eklenenler; boşsa gizli).
   Klasör `tanitim/k_<anahtar>/<sıra>/<ad>`, genel kökte. Uygulamayla gelen
   katalog `assets/katalog/<anahtar>.pdf` ilk açılışta bir kez kopyalanır
-  (`gomulu_<anahtar>` bayrağı; silinirse geri gelmez). Referanslar balonu
+  (`gomuluSurum_<anahtar>`; katalog PDF'i yenilenince `Tanitim.KATALOG_SURUM`
+  artırılır, telefondaki eski katalog yenisiyle değişir — ad korunur, silinmişse
+  geri gelmez). Referanslar balonu
   orta-alt (`Gravity.BOTTOM|CENTER_HORIZONTAL`, alttan ekranın %22'si);
   birden çok dolu katalog varsa basınca seçeneklere açılır, tek katalogda
   doğrudan gönderir. Balon izni yoksa kartta "Referanslar" → "Hangi
@@ -214,6 +216,11 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   yesiltemizlik.com/referanslar'daki logolu kartlardan 30 tane, kataloğa
   uyan iş türleri önde (sitede herkese açık; şablondaki yetkili listesi değil).
   Kart sabit yükseklikte; uzun hizmet metni kısaltılır, kesik kart ölçülür.
+  1. sayfa (kullanıcı 2026-11-26): metinler sitedeki hizmet sayfalarından
+  (/ofis-temizligi/, /bos-ev-temizligi/, /insaat-sonrasi-temizlik/) derlenir;
+  üç saha fotoğrafı (sitenin /assets/gallery/ gerçek fotoğrafları), öne
+  çıkanlar çipleri, yapılan işler, "kısa video gönderin" çağrısı, sitedeki
+  güven sayıları (484+ referans, 8 konsolosluk, Google 4.7, 2012).
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana

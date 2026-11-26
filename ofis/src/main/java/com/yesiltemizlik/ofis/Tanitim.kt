@@ -50,17 +50,33 @@ object Tanitim {
     private fun grupKlasoru(c: Context, g: String) =
         if (g == "genel") klasor(c) else File(klasor(c), "k_$g").apply { mkdirs() }
 
+    /**
+     * Gömülü katalogların sürümü: katalog PDF'leri yenilenince artırılır.
+     * Telefondaki eski katalog yenisiyle değişir; kullanıcı adını değiştirdiyse
+     * ad korunur, sildiyse (klasörü yoksa) geri getirilmez.
+     */
+    private const val KATALOG_SURUM = 2
+
     private fun gomululeriKopyala(c: Context) {
         val p = c.getSharedPreferences("ofis", Context.MODE_PRIVATE)
         for (g in GRUPLAR) {
             val ad = g.gomulu ?: continue
-            if (p.getBoolean("gomulu_${g.anahtar}", false)) continue
+            // Eski sürüm yalnız "kopyalandı" bayrağı tutuyordu; o bayrak sürüm 1 sayılır.
+            val kurulu = p.getInt("gomuluSurum_${g.anahtar}", if (p.getBoolean("gomulu_${g.anahtar}", false)) 1 else 0)
+            if (kurulu >= KATALOG_SURUM) continue
             try {
-                c.assets.open("katalog/${g.anahtar}.pdf").use { giris ->
-                    val d = File(grupKlasoru(c, g.anahtar), "0000000000000").apply { mkdirs() }
-                    File(d, ad).outputStream().use { giris.copyTo(it) }
+                val d = File(grupKlasoru(c, g.anahtar), "0000000000000")
+                if (kurulu > 0 && !d.exists()) {
+                    // Kullanıcı kataloğu silmiş: yenisini de getirme.
+                    p.edit().putInt("gomuluSurum_${g.anahtar}", KATALOG_SURUM).apply()
+                    continue
                 }
-                p.edit().putBoolean("gomulu_${g.anahtar}", true).apply()
+                d.mkdirs()
+                val hedef = d.listFiles()?.firstOrNull { it.isFile } ?: File(d, ad)
+                c.assets.open("katalog/${g.anahtar}.pdf").use { giris ->
+                    hedef.outputStream().use { giris.copyTo(it) }
+                }
+                p.edit().putInt("gomuluSurum_${g.anahtar}", KATALOG_SURUM).putBoolean("gomulu_${g.anahtar}", true).apply()
             } catch (_: Exception) {
                 // Bu sürümde gömülü katalog yok; sonraki sürümde gelirse kopyalanır.
             }
