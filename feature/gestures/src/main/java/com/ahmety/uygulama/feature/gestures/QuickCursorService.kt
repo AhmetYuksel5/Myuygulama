@@ -115,6 +115,8 @@ class QuickCursorService : EdgeGestureService() {
         lock.start()
         rebuild()
         instance = java.lang.ref.WeakReference(this)
+        // Alarmlar uygulama durdurulunca siliniyor; servis her bağlandığında yeniden kuruluyor.
+        runCatching { AgentScheduler.rearmAll(this) }
     }
 
     /**
@@ -565,6 +567,9 @@ class QuickCursorService : EdgeGestureService() {
         internal fun raise() {
             instance?.get()?.raiseSelf()
         }
+
+        /** Bağlı servis; zamanlanmış ajan görevi buna veriliyor. */
+        internal fun current(): QuickCursorService? = instance?.get()
 
         private const val LONG_PRESS_MS = 350L
 

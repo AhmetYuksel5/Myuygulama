@@ -207,6 +207,9 @@ fun AiSettingsScreen(
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        AgentScheduleSection()
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AgentBankSection()
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -453,6 +456,59 @@ private fun AgentBankSection() {
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * Ekran ajanının zamanlanmış görevleri. Kurmak için ajana "yarın 9'da şunu
+ * yap" demek yetiyor; burada yalnız görülüp siliniyorlar.
+ */
+@Composable
+private fun AgentScheduleSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var jobs by remember { mutableStateOf(com.ahmety.uygulama.feature.gestures.AgentScheduler.list(context)) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Zamanlanmış görevler", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Kurmak için ajana saatiyle söylemen yeter: \"yarın 9'da …\", \"her sabah 8.30'da …\", " +
+                "\"hafta içi 18:00'de …\". Saat gelince ekran yanar, kaydırma kilidi kalkar ve görev başlar; " +
+                "sonucu bildirimde de görürsün.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (jobs.isEmpty()) {
+            Text(
+                "Kurulu zamanlayıcı yok.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        jobs.forEach { job ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text(job.task, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        com.ahmety.uygulama.feature.gestures.AgentScheduler.describe(job),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = {
+                    com.ahmety.uygulama.feature.gestures.AgentScheduler.remove(context, job.id)
+                    jobs = com.ahmety.uygulama.feature.gestures.AgentScheduler.list(context)
+                }) { Text("Sil") }
+            }
+        }
+        if (!com.ahmety.uygulama.feature.gestures.AgentScheduler.exactAllowed(context)) {
+            TextButton(onClick = {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                            .setData(android.net.Uri.parse("package:" + context.packageName)),
+                    )
+                }
+            }) { Text("Tam saat iznini aç (yoksa birkaç dakika sapabilir)") }
         }
     }
 }
