@@ -194,9 +194,14 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   orta-alt (`Gravity.BOTTOM|CENTER_HORIZONTAL`, alttan ekranın %22'si);
   birden çok dolu katalog varsa basınca seçeneklere açılır, tek katalogda
   doğrudan gönderir. Balon izni yoksa kartta "Referanslar" → "Hangi
-  katalog?" penceresi. Katalog PDF'lerinin kaynağı: scratchpad'de HTML →
-  Chromium PDF (2 sayfa: kapsam + fiyat teklifi şablonunun "Referanslar"
-  sayfasındaki yıllık sözleşmeli liste, yalnız kurum + ilçe).
+  katalog?" penceresi. Katalog PDF'leri `ofis/katalog-kaynak/uret.py` ile
+  üretilir (HTML → Chromium PDF, A4, 2 sayfa). Tasarım kullanıcının beğendiği
+  "Haftada 5 Gün Temizlik Personeli" teklifi: sol üstte logo, #92D050 şerit +
+  beyaz büyük harf başlık, italik alt başlık, yeşil çizgili bölüm başlıkları,
+  altta "YEŞİL TEMİZLİK | 0212 369 90 75 | www.yesiltemizlik.com". 2. sayfa
+  yesiltemizlik.com/referanslar'daki logolu kartlardan 30 tane, kataloğa
+  uyan iş türleri önde (sitede herkese açık; şablondaki yetkili listesi değil).
+  Kart sabit yükseklikte; uzun hizmet metni kısaltılır, kesik kart ölçülür.
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana
