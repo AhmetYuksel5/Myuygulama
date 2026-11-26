@@ -138,7 +138,7 @@ class UpdateChecker @Inject constructor(
      * [background] doğruysa onay gerektiğinde ekrana bir şey açılmıyor,
      * bildirim düşüyor; kurulum ekranına düşme yolu da kapalı.
      */
-    fun install(file: File, background: Boolean = false) {
+    fun install(file: File, background: Boolean = false): Boolean {
         val opened = runCatching {
             val installer = context.packageManager.packageInstaller
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
@@ -164,13 +164,14 @@ class UpdateChecker @Inject constructor(
                 session.commit(pending.intentSender)
             }
         }.isSuccess
-        if (opened || background) return
+        if (opened || background) return opened
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
+        return false
     }
 
     /**
@@ -219,19 +220,46 @@ class UpdateChecker @Inject constructor(
         )
     }
 
-    /** Uygulamadan çıkılınca: yeni sürüm varsa ve sormadan kurulabiliyorsa indir ve kur. */
+    /**
+     * Uygulamadan çıkılınca ve 6 saatte bir: yeni sürüm varsa indir ve kur.
+     *
+     * Sormadan kurulabiliyorsa kuruluyor. Kurulamıyorsa (ilk güncelleme ya da
+     * telefon onay istiyorsa) "güncelleme hazır" bildirimi düşüyor. Önceden
+     * yalnız sormadan kurulabildiğinde çalışıyordu; güncellemeler elle
+     * kurulduğu için bu hiç sağlanmadı ve ne kurulum ne bildirim geldi.
+     */
     fun updateInBackground() {
-        if (!silentInstallable()) return
         if (!busy.compareAndSet(false, true)) return
         backgroundScope.launch {
             try {
                 val info = knownUpdate() ?: return@launch
+                val silent = silentInstallable()
+                // Aynı sürüm için bildirim art arda yağmasın.
+                if (!silent && recentlyNotified(info.versionCode)) return@launch
+                if (!canInstallPackages()) {
+                    InstallResultReceiver.notifyAvailable(context, info.versionName)
+                    markNotified(info.versionCode)
+                    return@launch
+                }
                 val file = download(info) {} ?: return@launch
-                install(file, background = true)
+                val opened = install(file, background = true)
+                if (!opened) InstallResultReceiver.notifyAvailable(context, info.versionName)
+                if (!silent) markNotified(info.versionCode)
             } finally {
                 busy.set(false)
             }
         }
+    }
+
+    private fun recentlyNotified(code: Long): Boolean {
+        val prefs = context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
+        return prefs.getLong("notified_code", 0L) == code &&
+            System.currentTimeMillis() - prefs.getLong("notified_at", 0L) < NOTIFY_EVERY_MS
+    }
+
+    private fun markNotified(code: Long) {
+        context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE).edit()
+            .putLong("notified_code", code).putLong("notified_at", System.currentTimeMillis()).apply()
     }
 
     private val busy = AtomicBoolean(false)
@@ -266,6 +294,7 @@ class UpdateChecker @Inject constructor(
 
     private companion object {
         const val CACHE_PREFS = "guncelleme_onbellek"
+        const val NOTIFY_EVERY_MS = 6 * 3_600_000L
         const val RELEASES_URL =
             "https://api.github.com/repos/AhmetYuksel5/Myuygulama/releases/latest"
     }

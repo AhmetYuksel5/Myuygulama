@@ -63,6 +63,32 @@ class InstallResultReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        /**
+         * Kurulum oturumu açılamadığında ya da kurma izni yokken: Merkez'i açan
+         * bildirim; açılınca güncelleme penceresi çıkıyor.
+         */
+        fun notifyAvailable(context: Context, versionName: String) {
+            val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL, "Güncelleme", NotificationManager.IMPORTANCE_DEFAULT),
+            )
+            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
+            val open = PendingIntent.getActivity(
+                context,
+                1,
+                launch,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val notification = Notification.Builder(context, CHANNEL)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle("Merkez güncellemesi var: $versionName")
+                .setContentText("Kurmak için dokun")
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .build()
+            runCatching { manager.notify(NOTIFICATION_ID, notification) }
+        }
+
         const val EXTRA_BACKGROUND = "arkaplan"
         private const val CHANNEL = "guncelleme"
         private const val NOTIFICATION_ID = 8

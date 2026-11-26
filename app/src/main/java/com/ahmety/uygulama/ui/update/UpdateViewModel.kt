@@ -39,16 +39,31 @@ class UpdateViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(canInstall = checker.canInstallPackages())
     }
 
-    /** Açılışta taze bakılır (önbellek yaşı 0); yeni sürüm varsa pencere açılıyor. */
+    private var dismissedAt = 0L
+
+    /**
+     * Merkez'e her dönüşte bakılır; yeni sürüm varsa pencere açılıyor.
+     * Önceden yalnız uygulama ilk açılırken bakılıyordu; Merkez arka planda
+     * açık kalınca geri dönüldüğünde pencere hiç çıkmıyordu. "Sonra" dendiyse
+     * yarım saat sorulmuyor. Sonuç 5 dakika önbellekte: GitHub'ın girişsiz
+     * saatlik sınırı dolmasın.
+     */
     fun checkOnLaunch() {
+        if (System.currentTimeMillis() - dismissedAt < REPROMPT_MS) return
+        if (_uiState.value.promptOnLaunch || _uiState.value.downloadProgress != null) return
         viewModelScope.launch {
-            val info = checker.knownUpdate(maxAgeMs = 0L) ?: return@launch
+            val info = checker.knownUpdate(maxAgeMs = 5 * 60_000L) ?: return@launch
             _uiState.value = _uiState.value.copy(available = info, promptOnLaunch = true)
         }
     }
 
     fun dismissLaunchPrompt() {
+        dismissedAt = System.currentTimeMillis()
         _uiState.value = _uiState.value.copy(promptOnLaunch = false)
+    }
+
+    private companion object {
+        const val REPROMPT_MS = 30 * 60_000L
     }
 
     fun check() {

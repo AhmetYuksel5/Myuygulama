@@ -134,6 +134,10 @@
         <receiver
             android:name=".ui.update.InstallResultReceiver"
             android:exported="false" />
+        <!-- 6 saatte bir güncelleme denetimi. -->
+        <receiver
+            android:name=".ui.update.UpdateAlarmReceiver"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

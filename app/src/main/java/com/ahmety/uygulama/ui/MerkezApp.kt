@@ -21,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.Badge
@@ -122,7 +121,14 @@ fun MerkezApp() {
     // Açılışta yeni sürüm varsa pencere kendiliğinden açılıyor (My Asistan'daki gibi).
     val updateViewModel: UpdateViewModel = hiltViewModel()
     val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { updateViewModel.checkOnLaunch() }
+    val updateLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(updateLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) updateViewModel.checkOnLaunch()
+        }
+        updateLifecycle.lifecycle.addObserver(observer)
+        onDispose { updateLifecycle.lifecycle.removeObserver(observer) }
+    }
 
     if (showUpdate) {
         UpdateDialog(onDismiss = { showUpdate = false }, viewModel = updateViewModel)
