@@ -21,6 +21,8 @@ class AramaAlicisi : BroadcastReceiver() {
         when (durum) {
             TelephonyManager.EXTRA_STATE_OFFHOOK -> if (!d.konusuldu) {
                 d.aramaBas = System.currentTimeMillis()
+                // Görüşme bitince "bundan sonra eklenen satır" diye bulunabilsin.
+                d.oncekiSonArama = if (context.aramaIzniVar()) sonAramalar(context, 1).firstOrNull()?.zaman ?: 0L else -1L
                 d.konusuldu = true
             }
             TelephonyManager.EXTRA_STATE_IDLE -> if (d.konusuldu) {
@@ -35,7 +37,7 @@ class AramaAlicisi : BroadcastReceiver() {
                     try {
                         var a: Arama? = null
                         for (i in 0 until 6) {
-                            a = bitenArama(context, bas)
+                            a = bitenArama(context, bas, d.oncekiSonArama)
                             if (a != null) break
                             Thread.sleep(500)
                         }

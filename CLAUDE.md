@@ -137,6 +137,11 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
 - Görüşme bitince kart: `AramaAlicisi` (PHONE_STATE, OFFHOOK → IDLE) →
   `KartAcici` (pencere + yedek bildirim) → `KartActivity`. Numara/süre/yön
   arama kaydından okunur.
+  Bu görüşmenin satırı: OFFHOOK'ta kayıttaki son satırın zamanı
+  (`Depo.oncekiSonArama`) not edilir, IDLE'dan sonra ondan YENİ ilk satır
+  alınır (kullanıcı 2026-11-26: kart bazen numarasız/pasif). Saat tahmini
+  (bitiş > açılış) uzun çalıp kısa konuşulan gelen aramada tutmuyordu:
+  kayıt çalma başlangıcını tutar. Kart 14 sn'ye kadar bekler.
 - Kart: üç düğme, aynı çizgi simge dili (`res/drawable/s_*.xml`, 24 birim,
   2 kalınlık). İş arayan → yaka → ilçe → o ilçedeki işler (+ diğer işler,
   aynı yaka önce) → ad, not → Kaydet. Müşteri → ad, not → Kaydet. WhatsApp →

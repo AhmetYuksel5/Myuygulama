@@ -217,8 +217,9 @@ private fun Kart(
 
     LaunchedEffect(bas) {
         if (deneme || verilen != null) return@LaunchedEffect
-        repeat(8) {
-            val a = withContext(Dispatchers.IO) { bitenArama(ctx, bas) }
+        // MIUI arama kaydını bazen geç yazıyor: 14 sn'ye kadar beklenir.
+        repeat(20) {
+            val a = withContext(Dispatchers.IO) { bitenArama(ctx, bas, depo.oncekiSonArama) }
             if (a != null) {
                 // Listeye alınmış numara: kart hiç görünmesin.
                 if (depo.engelliMi(a.tel)) {

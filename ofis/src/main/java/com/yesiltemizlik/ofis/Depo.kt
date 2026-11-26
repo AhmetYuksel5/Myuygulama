@@ -39,6 +39,11 @@ class Depo(context: Context) {
         get() = p.getBoolean("konusuldu", false)
         set(v) = p.edit().putBoolean("konusuldu", v).commit().let { }
 
+    /** Telefon açıldığı anda arama kaydındaki son satırın zamanı; -1 = okunamadı. */
+    var oncekiSonArama: Long
+        get() = p.getLong("oncekiSonArama", -1L)
+        set(v) = p.edit().putLong("oncekiSonArama", v).commit().let { }
+
     var aramaBas: Long
         get() = p.getLong("aramaBas", 0L)
         set(v) = p.edit().putLong("aramaBas", v).apply()

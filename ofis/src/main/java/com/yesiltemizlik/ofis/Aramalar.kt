@@ -41,13 +41,19 @@ fun sonAramalar(c: Context, adet: Int = 80): List<Arama> {
 
 /**
  * Biten görüşmeyi bulur. Kayıt, telefon IDLE'a geçtikten biraz sonra
- * yazılıyor; en son satırın bu görüşme olup olmadığına bakılır: bitişi
- * açılma anından sonraysa ya da başlangıcı o ana denk geliyorsa (cevapsız
- * giden arama, süre 0) bu görüşmedir.
+ * yazılıyor; bu yüzden en son satırın bu görüşme olup olmadığına bakılır.
+ *
+ * [onceki]: telefon açıldığı anda arama kaydındaki son satırın zamanı. Ondan
+ * sonra eklenen ilk satır kesinlikle bu görüşmedir. Eskiden saatlere göre
+ * tahmin ediliyordu (bitiş açılış anından sonra mı); gelen aramada kayıt
+ * çalmaya başladığı anı tuttuğu için uzun çalıp kısa konuşulan görüşme
+ * "bu değil" sayılıyor, kart numarasız ve WhatsApp/Tanıtım pasif kalıyordu
+ * (kullanıcı 2026-11-26 ekran görüntüsü).
+ * [onceki] < 0 ise (açılışta okunamadı) gevşek zaman penceresi: en çok 2 dk çalma.
  */
-fun bitenArama(c: Context, bas: Long): Arama? {
+fun bitenArama(c: Context, bas: Long, onceki: Long): Arama? {
     val a = sonAramalar(c, 1).firstOrNull() ?: return null
-    val bu = a.zaman >= bas - 3_000 || a.zaman + a.sure * 1000 > bas + 1_000
+    val bu = if (onceki >= 0) a.zaman > onceki else a.zaman >= bas - 120_000
     return if (bu) a else null
 }
 
