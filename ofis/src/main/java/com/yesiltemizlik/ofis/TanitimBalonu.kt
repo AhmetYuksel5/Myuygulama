@@ -80,9 +80,48 @@ object TanitimBalonu {
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT),
         )
 
+        // Katalog seçenekleri: "Referanslar"a basınca kutunun yerine açılır.
+        val secenekler = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor(0xFF1F6B3A.toInt())
+            }
+            elevation = dp(8).toFloat()
+        }
+        Tanitim.doluGruplar(app).forEach { g ->
+            secenekler.addView(
+                TextView(app).apply {
+                    text = g.ad
+                    setTextColor(0xFF0B2E17.toInt())
+                    textSize = 14f
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                    minHeight = dp(44)
+                    setPadding(dp(16), 0, dp(16), 0)
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(0xFFD6EEDC.toInt())
+                    }
+                    setOnClickListener { gonder(app, tel, g.anahtar) }
+                },
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(0, dp(4), 0, dp(4))
+                },
+            )
+        }
+
         // Köşede küçük ×: balonu kapatır. Kutunun dışına taşsın diye dış çerçeve
         // biraz boşluklu; × çerçevenin sağ üst köşesinde.
         val cerceve = FrameLayout(app)
+        cerceve.addView(
+            secenekler,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(dp(10), dp(10), dp(10), dp(10))
+            },
+        )
         cerceve.addView(
             kutu,
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -118,9 +157,11 @@ object TanitimBalonu {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = dp(16)
-            y = dp(140)
+            // Ekranın ortası, alt yarı (kullanıcı 2026-11-26: "çok yukarıda kalmış"):
+            // alttan ekran boyunun ~%22'si; WhatsApp'ın yazı satırının üstünde kalır.
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            x = 0
+            y = (app.resources.displayMetrics.heightPixels * 0.22f).toInt()
         }
 
         // Dokunma: kısa basış gönderir, sürükleme taşır, uzun basış kapatır.
@@ -155,9 +196,9 @@ object TanitimBalonu {
                         ana.removeCallbacks(uzun)
                     }
                     if (tasindi) {
-                        // Sağdan ölçülüyor (Gravity.END): sağa çekmek x'i azaltır.
-                        lp.x = ilkX - dx.toInt()
-                        lp.y = (ilkY + dy.toInt()).coerceAtLeast(0)
+                        // Ortadan ve alttan ölçülüyor: aşağı çekmek y'yi azaltır.
+                        lp.x = ilkX + dx.toInt()
+                        lp.y = (ilkY - dy.toInt()).coerceAtLeast(0)
                         try {
                             wm.updateViewLayout(cerceve, lp)
                         } catch (_: Exception) {
@@ -167,9 +208,17 @@ object TanitimBalonu {
                 MotionEvent.ACTION_UP -> {
                     ana.removeCallbacks(uzun)
                     if (!tasindi && !uzunOldu) {
-                        kaldir(app)
-                        if (!Tanitim.dosyaGonder(app, tel)) {
-                            Toast.makeText(app, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
+                        val gruplar = Tanitim.doluGruplar(app)
+                        if (gruplar.size == 1) {
+                            gonder(app, tel, gruplar[0].anahtar)
+                        } else {
+                            // Birden çok katalog: balon seçeneklere açılır.
+                            kutu.visibility = View.GONE
+                            secenekler.visibility = View.VISIBLE
+                            try {
+                                wm.updateViewLayout(cerceve, lp)
+                            } catch (_: Exception) {
+                            }
                         }
                     }
                 }
@@ -185,6 +234,13 @@ object TanitimBalonu {
             true
         } catch (e: Exception) {
             false
+        }
+    }
+
+    private fun gonder(app: Context, tel: String, grup: String) {
+        kaldir(app)
+        if (!Tanitim.dosyaGonder(app, tel, grup)) {
+            Toast.makeText(app, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
         }
     }
 

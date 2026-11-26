@@ -32,15 +32,55 @@ object Tanitim {
     fun mesajYaz(c: Context, m: String) =
         c.getSharedPreferences("ofis", Context.MODE_PRIVATE).edit().putString("waMesaj", m).apply()
 
-    /** Eklenme sırasıyla (dosya adının önündeki sıra numarası). */
+    /**
+     * Kataloglar (kullanıcı 2026-11-26): kartta / balonda "Referanslar"a basınca
+     * hangisinin gideceği seçilir. "genel" eski düzende eklenmiş dosyalar.
+     * Uygulamayla gelen katalog PDF'leri `assets/katalog/<anahtar>.pdf`; ilk
+     * açılışta bir kez kopyalanır, silinirse geri gelmez.
+     */
+    data class Grup(val anahtar: String, val ad: String, val gomulu: String? = null)
+
+    val GRUPLAR = listOf(
+        Grup("ofis", "Ofis tanıtım", "Yesil Temizlik - Ofis Temizligi.pdf"),
+        Grup("bos", "Boş daire temizliği", "Yesil Temizlik - Bos Daire Temizligi.pdf"),
+        Grup("insaat", "İnşaat sonrası", "Yesil Temizlik - Insaat Sonrasi Temizlik.pdf"),
+        Grup("genel", "Diğer"),
+    )
+
+    private fun grupKlasoru(c: Context, g: String) =
+        if (g == "genel") klasor(c) else File(klasor(c), "k_$g").apply { mkdirs() }
+
+    private fun gomululeriKopyala(c: Context) {
+        val p = c.getSharedPreferences("ofis", Context.MODE_PRIVATE)
+        for (g in GRUPLAR) {
+            val ad = g.gomulu ?: continue
+            if (p.getBoolean("gomulu_${g.anahtar}", false)) continue
+            try {
+                c.assets.open("katalog/${g.anahtar}.pdf").use { giris ->
+                    val d = File(grupKlasoru(c, g.anahtar), "0000000000000").apply { mkdirs() }
+                    File(d, ad).outputStream().use { giris.copyTo(it) }
+                }
+                p.edit().putBoolean("gomulu_${g.anahtar}", true).apply()
+            } catch (_: Exception) {
+                // Bu sürümde gömülü katalog yok; sonraki sürümde gelirse kopyalanır.
+            }
+        }
+    }
+
+    /** İçinde dosya olan gruplar, sırasıyla. */
+    fun doluGruplar(c: Context): List<Grup> = GRUPLAR.filter { dosyalar(c, it.anahtar).isNotEmpty() }
+
+    fun dosyalar(c: Context): List<File> = GRUPLAR.flatMap { dosyalar(c, it.anahtar) }
+
     /**
      * Her dosya kendi klasöründe (klasör adı = eklenme anı, sıra için): WhatsApp
      * belgeyi dosya adıyla gösteriyor, adın önünde sıra numarası durmasın.
      * Eski düzende (önekli, düz klasörde) eklenmiş dosyalar burada taşınır.
      */
-    fun dosyalar(c: Context): List<File> {
-        val k = klasor(c)
-        (k.listFiles() ?: emptyArray()).filter { it.isFile }.forEach { eski ->
+    fun dosyalar(c: Context, grup: String): List<File> {
+        gomululeriKopyala(c)
+        val k = grupKlasoru(c, grup)
+        if (grup == "genel") (k.listFiles() ?: emptyArray()).filter { it.isFile }.forEach { eski ->
             val sira = eski.name.substringBefore('_', "")
             val ad = eski.name.substringAfter('_')
             if (sira.isNotEmpty()) {
@@ -48,7 +88,7 @@ object Tanitim {
                 eski.renameTo(File(yeniKlasor, ad))
             }
         }
-        return (k.listFiles() ?: emptyArray()).filter { it.isDirectory }.sortedBy { it.name }
+        return (k.listFiles() ?: emptyArray()).filter { it.isDirectory && !it.name.startsWith("k_") }.sortedBy { it.name }
             .mapNotNull { d -> d.listFiles()?.firstOrNull { it.isFile } }
     }
 
@@ -72,13 +112,13 @@ object Tanitim {
      * Seçilen dosyayı uygulamanın kendi klasörüne kopyalar: telefondaki asıl
      * dosya taşınsa ya da silinse de tanıtım bozulmasın.
      */
-    fun ekle(c: Context, uri: Uri): Boolean = try {
+    fun ekle(c: Context, uri: Uri, grup: String): Boolean = try {
         var ad = "dosya"
         c.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
             if (it.moveToFirst()) ad = it.getString(0) ?: ad
         }
         ad = temizle(ad).ifEmpty { "dosya" }
-        val hedef = File(File(klasor(c), "%013d".format(System.currentTimeMillis())).apply { mkdirs() }, ad)
+        val hedef = File(File(grupKlasoru(c, grup), "%013d".format(System.currentTimeMillis())).apply { mkdirs() }, ad)
         c.contentResolver.openInputStream(uri)?.use { g -> hedef.outputStream().use { g.copyTo(it) } }
         hedef.exists() && hedef.length() > 0
     } catch (e: Exception) {
@@ -114,9 +154,9 @@ object Tanitim {
      * olmayan ama yıllardır çalışan eki: kişi seçme ekranını atlatıp doğrudan
      * sohbete düşürür. Tanımazsa kişi seçme ekranı çıkar.
      */
-    fun dosyaGonder(c: Context, tel: String): Boolean {
+    fun dosyaGonder(c: Context, tel: String, grup: String): Boolean {
         val n = waNumara(tel)
-        val dosya = dosyalar(c)
+        val dosya = dosyalar(c, grup)
         if (n.length < 10 || dosya.isEmpty()) return false
         val urler = ArrayList(dosya.map { FileProvider.getUriForFile(c, "${c.packageName}.dosyalar", it) })
         val turler = dosya.map { tur(it) }

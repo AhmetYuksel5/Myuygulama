@@ -474,12 +474,15 @@ private fun IzinListesi(tur: Int) {
 private fun TanitimAyari() {
     val ctx = LocalContext.current
     var mesaj by remember { mutableStateOf(Tanitim.mesaj(ctx)) }
-    var dosyalar by remember { mutableStateOf(Tanitim.dosyalar(ctx)) }
+    // Katalog başına dosyalar; "Diğer" yalnız içinde dosya varsa görünür.
+    fun oku() = Tanitim.GRUPLAR.associate { it.anahtar to Tanitim.dosyalar(ctx, it.anahtar) }
+    var dosyalar by remember { mutableStateOf(oku()) }
     var silinecek by remember { mutableStateOf<java.io.File?>(null) }
+    var eklenecekGrup by remember { mutableStateOf("ofis") }
     val sec = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { urler ->
-        val olmayan = urler.count { !Tanitim.ekle(ctx, it) }
+        val olmayan = urler.count { !Tanitim.ekle(ctx, it, eklenecekGrup) }
         if (olmayan > 0) Toast.makeText(ctx, "$olmayan dosya eklenemedi", Toast.LENGTH_SHORT).show()
-        dosyalar = Tanitim.dosyalar(ctx)
+        dosyalar = oku()
     }
     // Dosyaya dokununca: adını değiştir ya da kaldır. Uzantı korunur.
     silinecek?.let { f ->
@@ -500,7 +503,7 @@ private fun TanitimAyari() {
             confirmButton = {
                 Button(onClick = {
                     Tanitim.yenidenAdlandir(f, yeniAd)
-                    dosyalar = Tanitim.dosyalar(ctx)
+                    dosyalar = oku()
                     silinecek = null
                 }) { Text("Kaydet") }
             },
@@ -508,7 +511,7 @@ private fun TanitimAyari() {
                 Row {
                     TextButton(onClick = {
                         Tanitim.sil(f)
-                        dosyalar = Tanitim.dosyalar(ctx)
+                        dosyalar = oku()
                         silinecek = null
                     }) { Text("Kaldır", color = MaterialTheme.colorScheme.error) }
                     TextButton(onClick = { silinecek = null }) { Text("Vazgeç") }
@@ -528,18 +531,32 @@ private fun TanitimAyari() {
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
-        dosyalar.forEach { f ->
-            Text(
-                Tanitim.ad(f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { silinecek = f }
-                    .padding(vertical = 10.dp, horizontal = 4.dp),
-            )
-        }
-        OutlinedButton(onClick = { sec.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Dosya ekle")
+        Tanitim.GRUPLAR.forEach { g ->
+            val liste = dosyalar[g.anahtar].orEmpty()
+            if (g.anahtar == "genel" && liste.isEmpty()) return@forEach
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                Text(
+                    g.ad,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = {
+                    eklenecekGrup = g.anahtar
+                    sec.launch(arrayOf("*/*"))
+                }) { Text("Dosya ekle") }
+            }
+            liste.forEach { f ->
+                Text(
+                    Tanitim.ad(f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { silinecek = f }
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                )
+            }
         }
     }
 }

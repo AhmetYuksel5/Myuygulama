@@ -214,6 +214,7 @@ private fun Kart(
     var ara by remember { mutableStateOf("") }
     var engelSor by remember { mutableStateOf(false) }
     var tanitimAsama by remember { mutableIntStateOf(0) }
+    var katalogSor by remember { mutableStateOf(false) }
 
     LaunchedEffect(bas) {
         if (deneme || verilen != null) return@LaunchedEffect
@@ -375,6 +376,32 @@ private fun Kart(
                     onUzun = if (numaraAnahtari(arama?.tel ?: "").isNotEmpty()) ({ engelSor = true }) else null,
                 )
             }
+            if (katalogSor) {
+                val tel = arama?.tel ?: ""
+                AlertDialog(
+                    onDismissRequest = { katalogSor = false },
+                    title = { Text("Hangi katalog?") },
+                    text = {
+                        Column {
+                            Tanitim.doluGruplar(ctx).forEach { g ->
+                                TextButton(
+                                    onClick = {
+                                        katalogSor = false
+                                        if (Tanitim.dosyaGonder(ctx, tel, g.anahtar)) {
+                                            tanitimAsama = 0
+                                        } else {
+                                            Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(g.ad) }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = { TextButton(onClick = { katalogSor = false }) { Text("Vazgeç") } },
+                )
+            }
             if (engelSor) {
                 val tel = arama?.tel ?: ""
                 AlertDialog(
@@ -416,7 +443,8 @@ private fun Kart(
                             if (!whatsappAc(ctx, tel)) Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
                         }
                         // Aşamalı: önce selam yazısı, WhatsApp'tan dönünce dosyalar.
-                        val dosyaVar = remember { Tanitim.dosyalar(ctx).isNotEmpty() }
+                        val gruplar = remember { Tanitim.doluGruplar(ctx) }
+                        val dosyaVar = gruplar.isNotEmpty()
                         val ikinci = tanitimAsama == 1
                         BuyukSecim(
                             when {
@@ -428,7 +456,15 @@ private fun Kart(
                             if (ikinci) renk.onPrimary else renk.onTertiaryContainer,
                             Modifier.weight(1f), etkin = numaraVar,
                         ) {
-                            val tamam = if (ikinci) Tanitim.dosyaGonder(ctx, tel) else Tanitim.yaziGonder(ctx, tel)
+                            if (ikinci && gruplar.size > 1) {
+                                katalogSor = true
+                                return@BuyukSecim
+                            }
+                            val tamam = if (ikinci) {
+                                Tanitim.dosyaGonder(ctx, tel, gruplar.firstOrNull()?.anahtar ?: "genel")
+                            } else {
+                                Tanitim.yaziGonder(ctx, tel)
+                            }
                             if (!tamam) {
                                 Toast.makeText(ctx, "WhatsApp açılamadı", Toast.LENGTH_SHORT).show()
                             } else if (!ikinci && dosyaVar) {

@@ -185,6 +185,18 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   taşınır). FileProvider `tanitim/`. Ayarlar'da dosyaya dokununca pencere:
   ad kutusu (uzantı korunur) + Kaydet / Kaldır / Vazgeç (kullanıcı 2026-11-26).
   Paneldeki WhatsApp botu bu işe karışmaz (kullanıcı: "onu karıştırma").
+- Kataloglar (kullanıcı 2026-11-26): tanıtım dosyaları gruplu —
+  `Tanitim.GRUPLAR`: ofis "Ofis tanıtım", bos "Boş daire temizliği", insaat
+  "İnşaat sonrası", genel "Diğer" (eski düzende eklenenler; boşsa gizli).
+  Klasör `tanitim/k_<anahtar>/<sıra>/<ad>`, genel kökte. Uygulamayla gelen
+  katalog `assets/katalog/<anahtar>.pdf` ilk açılışta bir kez kopyalanır
+  (`gomulu_<anahtar>` bayrağı; silinirse geri gelmez). Referanslar balonu
+  orta-alt (`Gravity.BOTTOM|CENTER_HORIZONTAL`, alttan ekranın %22'si);
+  birden çok dolu katalog varsa basınca seçeneklere açılır, tek katalogda
+  doğrudan gönderir. Balon izni yoksa kartta "Referanslar" → "Hangi
+  katalog?" penceresi. Katalog PDF'lerinin kaynağı: scratchpad'de HTML →
+  Chromium PDF (2 sayfa: kapsam + fiyat teklifi şablonunun "Referanslar"
+  sayfasındaki yıllık sözleşmeli liste, yalnız kurum + ilçe).
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana
