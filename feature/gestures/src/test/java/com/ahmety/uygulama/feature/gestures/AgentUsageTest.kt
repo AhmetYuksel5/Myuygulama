@@ -47,3 +47,22 @@ class BankLockTest {
             .forEach { assertFalse("$it", BankAccess.isMoneyButton(it)) }
     }
 }
+
+class PlanPromptTest {
+    @Test
+    fun `plan adim isteminde gorunuyor`() {
+        val snapshot = ScreenSnapshot(
+            width = 1080, height = 2400, packageName = "com.whatsapp", keyboardOpen = false,
+            treeText = "#1 [540,200] click \"Ara\"", nodeCount = 1, signature = "x", sensitive = false,
+        )
+        val prompt = AgentProtocol.buildStepPrompt(
+            goal = "Ayşe'ye yoldayım yaz",
+            step = 1,
+            maxSteps = 20,
+            snapshot = snapshot,
+            plan = listOf("Arama kutusuna Ayşe yaz", "Sohbeti aç"),
+        )
+        assertTrue(prompt.contains("1. Arama kutusuna Ayşe yaz"))
+        assertTrue(prompt.contains("2. Sohbeti aç"))
+    }
+}

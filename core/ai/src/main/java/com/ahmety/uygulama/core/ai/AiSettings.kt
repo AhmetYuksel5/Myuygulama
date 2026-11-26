@@ -108,7 +108,12 @@ class AiSettings @Inject constructor(
         prefs.edit().remove(KEY_CLAUDE_API).apply()
     }
 
-    /** Ekran ajanında Haiku takılınca birkaç adımlığına Opus devralsın mı. */
+    /** Ekran ajanında turun başında Opus adım planı yazsın mı; uygulayan seçili model. */
+    var claudePlanner: Boolean
+        get() = prefs.getBoolean(KEY_CLAUDE_PLANNER, true)
+        set(value) = prefs.edit().putBoolean(KEY_CLAUDE_PLANNER, value).apply()
+
+    /** Ekran ajanında Haiku takılınca Sonnet, o da takılınca Opus devralsın mı. */
     var claudeEscalate: Boolean
         get() = prefs.getBoolean(KEY_CLAUDE_ESCALATE, true)
         set(value) = prefs.edit().putBoolean(KEY_CLAUDE_ESCALATE, value).apply()
@@ -185,6 +190,7 @@ class AiSettings @Inject constructor(
         const val KEY_CLAUDE_MODEL = "claude_model"
         const val KEY_AGENT_PROVIDER = "agent_provider"
         const val KEY_CLAUDE_ESCALATE = "claude_escalate"
+        const val KEY_CLAUDE_PLANNER = "claude_planner"
         private const val KEY_HAIKU_MIGRATED = "claude_haiku_migrated"
     }
 }

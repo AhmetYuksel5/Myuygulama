@@ -71,6 +71,8 @@ class AiSettingsViewModel @Inject constructor(
     }
     val claudeModels: List<String> get() = AiSettings.CLAUDE_MODELS
 
+    fun claudePlanner(): Boolean = settings.claudePlanner
+    fun saveClaudePlanner(value: Boolean) { settings.claudePlanner = value }
     fun claudeEscalate(): Boolean = settings.claudeEscalate
     fun saveClaudeEscalate(value: Boolean) { settings.claudeEscalate = value }
     fun agentUsage(): List<AgentUsageRow> = settings.agentUsage()
@@ -189,13 +191,31 @@ fun AiSettingsScreen(
             onSaveModel = { viewModel.saveClaudeModel(it) },
         )
 
+        var planner by remember { mutableStateOf(viewModel.claudePlanner()) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f)) {
+                Text("Opus planlasın", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Her turun başında Opus ekrana bir kez bakıp adım planı yazar; seçili model " +
+                        "(Haiku) bu plana göre dokunur. Tur başına bir Opus çağrısı (~0,03 $).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = planner, onCheckedChange = {
+                planner = it
+                viewModel.saveClaudePlanner(it)
+            })
+        }
+
         var escalate by remember { mutableStateOf(viewModel.claudeEscalate()) }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
-                Text("Takılınca Opus devralsın", style = MaterialTheme.typography.bodyLarge)
+                Text("Takılınca güçlü model devralsın", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Ekran ajanı Haiku ile çalışır; ekran değişmez, aynı hareketi tekrarlar ya da " +
-                        "anlamsız yanıt verirse 3 adım Opus 5.5 devreye girer (turda en çok 5 adım).",
+                    "Haiku takılırsa (ekran değişmez, aynı hareketi tekrarlar, anlamsız yanıt verir) " +
+                        "Sonnet en az 4 adım devralır; o da takılırsa Opus en az 3 adım. Sonra birer " +
+                        "basamak iner. Turda en çok Sonnet 10, Opus 5 adım.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -903,6 +903,11 @@ internal object ScreenAgent {
         val recentMoves = ArrayDeque<String>()
 
         try {
+            if (config.provider == PROVIDER_CLAUDE && config.planner &&
+                !config.claudeModel.contains("opus") && (session.plan.isEmpty() || resumed)
+            ) {
+                makePlan(service, sessionId, session, config)
+            }
             for (localStep in 1..MAX_STEPS_PER_RUN) {
                 if (!isAlive(sessionId)) return
                 val displayStep = session.totalSteps + 1
@@ -1017,6 +1022,7 @@ internal object ScreenAgent {
                         java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE HH:mm", java.util.Locale.forLanguageTag("tr")),
                     ),
                     scheduledRun = session.scheduledRun,
+                    plan = session.plan,
                 ) + if (snapshot.bank) BANK_NOTE else ""
 
                 val callStart = System.currentTimeMillis()
@@ -1255,6 +1261,44 @@ internal object ScreenAgent {
      * Takılınca güçlü modele geçiş. Turdaki Opus adımı sınırı dolduysa ajan
      * durup soruyor: pahalı model sessizce para yakmasın. false: tur bitti.
      */
+    /**
+     * Turun başında Opus bir kez ekrana bakıp adım planı yazıyor. Haiku'nun
+     * en zayıf yanı "ne yapmalıyım" kararı; plan ona kalmayınca yalnız
+     * "şu yazılı düğmeye bas" kısmını yapıyor. Plan alınamazsa ajan plansız
+     * devam ediyor.
+     */
+    private fun makePlan(
+        service: AccessibilityService,
+        sessionId: Int,
+        session: AgentSession,
+        config: AgentConfig,
+    ) {
+        updateStopPill("${session.totalSteps + 1} · Opus planlıyor…")
+        val snapshot = onMainBlocking { readScreen(service) } ?: return
+        if (snapshot.sensitive || !isAlive(sessionId)) return
+        val prompt = AgentProtocol.buildStepPrompt(
+            goal = session.goal,
+            step = 1,
+            maxSteps = MAX_STEPS_PER_RUN,
+            snapshot = snapshot,
+            stateSummary = session.stateSummary,
+            userNotes = session.userNotes,
+            history = session.history,
+            now = java.time.LocalDateTime.now().format(
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE HH:mm", java.util.Locale.forLanguageTag("tr")),
+            ),
+            scheduledRun = session.scheduledRun,
+        )
+        val raw = runCatching {
+            callClaude(service, session, config.claudeKey, ESCALATION_MODEL, PLANNER_PROMPT, prompt, null)
+        }.getOrNull() ?: return
+        val plan = AgentProtocol.parsePlan(raw)
+        if (plan.isNotEmpty()) {
+            session.plan = plan
+            AgentLog.add(session, "Plan (Opus · ${session.lastCall}):\n" + plan.mapIndexed { i, s -> "   ${i + 1}. $s" }.joinToString("\n"))
+        }
+    }
+
     private fun escalate(
         service: AccessibilityService,
         sessionId: Int,
@@ -1263,8 +1307,9 @@ internal object ScreenAgent {
         reason: String,
     ): Boolean {
         if (ladder.escalate()) {
-            session.history += "Takıldı ($reason): birkaç adım ${modelLabel(PROVIDER_CLAUDE, ESCALATION_MODEL)} devralıyor."
-            AgentLog.add(session, "↑ Opus devralıyor: $reason")
+            val who = modelLabel(PROVIDER_CLAUDE, ladder.modelForStep())
+            session.history += "Takıldı ($reason): birkaç adım $who devralıyor."
+            AgentLog.add(session, "↑ $who devralıyor: $reason")
             while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
             return true
         }
@@ -1275,7 +1320,8 @@ internal object ScreenAgent {
             session,
             AgentOutcome(
                 kind = OutcomeKind.STOPPED,
-                message = "Takıldım ($reason) ve güçlü modelin bu turdaki $MAX_ESCALATED_STEPS adımlık sınırı doldu. " +
+                message = "Takıldım ($reason) ve güçlü modellerin bu turdaki sınırı doldu " +
+                    "(Opus $MAX_OPUS_STEPS, Sonnet $MAX_SONNET_STEPS adım). " +
                     "Yön göstermek için bir şey yazabilir ya da \"Devam et\" diyebilirsin.",
             ),
         )
@@ -1283,35 +1329,64 @@ internal object ScreenAgent {
     }
 
     /**
-     * Adım başına hangi modelin çalışacağı. Normalde seçili Claude modeli
-     * (varsayılan Haiku 5.5); takılınca [ESCALATED_RUN] adım Opus 5.5, sonra
-     * geri. Bir turda en fazla [MAX_ESCALATED_STEPS] Opus adımı. Her adım ayrı
-     * bir istek olduğu için model değiştirmek önceki adımları bozmuyor.
+     * Adım başına hangi modelin çalışacağı: Haiku → Sonnet → Opus merdiveni.
+     *
+     * Takılınca bir basamak çıkılıyor; devralan model en az birkaç adım işi
+     * tutuyor ([HOLD_SONNET] / [HOLD_OPUS]), sonra yine birer basamak iniliyor.
+     * Her adımda modeller arasında gidip gelmek hem karar tutarlılığını bozuyor
+     * hem de önbelleği boşa çıkarıyordu (önbellek modele özel). Turda Opus ve
+     * Sonnet adımları ayrı sınırlı; sınır dolunca ajan durup soruyor.
      */
     private class ModelLadder(config: AgentConfig, forceSmart: Boolean) {
-        private val base = config.claudeModel
-        val canEscalateAtAll = config.provider == PROVIDER_CLAUDE &&
-            config.escalate && !base.contains("opus")
-        private var remaining = 0
-        private var used = 0
+        private val tiers: List<String> = when {
+            config.provider != PROVIDER_CLAUDE || !config.escalate -> listOf(config.claudeModel)
+            config.claudeModel.contains("opus") -> listOf(config.claudeModel)
+            config.claudeModel.contains("sonnet") -> listOf(config.claudeModel, ESCALATION_MODEL)
+            else -> listOf(config.claudeModel, SONNET_MODEL, ESCALATION_MODEL)
+        }
+        val canEscalateAtAll = tiers.size > 1
+        private var level = 0
+        private var hold = 0
+        private var opusUsed = 0
+        private var sonnetUsed = 0
 
         init {
-            if (forceSmart && canEscalateAtAll) remaining = ESCALATED_RUN
-        }
-
-        fun modelForStep(): String = if (remaining > 0) ESCALATION_MODEL else base
-
-        fun stepDone() {
-            if (remaining > 0) {
-                remaining--
-                used++
+            if (forceSmart && canEscalateAtAll) {
+                level = tiers.lastIndex
+                hold = HOLD_OPUS
             }
         }
 
-        /** Opus'a geç; sınır dolduysa ya da geçiş kapalıysa false. */
+        fun modelForStep(): String = tiers[level]
+
+        private fun budgetLeft(model: String): Boolean = when {
+            model.contains("opus") -> opusUsed < MAX_OPUS_STEPS
+            model.contains("sonnet") && model == SONNET_MODEL -> sonnetUsed < MAX_SONNET_STEPS
+            else -> true
+        }
+
+        private fun holdFor(model: String) = if (model.contains("opus")) HOLD_OPUS else HOLD_SONNET
+
+        fun stepDone() {
+            val model = tiers[level]
+            if (level == 0) return
+            if (model.contains("opus")) opusUsed++ else sonnetUsed++
+            hold--
+            // Süre doldu ya da bu basamağın sınırı bitti: bir basamak in.
+            while (level > 0 && (hold <= 0 || !budgetLeft(tiers[level]))) {
+                level--
+                hold = if (level > 0) holdFor(tiers[level]) else 0
+            }
+        }
+
+        /** Bir basamak çık (en üstteysek orada süreyi tazele); sınırlar doluysa false. */
         fun escalate(): Boolean {
-            if (!canEscalateAtAll || used >= MAX_ESCALATED_STEPS) return false
-            remaining = minOf(ESCALATED_RUN, MAX_ESCALATED_STEPS - used)
+            if (!canEscalateAtAll) return false
+            var next = minOf(level + 1, tiers.lastIndex)
+            while (next > 0 && !budgetLeft(tiers[next])) next--
+            if (next == 0 || next < level) return false
+            level = next
+            hold = holdFor(tiers[next])
             return true
         }
     }
@@ -2011,8 +2086,10 @@ internal object ScreenAgent {
         val geminiModel: String,
         val claudeKey: String,
         val claudeModel: String,
-        /** Takılınca Opus'a geçilsin mi (Yapay zekâ ayarları). */
+        /** Takılınca güçlü modele geçilsin mi (Yapay zekâ ayarları). */
         val escalate: Boolean,
+        /** Turun başında Opus plan yazsın mı (Yapay zekâ ayarları). */
+        val planner: Boolean,
     ) {
         val hasAnyKey: Boolean get() = geminiKey.isNotBlank() || claudeKey.isNotBlank()
     }
@@ -2038,6 +2115,7 @@ internal object ScreenAgent {
             claudeModel = prefs.getString(KEY_CLAUDE_MODEL, null)?.trim()
                 ?.takeIf { it.isNotBlank() } ?: DEFAULT_CLAUDE_MODEL,
             escalate = prefs.getBoolean(KEY_CLAUDE_ESCALATE, true),
+            planner = prefs.getBoolean(KEY_CLAUDE_PLANNER, true),
         )
     }
 
@@ -2375,13 +2453,24 @@ internal object ScreenAgent {
     private const val PROVIDER_CLAUDE = "claude"
     private const val DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
     private const val KEY_CLAUDE_ESCALATE = "claude_escalate"
+    private const val KEY_CLAUDE_PLANNER = "claude_planner"
     private const val KEY_HAIKU_MIGRATED = "claude_haiku_migrated"
     private const val DEFAULT_CLAUDE_MODEL = "claude-haiku-5-5"
 
     /** Takılınca devralan model ve sınırları. */
     private const val ESCALATION_MODEL = "claude-opus-5-5"
-    private const val ESCALATED_RUN = 3
-    private const val MAX_ESCALATED_STEPS = 5
+    private const val SONNET_MODEL = "claude-sonnet-5-5"
+    private const val HOLD_SONNET = 4
+    private const val HOLD_OPUS = 3
+    private const val MAX_OPUS_STEPS = 5
+    private const val MAX_SONNET_STEPS = 10
+
+    /** Planlayıcının yönergesi: Opus turun başında bir kez plan yazıyor, uygulayan küçük model. */
+    private const val PLANNER_PROMPT = "Sen bir Android ekran ajanının planlayıcısısın. Sana görev, ekran ve " +
+        "görünür öğeler verilir. Görevi bu ekrandan başlayarak en fazla 8 kısa, somut adıma böl " +
+        "(hangi uygulama, hangi düğme ya da kutu, ne yazılacak). Belirsiz bir nokta varsa adımda " +
+        "\"kullanıcıya sor\" de. Görev ileri bir saate zamanlanmak isteniyorsa boş plan ver. " +
+        "Yalnız şu JSON'u döndür: {\"plan\": [\"adım 1\", \"adım 2\"]}"
     private const val INVALID_LIMIT = 2
     private const val STUCK_LIMIT = 2
     private const val MAX_WALK = 800
@@ -2457,6 +2546,8 @@ internal data class AgentSession(
     var lastOutcome: AgentOutcome? = null,
     /** Zamanlayıcıyla başlayan görev: yeniden zamanlanmıyor, bitince bildirim düşüyor. */
     val scheduledRun: Boolean = false,
+    /** Opus'un turun başında yazdığı adım planı; uygulayan model her adımda görüyor. */
+    var plan: List<String> = emptyList(),
     /** "Daha akıllı dene": sonraki tur Opus ile başlasın. */
     var forceSmart: Boolean = false,
     /** Bu görevde model başına adım sayısı ve yaklaşık dolar; kartta gösteriliyor. */
@@ -2570,11 +2661,16 @@ Kurallar:
         sameScreen: Boolean = false,
         now: String = "",
         scheduledRun: Boolean = false,
+        plan: List<String> = emptyList(),
     ): String = buildString {
         if (now.isNotBlank()) append("Şu an: ").append(now).append('\n')
         append("Görev: ").append(goal).append('\n')
         if (scheduledRun) {
             append("Bu görev zamanlayıcıyla şimdi başladı: zamanlama yapma, görevi şimdi uygula.\n")
+        }
+        if (plan.isNotEmpty()) {
+            append("Planlayıcının planı (durum özetine bakıp sıradaki adımı uygula; ekran plandan farklıysa ekrana göre davran):\n")
+            plan.forEachIndexed { i, step -> append(i + 1).append(". ").append(step).append('\n') }
         }
         if (stateSummary.isNotBlank()) {
             append("Mevcut durum özeti: ").append(stateSummary).append('\n')
@@ -2602,6 +2698,13 @@ Kurallar:
         } else {
             append(snapshot.treeText).append('\n')
         }
+    }
+
+    /** Planlayıcının cevabından adım listesi; okunamazsa boş. */
+    fun parsePlan(raw: String): List<String> {
+        val jsonText = extractJsonObject(raw) ?: return emptyList()
+        val arr = runCatching { JSONObject(jsonText).optJSONArray("plan") }.getOrNull() ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { arr.optString(it).trim().takeIf { s -> s.isNotEmpty() } }.take(8)
     }
 
     /** Modelin döndürdüğü ham metinden JSON eylemini çıkarır. */
