@@ -585,6 +585,16 @@ internal object ScreenAgent {
                 },
             )
         }
+        // Günlük: ne olduğunu birlikte konuşabilmek için tek dokunuşla panoya.
+        if (session.log.isNotEmpty()) {
+            actionRow.addView(
+                optionChip(service, "Günlüğü kopyala", d, accent = false) {
+                    val cm = service.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    cm?.setPrimaryClip(ClipData.newPlainText("Ajan günlüğü", AgentLog.text(session)))
+                    toast(service, "Günlük kopyalandı")
+                },
+            )
+        }
         // Haiku takıldıysa ya da yanlış yoldaysa: sonraki tur Opus ile başlasın.
         val cfgNow = loadConfig(service)
         if (session.provider == PROVIDER_CLAUDE && cfgNow.escalate &&
@@ -811,6 +821,14 @@ internal object ScreenAgent {
         running = true
         val startStep = session.totalSteps + 1
         showStopPill(service, "$startStep · Ekran okunuyor…")
+        val model = if (config.provider == PROVIDER_CLAUDE) config.claudeModel else config.geminiModel
+        AgentLog.add(
+            session,
+            "── ${AgentLog.clock()} · ${if (resumed) "devam" else "yeni görev"} · $model" +
+                (if (config.provider == PROVIDER_CLAUDE && config.escalate) " (takılınca Opus)" else "") +
+                (if (session.alwaysScreenshot) " · her adım görüntü" else ""),
+        )
+        if (!resumed) AgentLog.add(session, "Görev: ${session.goal.take(200)}")
 
         Thread {
             runLoop(service, sessionId, session, config, resumed)
@@ -941,6 +959,7 @@ internal object ScreenAgent {
                     sameScreen = sameScreen,
                 )
 
+                val callStart = System.currentTimeMillis()
                 val rawReply = callModel(
                     service,
                     session,
@@ -951,10 +970,16 @@ internal object ScreenAgent {
                     screenshotBase64,
                 )
                 ladder.stepDone()
+                val stepHead = "#$displayStep $who · ${snapshot.packageName.substringAfterLast('.')} · " +
+                    "${snapshot.nodeCount} öğe" + (if (screenshotBase64 != null) " · görüntü" else "") +
+                    (if (sameScreen) " · ekran aynı" else "") +
+                    " · ${System.currentTimeMillis() - callStart} ms" +
+                    session.lastCall.let { if (it.isEmpty()) "" else " · $it" }
                 if (!isAlive(sessionId)) return
 
                 val decision = AgentProtocol.parseAction(rawReply)
                 if (decision == null) {
+                    AgentLog.add(session, "$stepHead\n   geçersiz yanıt: ${rawReply.replace('\n', ' ').take(160)}")
                     session.history += "Adım $displayStep: Model geçersiz yanıt verdi, tekrar deneniyor."
                     while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
                     lastActed = false
@@ -970,6 +995,13 @@ internal object ScreenAgent {
 
                 if (decision.state.isNotBlank()) {
                     session.stateSummary = decision.state.take(200)
+                }
+                if (decision.action == "ask" || decision.action == "done" || decision.action == "screenshot") {
+                    AgentLog.add(
+                        session,
+                        stepHead + "\n   " + decision.action +
+                            (if (decision.thought.isNotBlank()) " · ${decision.thought.take(200)}" else ""),
+                    )
                 }
                 session.updatedAtMs = System.currentTimeMillis()
 
@@ -1047,6 +1079,12 @@ internal object ScreenAgent {
                 updateStopPill("$displayStep · $stepLabel")
 
                 val outcomeText = executeAction(service, sessionId, decision, snapshot)
+                AgentLog.add(
+                    session,
+                    stepHead +
+                        (if (decision.thought.isNotBlank()) "\n   düşünce: ${decision.thought.take(200)}" else "") +
+                        "\n   hareket: ${decision.describe().take(140)} → $outcomeText",
+                )
                 lastActed = decision.action != "wait"
                 session.history += "Adım $displayStep · $who: ${decision.describe()} → $outcomeText"
                 while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
@@ -1099,6 +1137,7 @@ internal object ScreenAgent {
     ): Boolean {
         if (ladder.escalate()) {
             session.history += "Takıldı ($reason): birkaç adım ${modelLabel(PROVIDER_CLAUDE, ESCALATION_MODEL)} devralıyor."
+            AgentLog.add(session, "↑ Opus devralıyor: $reason")
             while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
             return true
         }
@@ -1170,6 +1209,12 @@ internal object ScreenAgent {
         session.lastOutcome = outcome
         session.updatedAtMs = System.currentTimeMillis()
         currentSession = session
+        AgentLog.add(
+            session,
+            "Sonuç: ${outcome.kind.name.lowercase()} · ${outcome.message.replace('\n', ' ').take(240)}" +
+                AgentUsage.summary(session).let { if (it.isEmpty()) "" else "\n   $it" },
+        )
+        AgentLog.persist(service, session)
         handler.post {
             hideStopPill(service)
             GestureFeedback.vibrateOnce(service, 25L)
@@ -2236,6 +2281,12 @@ internal data class AgentSession(
     /** Bu görevde model başına adım sayısı ve yaklaşık dolar; kartta gösteriliyor. */
     val modelSteps: MutableMap<String, Int> = linkedMapOf(),
     var costUsd: Double = 0.0,
+    /** Son model çağrısının token ve maliyet notu; günlüğe yazılıyor. */
+    var lastCall: String = "",
+    /** Adım adım çalışma günlüğü; ekranın tam metni girmiyor. */
+    val log: MutableList<String> = mutableListOf(),
+    /** Günlüğün dosyaya yazılmış kısmı. */
+    var loggedUpTo: Int = 0,
     var updatedAtMs: Long = System.currentTimeMillis(),
 )
 

@@ -377,4 +377,38 @@ private fun AgentUsageSection(viewModel: AiSettingsViewModel) {
             rows = emptyList()
         }) { Text("Sayacı sıfırla") }
     }
+    AgentLogSection()
+}
+
+/** Ajanın son turlarının günlüğü: kopyalayıp sohbete yapıştırmak için. */
+@Composable
+private fun AgentLogSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var log by remember { mutableStateOf(com.ahmety.uygulama.feature.gestures.AgentLog.saved(context)) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Ekran ajanı günlüğü", style = MaterialTheme.typography.titleSmall)
+        Text(
+            if (log.isBlank()) {
+                "Henüz kayıt yok. Ajan her turu adım adım buraya yazar."
+            } else {
+                "Son turlar adım adım: model, uygulama, süre, maliyet, düşünce ve hareket. " +
+                    "Ekranın tam yazısı kaydedilmez."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (log.isNotBlank()) {
+            Row {
+                TextButton(onClick = {
+                    val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("Ajan günlüğü", log))
+                    android.widget.Toast.makeText(context, "Günlük kopyalandı", android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text("Günlüğü kopyala") }
+                TextButton(onClick = {
+                    com.ahmety.uygulama.feature.gestures.AgentLog.clear(context)
+                    log = ""
+                }) { Text("Sil") }
+            }
+        }
+    }
 }

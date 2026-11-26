@@ -49,6 +49,9 @@ internal object AgentUsage {
         val output = usage.optLong("output_tokens")
         val p = priceOf(model)
         val usd = (input * p.input + cacheRead * p.cacheRead + cacheWrite * p.cacheWrite + output * p.output) / 1_000_000.0
+        session.lastCall = "${input + cacheRead + cacheWrite}+$output tok" +
+            (if (cacheRead > 0) " (önbellek $cacheRead)" else "") +
+            " ~" + String.format(java.util.Locale.ROOT, "%.4f", usd) + " $"
         add(context, session, label(model), input + cacheRead + cacheWrite, output, usd)
     }
 
@@ -57,6 +60,7 @@ internal object AgentUsage {
         val input = meta.optLong("promptTokenCount")
         val output = meta.optLong("candidatesTokenCount") + meta.optLong("thoughtsTokenCount")
         // Gemini fiyatı burada tutulmuyor: yalnız token sayılıyor.
+        session.lastCall = "$input+$output tok"
         add(context, session, label(model), input, output, 0.0)
     }
 
