@@ -147,6 +147,28 @@ class AiSettings @Inject constructor(
         get() = AgentProvider.fromId(prefs.getString(KEY_AGENT_PROVIDER, null))
         set(value) = prefs.edit().putString(KEY_AGENT_PROVIDER, value.id).apply()
 
+    // ---- Google Drive Apps Script köprüsü (drive_search, drive_read, log, hafıza) ----
+
+    var driveBridgeUrl: String
+        get() = prefs.getString(KEY_DRIVE_BRIDGE_URL, null).orEmpty()
+        set(value) = prefs.edit().putString(KEY_DRIVE_BRIDGE_URL, value.trim()).apply()
+
+    var driveBridgeToken: String
+        get() = prefs.getString(KEY_DRIVE_BRIDGE_TOKEN, null).orEmpty()
+        set(value) = prefs.edit().putString(KEY_DRIVE_BRIDGE_TOKEN, value.trim()).apply()
+
+    val driveBridgeConfigured: Boolean
+        get() = driveBridgeUrl.isNotBlank() && driveBridgeToken.isNotBlank()
+
+    fun maskedDriveToken(): String = mask(driveBridgeToken)
+
+    fun clearDriveBridge() {
+        prefs.edit()
+            .remove(KEY_DRIVE_BRIDGE_URL)
+            .remove(KEY_DRIVE_BRIDGE_TOKEN)
+            .apply()
+    }
+
     private fun mask(key: String): String {
         if (key.isBlank()) return ""
         return if (key.length <= 10) "•".repeat(key.length) else key.take(6) + "…" + key.takeLast(4)
@@ -192,6 +214,8 @@ class AiSettings @Inject constructor(
         const val KEY_CLAUDE_ESCALATE = "claude_escalate"
         const val KEY_CLAUDE_PLANNER = "claude_planner"
         private const val KEY_HAIKU_MIGRATED = "claude_haiku_migrated"
+        const val KEY_DRIVE_BRIDGE_URL = "drive_bridge_url"
+        const val KEY_DRIVE_BRIDGE_TOKEN = "drive_bridge_token"
     }
 }
 

@@ -14,6 +14,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -23,9 +24,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,7 +37,11 @@ import androidx.lifecycle.ViewModel
 import com.ahmety.uygulama.core.ai.AgentProvider
 import com.ahmety.uygulama.core.ai.AiSettings
 import com.ahmety.uygulama.core.ai.AgentUsageRow
+import com.ahmety.uygulama.feature.gestures.ScreenAgentStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -78,6 +86,15 @@ class AiSettingsViewModel @Inject constructor(
     fun agentUsage(): List<AgentUsageRow> = settings.agentUsage()
     fun agentUsageSince(): Long = settings.agentUsageSince()
     fun resetAgentUsage() = settings.resetAgentUsage()
+
+    fun driveBridgeUrl(): String = settings.driveBridgeUrl
+    fun driveBridgeConfigured(): Boolean = settings.driveBridgeConfigured
+    fun maskedDriveToken(): String = settings.maskedDriveToken()
+    fun saveDriveBridge(url: String, token: String) {
+        if (url.isNotBlank()) settings.driveBridgeUrl = url
+        if (token.isNotBlank()) settings.driveBridgeToken = token
+    }
+    fun clearDriveBridge() = settings.clearDriveBridge()
 }
 
 /**
@@ -225,6 +242,12 @@ fun AiSettingsScreen(
                 viewModel.saveClaudeEscalate(it)
             })
         }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        DriveBridgeSection(viewModel)
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        AgentMemorySection()
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AgentScheduleSection()
@@ -529,6 +552,224 @@ private fun AgentScheduleSection() {
                     )
                 }
             }) { Text("Tam saat iznini aç (yoksa birkaç dakika sapabilir)") }
+        }
+    }
+}
+
+/** Google Apps Script köprüsü: arka planda Drive arama, okuma, log ve hafıza eşitleme. */
+@Composable
+private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var urlInput by remember { mutableStateOf(viewModel.driveBridgeUrl()) }
+    var tokenInput by remember { mutableStateOf("") }
+    var configured by remember { mutableStateOf(viewModel.driveBridgeConfigured()) }
+    var maskedToken by remember { mutableStateOf(viewModel.maskedDriveToken()) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Google Drive köprüsü (Apps Script)", style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = "Ekran ajanı Drive dosyalarını ekranda elle aramak yerine arka planda " +
+                "tek adımda bulup okur; günlükleri MerkezAjan/Merkez_Ajan_Log.md dosyasına " +
+                "otomatik yazar ve merdiven metotlarını Merkez_Ajan_Hafiza.md ile eşitler.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = if (configured) {
+                        "Köprü kayıtlı · Jeton: $maskedToken"
+                    } else {
+                        "Köprü kurulmamış."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = urlInput,
+            onValueChange = {
+                urlInput = it
+                status = null
+            },
+            label = { Text("Web uygulaması URL'si (https://script.google.com/…/exec)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        OutlinedTextField(
+            value = tokenInput,
+            onValueChange = {
+                tokenInput = it
+                status = null
+            },
+            label = { Text("Köprü jetonu (MERKEZ_TOKEN)") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            Button(
+                enabled = urlInput.isNotBlank() && (tokenInput.isNotBlank() || configured),
+                onClick = {
+                    viewModel.saveDriveBridge(urlInput, tokenInput)
+                    tokenInput = ""
+                    configured = viewModel.driveBridgeConfigured()
+                    maskedToken = viewModel.maskedDriveToken()
+                    status = "Kaydedildi."
+                },
+            ) {
+                Text("Kaydet")
+            }
+            if (configured) {
+                OutlinedButton(
+                    enabled = !testing,
+                    onClick = {
+                        testing = true
+                        status = "Sınanıyor…"
+                        scope.launch {
+                            val res = withContext(Dispatchers.IO) {
+                                ScreenAgentStorage.pingBridge(context)
+                            }
+                            testing = false
+                            status = res.getOrElse { "Hata: ${it.message}" }
+                        }
+                    },
+                ) {
+                    Text(if (testing) "Sınanıyor…" else "Bağlantıyı dene")
+                }
+                TextButton(
+                    onClick = {
+                        viewModel.clearDriveBridge()
+                        urlInput = ""
+                        tokenInput = ""
+                        configured = false
+                        maskedToken = ""
+                        status = null
+                    },
+                ) {
+                    Text("Sil", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+
+        status?.let { msg ->
+            Text(
+                text = msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (msg.startsWith("Hata")) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            )
+        }
+    }
+}
+
+/** Ajanın öğrendiği kısayollar ve engel aşma kuralları (Merkez_Ajan_Hafiza.md). */
+@Composable
+private fun AgentMemorySection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var memory by remember { mutableStateOf(ScreenAgentStorage.readLocalMemory(context)) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Ajan hafızası (merdiven metotları)", style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = "Ekran ajanı her görev başında bu Markdown notlarına bakar. " +
+                "Sık kullandığın yolları ve takıldığı engelleri aşma kurallarını " +
+                "buradan ya da Drive'daki Merkez_Ajan_Hafiza.md dosyasından güncelleyebilirsin.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        OutlinedTextField(
+            value = memory,
+            onValueChange = {
+                memory = it
+                status = null
+            },
+            label = { Text("Merkez_Ajan_Hafiza.md") },
+            minLines = 5,
+            maxLines = 12,
+            textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            Button(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    status = "Kaydediliyor…"
+                    scope.launch {
+                        val res = withContext(Dispatchers.IO) {
+                            ScreenAgentStorage.saveMemory(context, memory)
+                        }
+                        busy = false
+                        status = res.getOrElse { "Cihaza kaydedildi (Drive hatası: ${it.message})" }
+                    }
+                },
+            ) {
+                Text("Hafızayı kaydet")
+            }
+            if (ScreenAgentStorage.isBridgeConfigured(context)) {
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        status = "Drive'dan çekiliyor…"
+                        scope.launch {
+                            val res = withContext(Dispatchers.IO) {
+                                ScreenAgentStorage.syncMemoryFromDrive(context, force = true)
+                            }
+                            busy = false
+                            res.onSuccess {
+                                memory = it
+                                status = "Drive'dan güncellendi."
+                            }.onFailure {
+                                status = "Hata: ${it.message}"
+                            }
+                        }
+                    },
+                ) {
+                    Text("Drive'dan yenile")
+                }
+            }
+        }
+
+        status?.let { msg ->
+            Text(
+                text = msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (msg.startsWith("Hata")) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            )
         }
     }
 }

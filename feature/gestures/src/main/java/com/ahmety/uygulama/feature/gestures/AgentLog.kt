@@ -44,10 +44,13 @@ object AgentLog {
             session.log.drop(session.loggedUpTo).also { session.loggedUpTo = session.log.size }
         }
         if (fresh.isEmpty()) return@runCatching
+        val chunk = fresh.joinToString("\n")
         val file = File(context.filesDir, FILE)
         val old = if (file.exists()) file.readText() else ""
-        val combined = old + fresh.joinToString("\n", postfix = "\n")
+        val combined = old + chunk + "\n"
         file.writeText(if (combined.length > MAX_FILE_CHARS) combined.takeLast(MAX_FILE_CHARS) else combined)
+        // Drive köprüsü açıksa aynı log parçası arka planda MerkezAjan/Merkez_Ajan_Log.md'ye de gider.
+        ScreenAgentStorage.uploadLogChunk(context, chunk)
     }
 
     /** Telefonda saklanan son turlar; yoksa boş. */

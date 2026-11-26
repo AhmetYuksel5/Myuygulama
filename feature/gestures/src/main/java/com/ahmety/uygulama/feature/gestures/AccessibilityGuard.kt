@@ -60,6 +60,11 @@ object AccessibilityGuard {
     fun onServiceConnected(context: Context) {
         prefs(context).edit().putBoolean(KEY_EXPECTED, true).apply()
         cancelNotice(context)
+        if (prefs(context).getBoolean(KEY_KEEP_ADB_TIMEOUT, false) && canRestore(context)) {
+            runCatching {
+                Settings.Global.putLong(context.contentResolver, KEY_GLOBAL_ADB_TIMEOUT, 0L)
+            }
+        }
     }
 
     fun isGuarded(context: Context): Boolean = prefs(context).getBoolean(KEY_GUARD, true)
@@ -74,6 +79,53 @@ object AccessibilityGuard {
 
     /** Bekçinin servisi kaç kez kendisi geri açtığı. */
     fun restoredCount(context: Context): Int = prefs(context).getInt(KEY_RESTORED, 0)
+
+    /**
+     * Android'in 7 günlük ADB yetki zaman aşımı kapalı mı (`adb_allowed_connection_time = 0`).
+     *
+     * Sıfır yapıldığında bilgisayarla eşleştirilmiş kablosuz hata ayıklama yetkisi
+     * süre dolduğu için kendiliğinden iptal edilmez.
+     */
+    fun isAdbTimeoutDisabled(context: Context): Boolean = runCatching {
+        Settings.Global.getLong(
+            context.contentResolver,
+            KEY_GLOBAL_ADB_TIMEOUT,
+            DEFAULT_ADB_TIMEOUT_MS,
+        ) == 0L
+    }.getOrDefault(false)
+
+    fun setAdbTimeoutDisabled(context: Context, disable: Boolean): Boolean {
+        if (!canRestore(context)) return false
+        val ok = runCatching {
+            Settings.Global.putLong(
+                context.contentResolver,
+                KEY_GLOBAL_ADB_TIMEOUT,
+                if (disable) 0L else DEFAULT_ADB_TIMEOUT_MS,
+            )
+            true
+        }.getOrDefault(false)
+        if (ok) {
+            prefs(context).edit().putBoolean(KEY_KEEP_ADB_TIMEOUT, disable).apply()
+        }
+        return ok
+    }
+
+    fun isWirelessAdbOn(context: Context): Boolean = runCatching {
+        Settings.Global.getInt(context.contentResolver, KEY_GLOBAL_ADB_WIFI, 0) == 1
+    }.getOrDefault(false)
+
+    fun setWirelessAdb(context: Context, enabled: Boolean): Boolean {
+        if (!canRestore(context)) return false
+        return runCatching {
+            Settings.Global.putInt(context.contentResolver, KEY_GLOBAL_ADB_WIFI, if (enabled) 1 else 0)
+            true
+        }.getOrDefault(false)
+    }
+
+    private const val KEY_KEEP_ADB_TIMEOUT = "keep_adb_timeout_zero"
+    private const val KEY_GLOBAL_ADB_TIMEOUT = "adb_allowed_connection_time"
+    private const val KEY_GLOBAL_ADB_WIFI = "adb_wifi_enabled"
+    private const val DEFAULT_ADB_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1_000L
 
     /**
      * Ayar değişince ve izleyen servis bağlanınca çağrılıyor. Servis açıksa

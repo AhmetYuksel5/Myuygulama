@@ -345,6 +345,8 @@ private fun GuardSection() {
     val context = LocalContext.current
     var guarded by remember { mutableStateOf(AccessibilityGuard.isGuarded(context)) }
     var canRestore by remember { mutableStateOf(AccessibilityGuard.canRestore(context)) }
+    var adbNoTimeout by remember { mutableStateOf(AccessibilityGuard.isAdbTimeoutDisabled(context)) }
+    var wirelessAdbOn by remember { mutableStateOf(AccessibilityGuard.isWirelessAdbOn(context)) }
     var crash by remember { mutableStateOf(AccessibilityGuard.lastCrash(context)) }
     var exits by remember { mutableStateOf(AccessibilityGuard.exitHistory(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -352,6 +354,8 @@ private fun GuardSection() {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 canRestore = AccessibilityGuard.canRestore(context)
+                adbNoTimeout = AccessibilityGuard.isAdbTimeoutDisabled(context)
+                wirelessAdbOn = AccessibilityGuard.isWirelessAdbOn(context)
                 crash = AccessibilityGuard.lastCrash(context)
                 exits = AccessibilityGuard.exitHistory(context)
             }
@@ -385,6 +389,37 @@ private fun GuardSection() {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    if (canRestore) {
+        Text("Kablosuz hata ayıklama (ADB)", style = MaterialTheme.typography.labelLarge)
+        Toggle("ADB yetki zaman aşımını kapat", adbNoTimeout) { next ->
+            if (AccessibilityGuard.setAdbTimeoutDisabled(context, next)) {
+                adbNoTimeout = AccessibilityGuard.isAdbTimeoutDisabled(context)
+            } else {
+                android.widget.Toast.makeText(
+                    context,
+                    "Ayar yazılamadı; WRITE_SECURE_SETTINGS gerekli.",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+        Text(
+            text = "adb_allowed_connection_time = 0 yazar; bilgisayarla eşleştirilen " +
+                "kablosuz hata ayıklama yetkisi 7 gün sonunda kendiliğinden iptal edilmez.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Toggle("Kablosuz hata ayıklama", wirelessAdbOn) { next ->
+            if (AccessibilityGuard.setWirelessAdb(context, next)) {
+                wirelessAdbOn = AccessibilityGuard.isWirelessAdbOn(context)
+            } else {
+                android.widget.Toast.makeText(
+                    context,
+                    "Kablosuz hata ayıklama değiştirilemedi.",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
     if (!canRestore) {
         Text(
             text = AccessibilityGuard.ADB_COMMAND,
