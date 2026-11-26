@@ -215,7 +215,7 @@ fun AiSettingsScreen(
                 Text(
                     "Haiku takılırsa (ekran değişmez, aynı hareketi tekrarlar, anlamsız yanıt verir) " +
                         "Sonnet en az 4 adım devralır; o da takılırsa Opus en az 3 adım. Sonra birer " +
-                        "basamak iner. Turda en çok Sonnet 10, Opus 5 adım.",
+                        "basamak iner. Turda Sonnet en çok 10 adım; Opus için sınır yok.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

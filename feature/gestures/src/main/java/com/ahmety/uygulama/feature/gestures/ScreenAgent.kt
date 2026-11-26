@@ -1320,8 +1320,7 @@ internal object ScreenAgent {
             session,
             AgentOutcome(
                 kind = OutcomeKind.STOPPED,
-                message = "Takıldım ($reason) ve güçlü modellerin bu turdaki sınırı doldu " +
-                    "(Opus $MAX_OPUS_STEPS, Sonnet $MAX_SONNET_STEPS adım). " +
+                message = "Takıldım ($reason). " +
                     "Yön göstermek için bir şey yazabilir ya da \"Devam et\" diyebilirsin.",
             ),
         )
@@ -1347,7 +1346,6 @@ internal object ScreenAgent {
         val canEscalateAtAll = tiers.size > 1
         private var level = 0
         private var hold = 0
-        private var opusUsed = 0
         private var sonnetUsed = 0
 
         init {
@@ -1360,7 +1358,8 @@ internal object ScreenAgent {
         fun modelForStep(): String = tiers[level]
 
         private fun budgetLeft(model: String): Boolean = when {
-            model.contains("opus") -> opusUsed < MAX_OPUS_STEPS
+            // Opus için tur sınırı yok (kullanıcı isteği); turun 20 adım sınırı yetiyor.
+            model.contains("opus") -> true
             model.contains("sonnet") && model == SONNET_MODEL -> sonnetUsed < MAX_SONNET_STEPS
             else -> true
         }
@@ -1370,7 +1369,7 @@ internal object ScreenAgent {
         fun stepDone() {
             val model = tiers[level]
             if (level == 0) return
-            if (model.contains("opus")) opusUsed++ else sonnetUsed++
+            if (!model.contains("opus")) sonnetUsed++
             hold--
             // Süre doldu ya da bu basamağın sınırı bitti: bir basamak in.
             while (level > 0 && (hold <= 0 || !budgetLeft(tiers[level]))) {
@@ -1796,9 +1795,9 @@ internal object ScreenAgent {
             if (!isAlive(sessionId)) return "durduruldu"
         }
 
-        val ok = onMainBlocking {
-            val target = findEditableTarget(service, action.x, action.y) ?: return@onMainBlocking false
-            if (target.isPassword) return@onMainBlocking false
+        val result = onMainBlocking {
+            val target = findEditableTarget(service, action.x, action.y) ?: return@onMainBlocking null
+            if (target.isPassword) return@onMainBlocking null
 
             val args = Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
@@ -1817,15 +1816,26 @@ internal object ScreenAgent {
                 }
             }
 
+            // Kutunun gerçekten ne içerdiği okunuyor: karakter sınırı ya da biçimlendirme
+            // yazılanı değiştirdiyse model tahmin etmek yerine bunu görsün.
+            val actual = if (written) {
+                runCatching { target.refresh(); target.text?.toString() }.getOrNull()
+            } else {
+                null
+            }
             if (written && action.submit && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 runCatching {
                     target.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
                 }
             }
-            written
-        } == true
+            if (written) actual.orEmpty() else null
+        }
 
-        return if (ok) "metin yazıldı" else "yazma kutusu bulunamadı"
+        return when {
+            result == null -> "yazma kutusu bulunamadı"
+            result.isEmpty() || result == text -> "metin yazıldı"
+            else -> "yazıldı ama kutuda \"${ScreenAsk.mask(result).take(60)}\" görünüyor (karakter sınırı olabilir)"
+        }
     }
 
     /**
@@ -1869,9 +1879,15 @@ internal object ScreenAgent {
     }
 
     private fun findEditableTarget(service: AccessibilityService, x: Int, y: Int): AccessibilityNodeInfo? {
+        // Odaktaki kutu yalnız dokunulan nokta onun içindeyse (ya da nokta verilmediyse)
+        // seçiliyor. Önceden her zaman o seçiliyordu: kilometre kutusuna dokunulduğu
+        // hâlde odak plaka kutusunda kaldıysa kilometre plakanın üstüne yazılıyordu.
         val focused = runCatching { service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
-        if (focused != null && focused.isEditable && focused.packageName?.toString() != service.packageName) {
-            return focused
+            ?.takeIf { it.isEditable && it.packageName?.toString() != service.packageName }
+        if (focused != null) {
+            if (x <= 0 || y <= 0) return focused
+            val box = Rect().also { focused.getBoundsInScreen(it) }
+            if (box.contains(x, y)) return focused
         }
         val windows = runCatching { service.windows }.getOrNull().orEmpty()
             .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
@@ -2462,7 +2478,6 @@ internal object ScreenAgent {
     private const val SONNET_MODEL = "claude-sonnet-5-5"
     private const val HOLD_SONNET = 4
     private const val HOLD_OPUS = 3
-    private const val MAX_OPUS_STEPS = 5
     private const val MAX_SONNET_STEPS = 10
 
     /** Planlayıcının yönergesi: Opus turun başında bir kez plan yazıyor, uygulayan küçük model. */
