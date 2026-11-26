@@ -21,6 +21,8 @@ include(":app")
 // hiçbir modülüne bağlı değil.
 include(":okuyucu")
 include(":ofis")
+// Yeşil Temizlik Panel: panel.yesiltemizlik.com'u adres çubuğu olmadan açan TWA kabuğu.
+include(":panel")
 include(":core:model")
 include(":core:database")
 include(":core:designsystem")

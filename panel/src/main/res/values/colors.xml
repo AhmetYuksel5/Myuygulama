@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Panelin manifest'indeki background_color / theme_color ile aynı -->
+    <color name="zemin">#F6F6F7</color>
+    <color name="durum_cubugu">#F6F6F7</color>
+    <color name="iconBackground">#FFFFFFFF</color>
+</resources>
