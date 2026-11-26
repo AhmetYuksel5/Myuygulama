@@ -7,9 +7,12 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * 6 saatte bir güncelleme denetimi. Merkez'in ekranı hiç açılmadan yalnız
- * imleç, kısayollar ya da ajan kullanıldığında da yeni sürüm fark edilsin.
- * Yeni sürüm varsa ya sormadan kuruluyor ya da bildirim düşüyor.
+ * Merkez'in bir özelliği kullanıldığında güncelleme denetimi (feature/gestures
+ * modülündeki UpdatePing bu alıcıya sınıf adıyla yayın gönderiyor). Yeni sürüm
+ * varsa ya sormadan kuruluyor ya da bildirim düşüyor.
+ *
+ * Adı önceki 6 saatlik alarmdan kalma: o alarm istenmedi ve kaldırıldı; adı
+ * değişseydi eski kurulumlarda kalan alarm iptal edilemezdi.
  */
 class UpdateAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -17,26 +20,17 @@ class UpdateAlarmReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        /** Uygulama süreci her başladığında; aynı alarm üst üste kurulmuyor, yenileniyor. */
-        fun schedule(context: Context) {
+        /** 277'de kurulan 6 saatlik alarmı siler. */
+        fun cancelOldAlarm(context: Context) {
             val manager = context.getSystemService(AlarmManager::class.java) ?: return
             val pending = PendingIntent.getBroadcast(
                 context,
                 0,
                 Intent(context, UpdateAlarmReceiver::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            runCatching {
-                manager.setInexactRepeating(
-                    AlarmManager.RTC,
-                    System.currentTimeMillis() + FIRST_DELAY_MS,
-                    EVERY_MS,
-                    pending,
-                )
-            }
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
+            ) ?: return
+            runCatching { manager.cancel(pending) }
+            pending.cancel()
         }
-
-        private const val FIRST_DELAY_MS = 15 * 60_000L
-        private const val EVERY_MS = 6 * 3_600_000L
     }
 }

@@ -134,7 +134,7 @@
         <receiver
             android:name=".ui.update.InstallResultReceiver"
             android:exported="false" />
-        <!-- 6 saatte bir güncelleme denetimi. -->
+        <!-- Merkez kullanılırken güncelleme denetimi (UpdatePing). -->
         <receiver
             android:name=".ui.update.UpdateAlarmReceiver"
             android:exported="false" />

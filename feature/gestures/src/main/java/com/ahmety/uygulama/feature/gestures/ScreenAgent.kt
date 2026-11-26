@@ -103,6 +103,7 @@ internal object ScreenAgent {
     val active: Boolean get() = running
 
     fun open(service: AccessibilityService): Boolean {
+        UpdatePing.kick(service)
         if (running) {
             stop(service, showCard = true)
             return true

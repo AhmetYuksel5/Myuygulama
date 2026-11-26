@@ -221,7 +221,7 @@ class UpdateChecker @Inject constructor(
     }
 
     /**
-     * Uygulamadan çıkılınca ve 6 saatte bir: yeni sürüm varsa indir ve kur.
+     * Uygulamadan çıkılınca ve bir özelliği kullanılınca: yeni sürüm varsa indir ve kur.
      *
      * Sormadan kurulabiliyorsa kuruluyor. Kurulamıyorsa (ilk güncelleme ya da
      * telefon onay istiyorsa) "güncelleme hazır" bildirimi düşüyor. Önceden

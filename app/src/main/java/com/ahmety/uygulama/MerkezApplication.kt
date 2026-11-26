@@ -8,8 +8,7 @@ import dagger.hilt.android.HiltAndroidApp
 class MerkezApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        // Süreç erişilebilirlik servisiyle de başlıyor: uygulama ekranı hiç
-        // açılmasa bile güncelleme denetimi kurulmuş oluyor.
-        UpdateAlarmReceiver.schedule(this)
+        // Güncelleme artık zamanla değil, uygulama kullanılırken denetleniyor.
+        UpdateAlarmReceiver.cancelOldAlarm(this)
     }
 }

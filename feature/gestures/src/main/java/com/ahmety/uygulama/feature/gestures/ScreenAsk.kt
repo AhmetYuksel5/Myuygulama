@@ -84,6 +84,7 @@ internal object ScreenAsk {
     private val turns = mutableListOf<Pair<String, String>>()
 
     fun open(service: AccessibilityService): Boolean {
+        UpdatePing.kick(service)
         if (root != null) {
             close(service)
             return true

@@ -113,7 +113,12 @@ class ShortcutStore(context: Context) {
  * doğrudan arama ayrı bir izin istiyor ve yanlışlıkla açılan bir panelin
  * telefon etmesi istenecek bir şey değil.
  */
-internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean = when (item.kind) {
+internal fun runShortcut(service: AccessibilityService, item: Shortcut): Boolean {
+    UpdatePing.kick(service)
+    return runShortcutItem(service, item)
+}
+
+private fun runShortcutItem(service: AccessibilityService, item: Shortcut): Boolean = when (item.kind) {
     ShortcutKind.APP -> {
         val ok = launchPackage(service, item.value)
         // Kısayoldan açılan uygulama "önceki uygulama" listesine doğrudan

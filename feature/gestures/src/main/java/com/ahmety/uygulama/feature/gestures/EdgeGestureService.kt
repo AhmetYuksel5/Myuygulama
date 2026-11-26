@@ -355,6 +355,7 @@ open class EdgeGestureService : AccessibilityService() {
 
     private fun perform(action: GestureAction, gestureKey: String) {
         if (action == GestureAction.NONE) return
+        UpdatePing.kick(this)
         val ok = when (action) {
             GestureAction.OPEN_APP -> openApp(gestureKey)
             // Panel açıksa geri onu kapatıyor; arkadaki uygulamaya gitmesin.
