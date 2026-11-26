@@ -209,18 +209,15 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   birden çok dolu katalog varsa basınca seçeneklere açılır, tek katalogda
   doğrudan gönderir. Balon izni yoksa kartta "Referanslar" → "Hangi
   katalog?" penceresi. Katalog PDF'leri `ofis/katalog-kaynak/uret.py` ile
-  üretilir (HTML → Chromium PDF, A4, 2 sayfa). Tasarım kullanıcının beğendiği
-  "Haftada 5 Gün Temizlik Personeli" teklifi: sol üstte logo, #92D050 şerit +
-  beyaz büyük harf başlık, italik alt başlık, yeşil çizgili bölüm başlıkları,
-  altta "YEŞİL TEMİZLİK | 0212 369 90 75 | www.yesiltemizlik.com". 2. sayfa
-  yesiltemizlik.com/referanslar'daki logolu kartlardan 30 tane, kataloğa
-  uyan iş türleri önde (sitede herkese açık; şablondaki yetkili listesi değil).
-  Kart sabit yükseklikte; uzun hizmet metni kısaltılır, kesik kart ölçülür.
-  1. sayfa (kullanıcı 2026-11-26): metinler sitedeki hizmet sayfalarından
-  (/ofis-temizligi/, /bos-ev-temizligi/, /insaat-sonrasi-temizlik/) derlenir;
-  üç saha fotoğrafı (sitenin /assets/gallery/ gerçek fotoğrafları), öne
-  çıkanlar çipleri, yapılan işler, "kısa video gönderin" çağrısı, sitedeki
-  güven sayıları (484+ referans, 8 konsolosluk, Google 4.7, 2012).
+  üretilir (HTML → Chromium PDF). TELEFONDA OKUNUR (kullanıcı 2026-11-26:
+  "mobil görünüme uygun olsun, çok bilgi yığıntısı var"): sayfa 9:16
+  (120×213 mm), 2 sayfa. 1) logo, #92D050 şerit başlık, tek büyük saha
+  fotoğrafı, tek cümle giriş, 4 öne çıkan, 4 satır "yapılan işler", altta
+  "kısa video gönderin" çağrısı. 2) güven sayıları (484+, 8 konsolosluk,
+  Google 4.7, 2012) + 15 logolu referans (logo + ad, kataloğa uyan iş türleri
+  önde). Metin, fotoğraf ve referanslar yesiltemizlik.com'dan (hizmet
+  sayfaları, /assets/gallery/, /referanslar/). A4, madde yığını, adres
+  bloğu yok. Önce A4 teklif tasarımıyla yapılmıştı (renk ve şerit oradan).
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
   başlangıcı). Eşleşme, iş listesi, izinler, kartı dene Ayarlar'da; ana
