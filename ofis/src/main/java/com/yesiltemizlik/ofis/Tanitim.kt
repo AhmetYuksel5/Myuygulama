@@ -55,7 +55,7 @@ object Tanitim {
      * Telefondaki eski katalog yenisiyle değişir; kullanıcı adını değiştirdiyse
      * ad korunur, sildiyse (klasörü yoksa) geri getirilmez.
      */
-    private const val KATALOG_SURUM = 3
+    private const val KATALOG_SURUM = 4
 
     private fun gomululeriKopyala(c: Context) {
         val p = c.getSharedPreferences("ofis", Context.MODE_PRIVATE)

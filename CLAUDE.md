@@ -210,12 +210,14 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   doğrudan gönderir. Balon izni yoksa kartta "Referanslar" → "Hangi
   katalog?" penceresi. Katalog PDF'leri `ofis/katalog-kaynak/uret.py` ile
   üretilir (HTML → Chromium PDF). TELEFONDA OKUNUR (kullanıcı 2026-11-26:
-  "mobil görünüme uygun olsun, çok bilgi yığıntısı var"): sayfa 9:16
-  (120×213 mm), 2 sayfa. 1) logo, #92D050 şerit başlık, tek büyük saha
-  fotoğrafı, tek cümle giriş, 4 öne çıkan, 4 satır "yapılan işler", altta
-  "kısa video gönderin" çağrısı. 2) güven sayıları (484+, 8 konsolosluk,
-  Google 4.7, 2012) + 15 logolu referans (logo + ad, kataloğa uyan iş türleri
-  önde). Metin, fotoğraf ve referanslar yesiltemizlik.com'dan (hizmet
+  "mobil görünüme uygun olsun, çok bilgi yığıntısı var"): 1. sayfa 9:16
+  (120×213 mm): logo, #92D050 şerit başlık, tek büyük saha fotoğrafı, tek
+  cümle giriş, 4 öne çıkan, 4 satır "yapılan işler", altta "kısa video
+  gönderin" çağrısı. 2. sayfa REFERANSLAR A4, DETAYLI KALIR (kullanıcı
+  2026-11-26: "referanslardaki şirket ve iş detayı gitmiş, değişmesini
+  istemiyorum, bu kadar abartılmasın"): 30 kart, logo + ad + yapılan iş +
+  dönem · semt, kataloğa uyan iş türleri önde. Sadeleştirme yalnız 1. sayfada.
+  Üretim adımları `ofis/katalog-kaynak/BENIOKU.md`. Metin, fotoğraf ve referanslar yesiltemizlik.com'dan (hizmet
   sayfaları, /assets/gallery/, /referanslar/). A4, madde yığını, adres
   bloğu yok. Önce A4 teklif tasarımıyla yapılmıştı (renk ve şerit oradan).
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
