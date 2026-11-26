@@ -95,9 +95,14 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun Uygulama(yenile: Int) {
-    var ayarlar by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = ayarlar) { ayarlar = false }
-    if (ayarlar) AyarlarEkrani(yenile) { ayarlar = false } else AnaEkran(yenile) { ayarlar = true }
+    // "ana" · "ayarlar" · "gecmis" (sürüm geçmişi Ayarlar'dan açılır, geri Ayarlar'a döner).
+    var ekran by rememberSaveable { mutableStateOf("ana") }
+    BackHandler(enabled = ekran == "ayarlar") { ekran = "ana" }
+    when (ekran) {
+        "ayarlar" -> AyarlarEkrani(yenile, onGecmis = { ekran = "gecmis" }) { ekran = "ana" }
+        "gecmis" -> SurumGecmisiEkrani { ekran = "ayarlar" }
+        else -> AnaEkran(yenile) { ekran = "ayarlar" }
+    }
 }
 
 /** Son aramalar. Bir aramaya dokununca o aramanın kartı açılır; kartı doldurulmuş olanlar etiketli. */
@@ -252,7 +257,7 @@ private fun AramaSatiri(a: Arama, sinif: String?, onClick: () -> Unit) {
 /** Eşleşme, iş listesi, izinler, kartın kendisi: kurulumdan sonra pek açılmayan her şey burada. */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
+private fun AyarlarEkrani(yenile: Int, onGecmis: () -> Unit, onGeri: () -> Unit) {
     val ctx = LocalContext.current
     val depo = remember { Depo(ctx) }
     var jeton by remember { mutableStateOf(depo.jeton) }
@@ -407,7 +412,10 @@ private fun AyarlarEkrani(yenile: Int, onGeri: () -> Unit) {
 
             IzinListesi(izinTur)
 
-            Kutu { GuncellemeSatiri() }
+            Kutu {
+                GuncellemeSatiri()
+                TextButton(onClick = onGecmis, modifier = Modifier.fillMaxWidth()) { Text("Sürüm geçmişi") }
+            }
             if (jeton.isNotEmpty()) {
                 TextButton(onClick = {
                     depo.jeton = ""

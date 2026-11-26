@@ -130,6 +130,18 @@ taşımaz, değiştirilmez (kurulu sürüm güncellenemez olur). CI onu
 `ofis-v0.N` etiketiyle, yalnız `ofis/` değişince yayınlar;
 yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
 
+- **My Asistan işi Merkez'e dokunmaz** (kullanıcı 2026-11-26: "My Asistan ile
+  My uygulamayı karıştırma"). `git add -A` KULLANMA; yalnız `ofis/`, ilgili
+  belge ve iş akışı dosyalarını ekle. 2026-11-25/26'da Kotlin derleyicisinin
+  `.kotlin/errors/*.log` kayıtları `-A` ile depoya girdi, CI kök dizindeki
+  değişikliği Merkez sayıp My Asistan notlu iki boş Merkez sürümü çıkardı
+  (v0.265, v0.280). `.kotlin/` artık `.gitignore`'da ve Merkez süzgecinde.
+- Sürüm geçmişi: Ayarlar › Sürüm geçmişi (`SurumGecmisiEkrani`). GitHub'daki
+  `ofis-v0.*` sürümlerinin notları (commit iletisi; künye satırları atılır),
+  kurulu sürüm etiketli. Sürüm listesi 100'erli en çok 4 sayfa okunur
+  (`Guncelleme.ofisSurumleri`): Merkez sürümleri sık, ilk sayfada My Asistan
+  kalmayabilir — güncelleme denetimi de aynı listeyi kullanır.
+
 - **Sürüm numarası Merkez'den bağımsız** (kullanıcı 2026-11-24: "1.0'dan
   başlasın"): görünen ad 1.0, 1.1… = 258. derlemeden sonraki `ofis-v0.*`
   etiketi sayısı (CI `OFIS_SURUM`; sürüm başlığı "My Asistan 1.x", dosya

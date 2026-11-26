@@ -5,6 +5,8 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -167,6 +169,87 @@ fun GuncellemeSatiri() {
                     }
                 }
             }) { Text("Denetle") }
+        }
+    }
+}
+
+/** Her My Asistan sürümünde ne değişti: sürüm notları (kullanıcı 2026-11-26). */
+@Composable
+fun SurumGecmisiEkrani(onGeri: () -> Unit) {
+    val ctx = LocalContext.current
+    var liste by remember { mutableStateOf<List<Guncelleme.Gecmis>?>(null) }
+    var hata by remember { mutableStateOf(false) }
+    val kurulu = remember { Guncelleme.kuruluNumara(ctx) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val g = withContext(Dispatchers.IO) { Guncelleme.gecmis() }
+        if (g == null) hata = true else liste = g
+    }
+    androidx.activity.compose.BackHandler(onBack = onGeri)
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier.safeDrawingPadding(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.IconButton(onClick = onGeri) {
+                        androidx.compose.material3.Icon(
+                            androidx.compose.ui.res.painterResource(R.drawable.s_geri),
+                            contentDescription = "Geri",
+                        )
+                    }
+                    Text("Sürüm geçmişi", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+            when {
+                hata -> item { Text("Sürüm geçmişi alınamadı", color = MaterialTheme.colorScheme.error) }
+                liste == null -> item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+                    }
+                }
+                else -> liste!!.forEach { g ->
+                    item(key = g.numara) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 1.dp,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(g.ad, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    if (g.numara.toLong() == kurulu) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.padding(start = 8.dp),
+                                        ) {
+                                            Text(
+                                                "Kurulu",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            )
+                                        }
+                                    }
+                                    androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                                    Text(g.tarih, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (g.baslik.isNotEmpty()) Text(g.baslik, fontWeight = FontWeight.SemiBold)
+                                g.maddeler.forEach { m ->
+                                    Row {
+                                        Text("•  ", color = MaterialTheme.colorScheme.primary)
+                                        Text(m, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

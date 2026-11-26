@@ -31,34 +31,81 @@ object Guncelleme {
         Long.MAX_VALUE
     }
 
+    /** Sürüm geçmişi satırı: görünen ad, yayın tarihi, başlık ve maddeler (sürüm notu = commit iletisi). */
+    data class Gecmis(val numara: Int, val ad: String, val tarih: String, val baslik: String, val maddeler: List<String>)
+
+    private val ETIKET = Regex("^ofis-v0\\.(\\d+)$")
+
+    /**
+     * Yalnız My Asistan sürümleri, yeniden eskiye. Depoda Merkez sürümleri de
+     * var ve çok daha sık çıkıyor; ilk sayfada My Asistan hiç kalmayabilir, bu
+     * yüzden 100'erli en çok 4 sayfa okunur.
+     */
+    private fun ofisSurumleri(): List<org.json.JSONObject> {
+        val out = ArrayList<org.json.JSONObject>()
+        for (sayfa in 1..4) {
+            val c = URL("https://api.github.com/repos/AhmetYuksel5/Myuygulama/releases?per_page=100&page=$sayfa")
+                .openConnection() as HttpURLConnection
+            c.connectTimeout = 10_000
+            c.readTimeout = 15_000
+            c.setRequestProperty("Accept", "application/vnd.github+json")
+            c.setRequestProperty("User-Agent", "my-asistan")
+            val a = JSONArray(c.inputStream.bufferedReader().use { it.readText() })
+            c.disconnect()
+            for (i in 0 until a.length()) {
+                val r = a.getJSONObject(i)
+                if (ETIKET.matches(r.optString("tag_name"))) out += r
+            }
+            if (a.length() < 100) break
+        }
+        return out.sortedByDescending { numara(it) }
+    }
+
+    private fun numara(r: org.json.JSONObject) =
+        ETIKET.find(r.optString("tag_name"))?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+    /** Görünen ad sürüm başlığından ("My Asistan 1.3"); eski düzende yoksa sayaç. */
+    private fun gorunenAd(r: org.json.JSONObject) =
+        Regex("(\\d+\\.\\d+)\\s*$").find(r.optString("name"))?.groupValues?.get(1) ?: "0.${numara(r)}"
+
     fun sonSurum(): Surum? = try {
-        val c = URL("https://api.github.com/repos/AhmetYuksel5/Myuygulama/releases?per_page=40")
-            .openConnection() as HttpURLConnection
-        c.connectTimeout = 10_000
-        c.readTimeout = 15_000
-        c.setRequestProperty("Accept", "application/vnd.github+json")
-        c.setRequestProperty("User-Agent", "my-asistan")
-        val metin = c.inputStream.bufferedReader().use { it.readText() }
-        c.disconnect()
-        val a = JSONArray(metin)
-        var bulunan: Surum? = null
-        for (i in 0 until a.length()) {
-            val r = a.getJSONObject(i)
-            val n = Regex("^ofis-v0\\.(\\d+)$").find(r.optString("tag_name"))?.groupValues?.get(1)?.toIntOrNull() ?: continue
-            val dosyalar = r.optJSONArray("assets") ?: continue
+        ofisSurumleri().firstNotNullOfOrNull { r ->
+            val dosyalar = r.optJSONArray("assets") ?: return@firstNotNullOfOrNull null
             var apk: org.json.JSONObject? = null
             for (j in 0 until dosyalar.length()) {
                 val d = dosyalar.getJSONObject(j)
                 if (d.optString("name").endsWith(".apk")) apk = d
             }
-            if (apk == null) continue
-            if (bulunan == null || n > bulunan.numara) {
-                // Görünen ad sürüm başlığından ("My Asistan 1.3"); eski düzende yoksa sayaç.
-                val ad = Regex("(\\d+\\.\\d+)\\s*$").find(r.optString("name"))?.groupValues?.get(1) ?: "0.$n"
-                bulunan = Surum(n, apk.optString("browser_download_url"), apk.optLong("size"), ad)
-            }
+            apk?.let { Surum(numara(r), it.optString("browser_download_url"), it.optLong("size"), gorunenAd(r)) }
         }
-        bulunan
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Sürüm geçmişi; ağ yoksa null. Künye satırları (yardımcı yazar, oturum) atılır. */
+    fun gecmis(): List<Gecmis>? = try {
+        val ay = listOf("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
+        ofisSurumleri().map { r ->
+            val satirlar = r.optString("body").lines().map { it.trimEnd() }
+                .filterNot { it.startsWith("Co-Authored-By") || it.startsWith("Claude-Session") }
+            val baslik = satirlar.firstOrNull { it.isNotBlank() }?.trim() ?: ""
+            // Madde "- " ile başlar; sarılıp alt satıra geçen devamı aynı maddeye eklenir.
+            val maddeler = ArrayList<String>()
+            for (s in satirlar.dropWhile { it.isBlank() }.drop(1)) {
+                val t = s.trim()
+                when {
+                    t.startsWith("- ") -> maddeler += t.removePrefix("- ")
+                    t.isNotEmpty() && maddeler.isNotEmpty() -> maddeler[maddeler.lastIndex] = maddeler.last() + " " + t
+                }
+            }
+            val y = r.optString("published_at")
+            val tarih = if (y.length >= 10) {
+                "${y.substring(8, 10).toInt()} ${ay[y.substring(5, 7).toInt() - 1]} ${y.substring(0, 4)}"
+            } else {
+                ""
+            }
+            Gecmis(numara(r), gorunenAd(r), tarih, baslik.removePrefix("My Asistan: "), maddeler)
+        }
     } catch (e: Exception) {
         null
     }

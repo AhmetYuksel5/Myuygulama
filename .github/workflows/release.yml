@@ -169,7 +169,7 @@ jobs:
           else
             echo "degisti=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$degisen" | grep -qvE '^(ofis/|okuyucu/|docs/|web/|\.github/|settings\.gradle\.kts$|[^/]*\.md$)'; then
+          if echo "$degisen" | grep -qvE '^(ofis/|okuyucu/|docs/|web/|\.github/|\.kotlin/|\.gitignore$|settings\.gradle\.kts$|[^/]*\.md$)'; then
             echo "merkez=true" >> "$GITHUB_OUTPUT"
           else
             echo "Yalnız Merkez dışı dosyalar değişmiş; Merkez sürümü çıkmayacak."
