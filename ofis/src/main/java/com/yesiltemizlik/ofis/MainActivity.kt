@@ -481,19 +481,39 @@ private fun TanitimAyari() {
         if (olmayan > 0) Toast.makeText(ctx, "$olmayan dosya eklenemedi", Toast.LENGTH_SHORT).show()
         dosyalar = Tanitim.dosyalar(ctx)
     }
+    // Dosyaya dokununca: adını değiştir ya da kaldır. Uzantı korunur.
     silinecek?.let { f ->
+        var yeniAd by remember(f) { mutableStateOf(Tanitim.adGovde(f)) }
         AlertDialog(
             onDismissRequest = { silinecek = null },
-            title = { Text("Dosya kaldırılsın mı?") },
-            text = { Text(Tanitim.ad(f)) },
+            title = { Text("Dosya") },
+            text = {
+                OutlinedTextField(
+                    value = yeniAd,
+                    onValueChange = { yeniAd = it },
+                    label = { Text("Ad") },
+                    suffix = { if (f.extension.isNotEmpty()) Text("." + f.extension) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
             confirmButton = {
                 Button(onClick = {
-                    Tanitim.sil(f)
+                    Tanitim.yenidenAdlandir(f, yeniAd)
                     dosyalar = Tanitim.dosyalar(ctx)
                     silinecek = null
-                }) { Text("Kaldır") }
+                }) { Text("Kaydet") }
             },
-            dismissButton = { TextButton(onClick = { silinecek = null }) { Text("Vazgeç") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        Tanitim.sil(f)
+                        dosyalar = Tanitim.dosyalar(ctx)
+                        silinecek = null
+                    }) { Text("Kaldır", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { silinecek = null }) { Text("Vazgeç") }
+                }
+            },
         )
     }
     Kutu {

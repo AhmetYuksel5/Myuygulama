@@ -33,10 +33,40 @@ object Tanitim {
         c.getSharedPreferences("ofis", Context.MODE_PRIVATE).edit().putString("waMesaj", m).apply()
 
     /** Eklenme sırasıyla (dosya adının önündeki sıra numarası). */
-    fun dosyalar(c: Context): List<File> = (klasor(c).listFiles() ?: emptyArray()).sortedBy { it.name }
+    /**
+     * Her dosya kendi klasöründe (klasör adı = eklenme anı, sıra için): WhatsApp
+     * belgeyi dosya adıyla gösteriyor, adın önünde sıra numarası durmasın.
+     * Eski düzende (önekli, düz klasörde) eklenmiş dosyalar burada taşınır.
+     */
+    fun dosyalar(c: Context): List<File> {
+        val k = klasor(c)
+        (k.listFiles() ?: emptyArray()).filter { it.isFile }.forEach { eski ->
+            val sira = eski.name.substringBefore('_', "")
+            val ad = eski.name.substringAfter('_')
+            if (sira.isNotEmpty()) {
+                val yeniKlasor = File(k, sira).apply { mkdirs() }
+                eski.renameTo(File(yeniKlasor, ad))
+            }
+        }
+        return (k.listFiles() ?: emptyArray()).filter { it.isDirectory }.sortedBy { it.name }
+            .mapNotNull { d -> d.listFiles()?.firstOrNull { it.isFile } }
+    }
 
-    /** Görünen ad: sıra öneki atılmış dosya adı. */
-    fun ad(f: File) = f.name.substringAfter('_')
+    fun ad(f: File): String = f.name
+
+    /** Uzantısız ad: düzenleme kutusunda yalnız bu gösterilir, uzantı korunur. */
+    fun adGovde(f: File): String = f.nameWithoutExtension
+
+    private fun temizle(ad: String) = ad.replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
+
+    /** Uzantı aynı kalır; boş ya da aynı ad değiştirmez. */
+    fun yenidenAdlandir(f: File, yeniGovde: String): File {
+        val g = temizle(yeniGovde).removeSuffix("." + f.extension)
+        if (g.isEmpty()) return f
+        val yeni = File(f.parentFile, if (f.extension.isEmpty()) g else "$g.${f.extension}")
+        if (yeni.name == f.name) return f
+        return if (f.renameTo(yeni)) yeni else f
+    }
 
     /**
      * Seçilen dosyayı uygulamanın kendi klasörüne kopyalar: telefondaki asıl
@@ -47,15 +77,19 @@ object Tanitim {
         c.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
             if (it.moveToFirst()) ad = it.getString(0) ?: ad
         }
-        ad = ad.replace(Regex("[/\\\\:*?\"<>|]"), "_")
-        val hedef = File(klasor(c), "%013d_%s".format(System.currentTimeMillis(), ad))
+        ad = temizle(ad).ifEmpty { "dosya" }
+        val hedef = File(File(klasor(c), "%013d".format(System.currentTimeMillis())).apply { mkdirs() }, ad)
         c.contentResolver.openInputStream(uri)?.use { g -> hedef.outputStream().use { g.copyTo(it) } }
         hedef.exists() && hedef.length() > 0
     } catch (e: Exception) {
         false
     }
 
-    fun sil(f: File) = f.delete()
+    fun sil(f: File) {
+        val d = f.parentFile
+        f.delete()
+        d?.delete()
+    }
 
     private fun tur(f: File): String =
         MimeTypeMap.getSingleton().getMimeTypeFromExtension(f.extension.lowercase()) ?: "application/octet-stream"

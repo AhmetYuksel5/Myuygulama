@@ -173,8 +173,11 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   basmak zorunda kalıyoruz"): basınca dosyalar gider, sürüklenir, uzun basış
   kapatır, 3 dk sonra kendiliğinden gider. Üstte gösterme izni yoksa ikinci
   adım kartta "Dosyalar 2/2" olarak kalır. Gönder'e kullanıcı basar: WhatsApp başka uygulamanın onun adına
-  göndermesine izin vermiyor. Dosyalar `filesDir/tanitim/`e kopyalanır
-  (FileProvider `tanitim/`); Ayarlar'da dosyaya dokununca "kaldırılsın mı".
+  göndermesine izin vermiyor. Dosyalar `filesDir/tanitim/<eklenme anı>/<ad>`a
+  kopyalanır (her dosya kendi klasöründe: WhatsApp belgeyi dosya adıyla
+  gösterir, ad önekli olmasın; eski önekli dosyalar `dosyalar()` içinde
+  taşınır). FileProvider `tanitim/`. Ayarlar'da dosyaya dokununca pencere:
+  ad kutusu (uzantı korunur) + Kaydet / Kaldır / Vazgeç (kullanıcı 2026-11-26).
   Paneldeki WhatsApp botu bu işe karışmaz (kullanıcı: "onu karıştırma").
 - Ana ekran = son aramalar (arama kaydından); dokununca o aramanın kartı
   açılır, kartı doldurulan arama etiketlenir (`Depo.siniflar`, anahtar arama
