@@ -120,8 +120,8 @@ internal object ScreenAgent {
             toast(service, "Gemini veya Claude anahtarı girilmemiş: Merkez → Yapay zekâ.")
             return false
         }
-        if (findSensitivePackage(service) != null) {
-            toast(service, "Banka ve ödeme uygulamalarında ekran ajanı kapalı.")
+        findSensitivePackage(service)?.let { pkg ->
+            toast(service, "${appLabel(service, pkg)} ajana kapalı: Merkez → Yapay zekâ → Ajanın çalışabileceği bankalar.")
             return false
         }
         val recent = freshSession()
@@ -633,6 +633,21 @@ internal object ScreenAgent {
                 },
             )
         }
+        // Kapalı bankada durduysa: kullanıcı tek dokunuşla o bankayı ajana açabilsin.
+        if (outcome.kind == OutcomeKind.SENSITIVE && outcome.blockedPackage.isNotBlank() &&
+            BankAccess.isBankLike(outcome.blockedPackage)
+        ) {
+            actionRow.addView(
+                optionChip(service, "${appLabel(service, outcome.blockedPackage)} ajana açılsın", d, accent = true) {
+                    BankAccess.setAllowed(service, outcome.blockedPackage, true)
+                    closeResult(service)
+                    handler.postDelayed(
+                        { resumeSession(service, session, userReply = "Banka ajana açıldı; kaldığın yerden devam et.") },
+                        280L,
+                    )
+                },
+            )
+        }
         // Günlük: ne olduğunu birlikte konuşabilmek için tek dokunuşla panoya.
         if (session.log.isNotEmpty()) {
             actionRow.addView(
@@ -719,11 +734,9 @@ internal object ScreenAgent {
             toast(service, "Gemini veya Claude anahtarı girilmemiş: Merkez → Yapay zekâ.")
             return
         }
-        if (findSensitivePackage(service) != null) {
-            val outcome = AgentOutcome(
-                kind = OutcomeKind.SENSITIVE,
-                message = "Hâlâ banka/ödeme uygulaması açık. O ekrandan çıktıktan sonra \"Devam et\" diyebilirsin.",
-            )
+        val blockedNow = findSensitivePackage(service)
+        if (blockedNow != null) {
+            val outcome = blockedOutcome(service, blockedNow)
             session.lastOutcome = outcome
             session.updatedAtMs = System.currentTimeMillis()
             showResultCard(service, session, outcome)
@@ -873,7 +886,8 @@ internal object ScreenAgent {
         AgentLog.add(
             session,
             "── ${AgentLog.clock()} · ${if (resumed) "devam" else "yeni görev"} · $model" +
-                (if (config.provider == PROVIDER_CLAUDE && config.escalate) " (takılınca Opus)" else "") +
+                (if (config.provider == PROVIDER_CLAUDE && config.planner) " · Opus planlar" else "") +
+                (if (config.provider == PROVIDER_CLAUDE && config.escalate) " · takılınca Sonnet→Opus" else "") +
                 (if (session.alwaysScreenshot) " · her adım görüntü" else ""),
         )
         if (!resumed) AgentLog.add(session, "Görev: ${session.goal.take(200)}")
@@ -928,15 +942,7 @@ internal object ScreenAgent {
                     return
                 }
                 if (sensitiveNow.isNotEmpty()) {
-                    finish(
-                        service,
-                        sessionId,
-                        session,
-                        AgentOutcome(
-                            kind = OutcomeKind.SENSITIVE,
-                            message = "Banka/ödeme uygulaması açıldı, ekran ajanı güvenlik için durduruldu. Bu adımı elle tamamlayıp çıktıktan sonra kaldığın yerden devam edebilirsin.",
-                        ),
-                    )
+                    finish(service, sessionId, session, blockedOutcome(service, sensitiveNow))
                     return
                 }
 
@@ -958,15 +964,7 @@ internal object ScreenAgent {
                 }
 
                 if (snapshot.sensitive) {
-                    finish(
-                        service,
-                        sessionId,
-                        session,
-                        AgentOutcome(
-                            kind = OutcomeKind.SENSITIVE,
-                            message = "Banka/ödeme ekranı algılandı, ajan güvenlik için durduruldu.",
-                        ),
-                    )
+                    finish(service, sessionId, session, blockedOutcome(service, snapshot.packageName))
                     return
                 }
 
@@ -1169,17 +1167,18 @@ internal object ScreenAgent {
 
                 // Eylemi uygulamadan hemen önce bir kez daha hassas ekran kontrolü;
                 // yanıt gelmezse de durur.
-                if (onMainBlocking { findSensitivePackage(service).orEmpty() } != "") {
-                    finish(
-                        service,
-                        sessionId,
-                        session,
-                        AgentOutcome(
-                            kind = OutcomeKind.SENSITIVE,
-                            message = "Banka/ödeme uygulaması açıldı, ekran ajanı güvenlik için durduruldu.",
-                        ),
-                    )
+                val sensitiveBefore = onMainBlocking { findSensitivePackage(service).orEmpty() }
+                if (sensitiveBefore != "") {
+                    finish(service, sessionId, session, blockedOutcome(service, sensitiveBefore.orEmpty()))
                     return
+                }
+                // Kapalı bir bankayı açmaya kalkıyorsa: açmadan dur, kartta "ajana aç" çıksın.
+                if (decision.action == "open_app") {
+                    val target = onMainBlocking { resolveApp(service, decision.packageName) }
+                    if (target != null && BankAccess.blocked(service, target)) {
+                        finish(service, sessionId, session, blockedOutcome(service, target))
+                        return
+                    }
                 }
 
                 // Para kilidi: bankada basılacak düğmenin yazısı telefonun kendisinden
@@ -1261,6 +1260,50 @@ internal object ScreenAgent {
      * Takılınca güçlü modele geçiş. Turdaki Opus adımı sınırı dolduysa ajan
      * durup soruyor: pahalı model sessizce para yakmasın. false: tur bitti.
      */
+    /** Kapalı bankada durma sonucu: hangi banka olduğu ve nasıl açılacağı yazıyor. */
+    private fun blockedOutcome(context: Context, pkg: String): AgentOutcome {
+        val name = appLabel(context, pkg)
+        return AgentOutcome(
+            kind = OutcomeKind.SENSITIVE,
+            message = if (pkg.isNotBlank() && BankAccess.isBankLike(pkg)) {
+                "$name ajana kapalı, güvenlik için durdum. Aşağıdaki düğmeyle açarsan kaldığım yerden " +
+                    "devam ederim; para çıkaran düğmelere yine basmam."
+            } else {
+                "Banka/ödeme ekranı algılandı, ajan güvenlik için durduruldu."
+            },
+            blockedPackage = pkg,
+        )
+    }
+
+    private fun appLabel(context: Context, pkg: String): String = runCatching {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault(pkg.substringAfterLast('.').ifBlank { "Bu uygulama" })
+
+    /**
+     * open_app'e verilen paket adı ya da uygulamanın görünen adı → paket.
+     * Model paket adını çoğu zaman tahmin edip tutturamıyordu (Akbank'ı açmak
+     * için 12 adım harcadı); artık "Akbank" demesi yetiyor.
+     */
+    private fun resolveApp(context: Context, query: String): String? {
+        val q = query.trim()
+        if (q.isEmpty()) return null
+        val pm = context.packageManager
+        if (pm.getLaunchIntentForPackage(q) != null) return q
+        val tr = java.util.Locale.forLanguageTag("tr")
+        val wanted = q.lowercase(tr)
+        val apps = runCatching {
+            pm.queryIntentActivities(
+                android.content.Intent(android.content.Intent.ACTION_MAIN)
+                    .addCategory(android.content.Intent.CATEGORY_LAUNCHER),
+                0,
+            ).map { it.activityInfo.packageName to it.loadLabel(pm).toString().lowercase(tr) }
+        }.getOrDefault(emptyList())
+        return apps.firstOrNull { it.second == wanted }?.first
+            ?: apps.firstOrNull { it.second.startsWith(wanted) }?.first
+            ?: apps.firstOrNull { it.second.contains(wanted) }?.first
+    }
+
     /**
      * Turun başında Opus bir kez ekrana bakıp adım planı yazıyor. Haiku'nun
      * en zayıf yanı "ne yapmalıyım" kararı; plan ona kalmayınca yalnız
@@ -1688,14 +1731,14 @@ internal object ScreenAgent {
         }
 
         "open_app" -> {
-            val pkg = action.packageName.trim()
-            if (pkg.isEmpty()) {
-                "paket adı boş"
-            } else if (BankAccess.blocked(service, pkg)) {
-                "güvenlik nedeniyle açılmadı"
-            } else {
-                val ok = onMainBlocking { launchPackage(service, pkg) } == true
-                if (ok) "uygulama açıldı" else "uygulama bulunamadı: $pkg"
+            val query = action.packageName.trim()
+            val pkg = if (query.isEmpty()) null else onMainBlocking { resolveApp(service, query) }
+            when {
+                query.isEmpty() -> "uygulama adı boş"
+                pkg == null -> "uygulama bulunamadı: $query (çekmecede ya da aramada ara)"
+                BankAccess.blocked(service, pkg) -> "güvenlik nedeniyle açılmadı: ajana kapalı banka"
+                onMainBlocking { launchPackage(service, pkg) } == true -> "uygulama açıldı: ${appLabel(service, pkg)}"
+                else -> "uygulama açılamadı: $query"
             }
         }
 
@@ -2541,6 +2584,8 @@ internal data class AgentOutcome(
     val kind: OutcomeKind,
     val message: String,
     val options: List<String> = emptyList(),
+    /** Ajanın durduğu, kullanıcının açmadığı banka; kartta "ajana aç" düğmesi için. */
+    val blockedPackage: String = "",
 )
 
 /**
@@ -2643,7 +2688,7 @@ Yalnızca tek bir geçerli JSON nesnesi döndür; başka açıklama veya Markdow
   "text": "yazılacak metin (yalnız type için)",
   "submit": false,
   "direction": "down | up | left | right (yalnız scroll için; down=aşağı kaydırıp alttakileri gör)",
-  "package": "paket.adi (yalnız open_app için)",
+  "package": "paket adı ya da uygulamanın görünen adı, ör. Akbank (yalnız open_app için)",
   "ms": 1200,
   "message": "kullanıcıya kısa ve net Türkçe açıklama (ask veya done için)",
   "options": ["Seçenek 1", "Seçenek 2"],
@@ -2655,6 +2700,7 @@ Yalnızca tek bir geçerli JSON nesnesi döndür; başka açıklama veya Markdow
 Kurallar:
 - Ekranda gördüğün düğümlerin [x,y] merkez koordinatlarını kullan; tahmin etme.
 - Metin yazmak için "type" kullan ve kutunun [x,y] merkezini ver.
+- Bir uygulamayı açmak için çekmecede arama: "open_app" ver ve "package" alanına uygulamanın görünen adını yaz (ör. "Akbank", "TÜVTÜRK"); paket adını tahmin etme.
 - Her adımda "state" alanını tek kısa cümleyle güncel tut ki işlem duraklayıp devam ettiğinde kaldığın yeri tam bil.
 - Belirsizlik olduğunda (birden fazla eşleşen öğe, hangi hesap/kişi/cihaz olduğu belli değil, eksik bilgi, silme/gönderme/ödeme onayı, giriş/şifre/doğrulama adımı) görevi kapatma ("done" deme); bunun yerine "ask" döndür, "message" ile ne gerektiğini açıkla ve ekranda somut seçenekler varsa en fazla 4 kısa etiketi "options" dizisine koy. Kullanıcı cevap verince kaldığın yerden devam edeceksin.
 - Görev ileride bir zamanda yapılmak isteniyorsa ("yarın 9'da", "her sabah 8.30'da", "2 saat sonra", "cuma 17:00'de") ekrana dokunmadan hemen "schedule" döndür: "at" alanını aşağıdaki "Şu an" satırına göre mutlak tarih-saat olarak hesapla, "repeat" ile tekrarı ver, "task" alanına zaman ifadesini çıkarıp işi yaz, "message" ile ne kurduğunu kısaca söyle.
