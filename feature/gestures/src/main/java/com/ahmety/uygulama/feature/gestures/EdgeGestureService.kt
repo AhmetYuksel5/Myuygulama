@@ -43,12 +43,13 @@ open class EdgeGestureService : AccessibilityService() {
 
     private var windowManager: WindowManager? = null
     private val edgeViews = mutableListOf<View>()
-    private val handler = Handler(Looper.getMainLooper())
+    // View.getHandler() pencereden ayrılınca null döndüğü için iç sınıfta gölgelenmesin diye ayrı ad.
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var settings: GestureSettings
 
     // Kilit ekranında şerit görünmesin; durum değişince katman baştan kurulur.
-    private val lock = LockWatcher(this) { handler.post { rebuild() } }
+    private val lock = LockWatcher(this) { mainHandler.post { rebuild() } }
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         // Saydamlık dışındaki her ayar için en basit ve doğru yol: baştan çiz.
@@ -56,9 +57,9 @@ open class EdgeGestureService : AccessibilityService() {
         // onlarca değer geçiyor; her birinde katmanı kurup yıkmak göz
         // kırptırıyordu. Onda yalnız şeridin boyası değişiyor.
         if (key == "opacity") {
-            handler.post { applyOpacity() }
+            mainHandler.post { applyOpacity() }
         } else {
-            handler.post { rebuild() }
+            mainHandler.post { rebuild() }
         }
     }
 
@@ -140,7 +141,7 @@ open class EdgeGestureService : AccessibilityService() {
     /** Sistem penceresi açıldı ya da kapandı; şeritler çekiliyor ya da geri geliyor. */
     protected open fun onSystemUiChanged(covering: Boolean) {
         if (!::settings.isInitialized) return
-        if (covering) removeAll() else handler.post { rebuild() }
+        if (covering) removeAll() else mainHandler.post { rebuild() }
     }
 
     override fun onDestroy() {
@@ -150,7 +151,7 @@ open class EdgeGestureService : AccessibilityService() {
             settings.prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         }
         lock.stop()
-        handler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
         GestureFeedback.releaseTone()
         removeAll()
         super.onDestroy()
@@ -162,7 +163,7 @@ open class EdgeGestureService : AccessibilityService() {
      * hareketi çalışmıyordu.
      */
     protected fun raiseEdges() {
-        handler.post { if (::settings.isInitialized) rebuild() }
+        mainHandler.post { if (::settings.isInitialized) rebuild() }
     }
 
     private fun rebuild() {
@@ -253,7 +254,7 @@ open class EdgeGestureService : AccessibilityService() {
 
         /** Şerit kaldırılırken bekleyen uzun basış çalışmasın. */
         fun cancelPending() {
-            handler.removeCallbacks(longPressRunnable)
+            mainHandler.removeCallbacks(longPressRunnable)
         }
 
         private val longPressRunnable = Runnable {
@@ -284,20 +285,20 @@ open class EdgeGestureService : AccessibilityService() {
                     downX = event.rawX
                     downY = event.rawY
                     longPressFired = false
-                    handler.postDelayed(longPressRunnable, settings.longPressMs.toLong())
+                    mainHandler.postDelayed(longPressRunnable, settings.longPressMs.toLong())
                     return true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     // Belirgin hareket başladıysa bu bir kaydırma; uzun basışı iptal et.
                     if (abs(event.rawX - downX) > threshold || abs(event.rawY - downY) > threshold) {
-                        handler.removeCallbacks(longPressRunnable)
+                        mainHandler.removeCallbacks(longPressRunnable)
                     }
                     return true
                 }
 
                 MotionEvent.ACTION_UP -> {
-                    handler.removeCallbacks(longPressRunnable)
+                    mainHandler.removeCallbacks(longPressRunnable)
                     if (longPressFired) return true // eylem zaten tetiklendi
 
                     val dy = event.rawY - downY
@@ -345,7 +346,7 @@ open class EdgeGestureService : AccessibilityService() {
                 }
 
                 MotionEvent.ACTION_CANCEL -> {
-                    handler.removeCallbacks(longPressRunnable)
+                    mainHandler.removeCallbacks(longPressRunnable)
                     return true
                 }
             }
