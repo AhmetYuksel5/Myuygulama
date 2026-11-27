@@ -1213,14 +1213,15 @@ internal object ScreenAgent {
                 if (decision.action == "drive_search") {
                     lastActed = false
                     session.totalSteps = displayStep
+                    val account = decision.account.ifBlank { "work" }
                     updateStopPill("$displayStep · Drive'da aranıyor…")
                     val q = decision.query.ifBlank { decision.text }.trim()
-                    val res = ScreenAgentStorage.driveSearch(service, q)
+                    val res = ScreenAgentStorage.driveSearch(service, q, account, decision.limit)
                     val out = res.getOrElse { "Hata: ${it.message}" }
                     session.lastToolOutput = out.take(3500)
                     val shortOut = if (res.isSuccess) "sonuçlar alındı" else "hata"
-                    AgentLog.add(session, "$stepHead\n   drive_search(\"$q\") → $shortOut")
-                    session.history += "Adım $displayStep: drive_search(\"$q\") → $shortOut"
+                    AgentLog.add(session, "$stepHead\n   drive_search($account, \"$q\") → $shortOut")
+                    session.history += "Adım $displayStep: drive_search($account, \"$q\") → $shortOut"
                     while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
                     continue
                 }
@@ -1228,14 +1229,15 @@ internal object ScreenAgent {
                 if (decision.action == "drive_read") {
                     lastActed = false
                     session.totalSteps = displayStep
+                    val account = decision.account.ifBlank { "work" }
                     updateStopPill("$displayStep · Drive dosyası okunuyor…")
                     val fid = decision.fileId.ifBlank { decision.text }.trim()
-                    val res = ScreenAgentStorage.driveRead(service, fid)
+                    val res = ScreenAgentStorage.driveRead(service, fid, account)
                     val out = res.getOrElse { "Hata: ${it.message}" }
                     session.lastToolOutput = out.take(3500)
                     val shortOut = if (res.isSuccess) "okundu" else "hata"
-                    AgentLog.add(session, "$stepHead\n   drive_read($fid) → $shortOut")
-                    session.history += "Adım $displayStep: drive_read($fid) → $shortOut"
+                    AgentLog.add(session, "$stepHead\n   drive_read($account, $fid) → $shortOut")
+                    session.history += "Adım $displayStep: drive_read($account, $fid) → $shortOut"
                     while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
                     continue
                 }
@@ -1243,7 +1245,7 @@ internal object ScreenAgent {
                 if (decision.action == "gmail_search") {
                     lastActed = false
                     session.totalSteps = displayStep
-                    val account = decision.account.ifBlank { "is" }
+                    val account = decision.account.ifBlank { "work" }
                     updateStopPill("$displayStep · Gmail'de aranıyor…")
                     val q = decision.query.ifBlank { decision.text }.trim()
                     val res = ScreenAgentStorage.gmailSearch(service, q, account, decision.limit)
@@ -1259,7 +1261,7 @@ internal object ScreenAgent {
                 if (decision.action == "gmail_read") {
                     lastActed = false
                     session.totalSteps = displayStep
-                    val account = decision.account.ifBlank { "is" }
+                    val account = decision.account.ifBlank { "work" }
                     updateStopPill("$displayStep · E-posta okunuyor…")
                     val tid = decision.threadId.ifBlank { decision.text }.trim()
                     val res = ScreenAgentStorage.gmailRead(service, tid, account)
@@ -1275,7 +1277,7 @@ internal object ScreenAgent {
                 if (decision.action == "gmail_draft") {
                     lastActed = false
                     session.totalSteps = displayStep
-                    val account = decision.account.ifBlank { "is" }
+                    val account = decision.account.ifBlank { "work" }
                     updateStopPill("$displayStep · E-posta taslağı hazırlanıyor…")
                     val bodyText = decision.body.ifBlank { decision.text }
                     val res = ScreenAgentStorage.gmailDraft(service, decision.to, decision.subject, bodyText, account)
@@ -1284,6 +1286,71 @@ internal object ScreenAgent {
                     val shortOut = if (res.isSuccess) "taslak oluşturuldu" else "hata"
                     AgentLog.add(session, "$stepHead\n   gmail_draft($account, \"${decision.to}\") → $shortOut")
                     session.history += "Adım $displayStep: gmail_draft($account, \"${decision.to}\") → $shortOut"
+                    while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
+                    continue
+                }
+
+                if (decision.action == "calendar_list") {
+                    lastActed = false
+                    session.totalSteps = displayStep
+                    val account = decision.account.trim()
+                    updateStopPill("$displayStep · Takvim okunuyor…")
+                    val res = ScreenAgentStorage.calendarList(service, decision.start, decision.end, account, decision.limit)
+                    val out = res.getOrElse { "Hata: ${it.message}" }
+                    session.lastToolOutput = out.take(4000)
+                    val shortOut = if (res.isSuccess) "etkinlikler alındı" else "hata"
+                    val accTag = account.ifBlank { "ikisi" }
+                    AgentLog.add(session, "$stepHead\n   calendar_list($accTag, ${decision.start}..${decision.end}) → $shortOut")
+                    session.history += "Adım $displayStep: calendar_list($accTag) → $shortOut"
+                    while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
+                    continue
+                }
+
+                if (decision.action == "calendar_search") {
+                    lastActed = false
+                    session.totalSteps = displayStep
+                    val account = decision.account.trim()
+                    updateStopPill("$displayStep · Takvimde aranıyor…")
+                    val q = decision.query.ifBlank { decision.text }.trim()
+                    val res = ScreenAgentStorage.calendarSearch(
+                        service,
+                        q,
+                        decision.start,
+                        decision.end,
+                        account,
+                        decision.limit,
+                    )
+                    val out = res.getOrElse { "Hata: ${it.message}" }
+                    session.lastToolOutput = out.take(4000)
+                    val shortOut = if (res.isSuccess) "sonuçlar alındı" else "hata"
+                    val accTag = account.ifBlank { "ikisi" }
+                    AgentLog.add(session, "$stepHead\n   calendar_search($accTag, \"$q\") → $shortOut")
+                    session.history += "Adım $displayStep: calendar_search($accTag, \"$q\") → $shortOut"
+                    while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
+                    continue
+                }
+
+                if (decision.action == "calendar_create") {
+                    lastActed = false
+                    session.totalSteps = displayStep
+                    val account = decision.account.ifBlank { "work" }
+                    updateStopPill("$displayStep · Takvim etkinliği ekleniyor…")
+                    val title = decision.title.ifBlank { decision.subject.ifBlank { decision.text } }.trim()
+                    val res = ScreenAgentStorage.calendarCreate(
+                        service,
+                        title = title,
+                        start = decision.start,
+                        end = decision.end,
+                        allDay = decision.allDay,
+                        description = decision.description.ifBlank { decision.body },
+                        location = decision.location,
+                        account = account,
+                    )
+                    val out = res.getOrElse { "Hata: ${it.message}" }
+                    session.lastToolOutput = out.take(1500)
+                    val shortOut = if (res.isSuccess) "etkinlik eklendi" else "hata"
+                    AgentLog.add(session, "$stepHead\n   calendar_create($account, \"$title\") → $shortOut")
+                    session.history += "Adım $displayStep: calendar_create($account, \"$title\") → $shortOut"
                     while (session.history.size > MAX_HISTORY) session.history.removeAt(0)
                     continue
                 }
@@ -1469,18 +1536,17 @@ internal object ScreenAgent {
             ),
             scheduledRun = session.scheduledRun,
         )
-        // Planlayıcı arka plan Drive/Gmail araçlarını bilmezse Haiku'ya uygulamayı açmasını söylüyor.
+        // Planlayıcı arka plan Drive/Gmail/Takvim araçlarını bilmezse Haiku'ya uygulamayı açmasını söylüyor.
         val toolHint = buildString {
-            if (driveEnabled) {
-                append(" Arka plan Drive araçları (drive_search, drive_read) aktif; Drive dosyası için uygulamayı açma.")
-            }
             if (driveEnabled || personalGmailEnabled) {
                 val accounts = buildList {
-                    if (driveEnabled) add("is")
-                    if (personalGmailEnabled) add("kisisel")
+                    if (driveEnabled) add("work")
+                    if (personalGmailEnabled) add("personal")
                 }.joinToString(", ")
-                append(" Arka plan Gmail araçları (gmail_search, gmail_read, gmail_draft; hesaplar: $accounts) aktif; ")
-                append("e-posta okuma/arama için Gmail uygulamasını açma, e-posta yazarken asla gönderme yalnızca taslak oluştur.")
+                append(" Arka plan Google araçları aktif (hesaplar: $accounts): ")
+                append("Drive (drive_search, drive_read), Gmail (gmail_search, gmail_read, gmail_draft) ve Takvim (calendar_list, calendar_search, calendar_create). ")
+                append("Drive, Gmail veya Takvim işlerinde uygulamayı ekranda açma; doğrudan bu araçları planla. ")
+                append("E-posta yazarken asla gönderme yalnızca taslak oluştur.")
             }
         }
         val raw = runCatching {
@@ -2831,6 +2897,12 @@ internal data class AgentAction(
     val subject: String = "",
     val body: String = "",
     val limit: Int = 10,
+    val title: String = "",
+    val start: String = "",
+    val end: String = "",
+    val allDay: Boolean = false,
+    val description: String = "",
+    val location: String = "",
     val note: String = "",
     val learned: String = "",
     val ms: Long = 1_000L,
@@ -2848,11 +2920,14 @@ internal data class AgentAction(
         "scroll" -> "scroll($direction)"
         "open_app" -> "open_app($packageName)"
         "open_url" -> "open_url(${url.take(40)})"
-        "drive_search" -> "drive_search(\"${query.take(30)}\")"
-        "drive_read" -> "drive_read($fileId)"
-        "gmail_search" -> "gmail_search(${account.ifBlank { "is" }}, \"${query.take(30)}\")"
-        "gmail_read" -> "gmail_read(${account.ifBlank { "is" }}, $threadId)"
-        "gmail_draft" -> "gmail_draft(${account.ifBlank { "is" }}, \"${to.take(30)}\")"
+        "drive_search" -> "drive_search(${account.ifBlank { "work" }}, \"${query.take(30)}\")"
+        "drive_read" -> "drive_read(${account.ifBlank { "work" }}, $fileId)"
+        "gmail_search" -> "gmail_search(${account.ifBlank { "work" }}, \"${query.take(30)}\")"
+        "gmail_read" -> "gmail_read(${account.ifBlank { "work" }}, $threadId)"
+        "gmail_draft" -> "gmail_draft(${account.ifBlank { "work" }}, \"${to.take(30)}\")"
+        "calendar_list" -> "calendar_list(${account.ifBlank { "both" }}, ${start}..${end})"
+        "calendar_search" -> "calendar_search(${account.ifBlank { "both" }}, \"${query.take(30)}\")"
+        "calendar_create" -> "calendar_create(${account.ifBlank { "work" }}, \"${title.take(30)}\", $start)"
         "remember" -> "remember(\"${note.take(30)}\")"
         "wait" -> "wait(${ms}ms)"
         else -> action
@@ -2871,43 +2946,39 @@ internal object AgentProtocol {
         driveEnabled: Boolean = false,
         personalGmailEnabled: Boolean = false,
     ): String {
-        val gmailEnabled = driveEnabled || personalGmailEnabled
-        val extraActions = buildString {
-            if (driveEnabled) append(" | drive_search | drive_read")
-            if (gmailEnabled) append(" | gmail_search | gmail_read | gmail_draft")
-        }
-        val extraFields = buildString {
-            if (driveEnabled || gmailEnabled) {
-                val queryUsage = when {
-                    driveEnabled && gmailEnabled -> "arama sorgusu (drive_search veya gmail_search için)"
-                    driveEnabled -> "Google Drive arama sorgusu (yalnız drive_search için)"
-                    else -> "Gmail arama sorgusu (yalnız gmail_search için)"
-                }
-                append("\n  \"query\": \"$queryUsage\",")
-            }
-            if (driveEnabled) {
-                append("\n  \"file_id\": \"Drive dosya kimliği (yalnız drive_read için)\",")
-            }
-            if (gmailEnabled) {
-                append("\n  \"account\": \"is | kisisel (gmail_* için; varsayılan is)\",")
-                append("\n  \"limit\": 10,")
-                append("\n  \"threadId\": \"Gmail yazışma kimliği (yalnız gmail_read için)\",")
-                append("\n  \"to\": \"alıcı e-posta adresi (yalnız gmail_draft için)\",")
-                append("\n  \"subject\": \"e-posta konusu (yalnız gmail_draft için)\",")
-                append("\n  \"body\": \"e-posta gövdesi (yalnız gmail_draft için)\",")
-            }
-        }
-        val driveRule = if (driveEnabled) {
-            "\n- Google Drive köprüsü AKTİF: dosya veya klasör ararken Drive uygulamasında elle aramak yerine önce \"drive_search\" ve gerekirse \"drive_read\" kullan; dosyayı ekranda açmak gerekiyorsa dönen linki \"open_url\" ile tek adımda aç."
+        val bridgeEnabled = driveEnabled || personalGmailEnabled
+        val extraActions = if (bridgeEnabled) {
+            " | drive_search | drive_read | gmail_search | gmail_read | gmail_draft | calendar_list | calendar_search | calendar_create"
         } else {
             ""
         }
-        val gmailRule = if (gmailEnabled) {
-            val activeAccounts = buildList {
-                if (driveEnabled) add("\"is\" (yesiltemizlik@gmail.com)")
-                if (personalGmailEnabled) add("\"kisisel\" (ahmetyuksel5@gmail.com)")
-            }.joinToString(" ve ")
-            "\n- Gmail köprüsü AKTİF ($activeAccounts): e-posta aranıyorsa ekranda Gmail uygulamasını açmak yerine önce \"gmail_search\" ve \"gmail_read\" araçlarını kullan; hangi hesap olduğu belli değilse aktif hesapların ikisinde de ara veya \"ask\" ile sor. E-posta yazılması istendiğinde asla doğrudan gönderme; \"gmail_draft\" ile taslak oluşturup kullanıcıya bildir."
+        val extraFields = if (bridgeEnabled) {
+            """
+  "query": "arama sorgusu (drive_search, gmail_search veya calendar_search için)",
+  "file_id": "Drive dosya kimliği (yalnız drive_read için)",
+  "account": "work | personal (drive_*, gmail_*, calendar_* için; calendar_list/search boş bırakılırsa ikisine birden bakar)",
+  "limit": 10,
+  "threadId": "Gmail yazışma kimliği (yalnız gmail_read için)",
+  "to": "alıcı e-posta adresi (yalnız gmail_draft için)",
+  "subject": "e-posta konusu (yalnız gmail_draft için)",
+  "body": "e-posta gövdesi (yalnız gmail_draft için)",
+  "title": "etkinlik başlığı (yalnız calendar_create için)",
+  "start": "YYYY-MM-DD veya YYYY-MM-DDTHH:MM (calendar_list, calendar_search, calendar_create için)",
+  "end": "YYYY-MM-DD veya YYYY-MM-DDTHH:MM (calendar_list, calendar_search, calendar_create için; isteğe bağlı)",
+  "allDay": false,
+  "description": "etkinlik açıklaması (yalnız calendar_create için; isteğe bağlı)",
+  "location": "etkinlik yeri (yalnız calendar_create için; isteğe bağlı)","""
+        } else {
+            ""
+        }
+        val activeAccounts = buildList {
+            if (driveEnabled) add("\"work\" (yesiltemizlik@gmail.com)")
+            if (personalGmailEnabled) add("\"personal\" (ahmetyuksel5@gmail.com)")
+        }.joinToString(" ve ")
+        val bridgeRules = if (bridgeEnabled) {
+            "\n- Google Drive köprüsü AKTİF ($activeAccounts): dosya veya klasör ararken Drive uygulamasında elle aramak yerine önce \"drive_search\" ve gerekirse \"drive_read\" kullan (\"account\": \"work\" veya \"personal\"); dosyayı ekranda açmak gerekiyorsa dönen linki \"open_url\" ile tek adımda aç." +
+                "\n- Gmail köprüsü AKTİF ($activeAccounts): e-posta aranıyorsa ekranda Gmail uygulamasını açmak yerine önce \"gmail_search\" ve \"gmail_read\" araçlarını kullan; hangi hesap olduğu belli değilse aktif hesapların ikisinde de ara veya \"ask\" ile sor. E-posta yazılması istendiğinde asla doğrudan gönderme; \"gmail_draft\" ile taslak oluşturup kullanıcıya bildir." +
+                "\n- Google Takvim köprüsü AKTİF ($activeAccounts): kullanıcı \"takvimde ne var\", \"bugün/yarın ne var\", \"toplantı ekle\" dediğinde ekranda Takvim uygulamasını açmak yerine doğrudan \"calendar_list\", \"calendar_search\" ve \"calendar_create\" araçlarını kullan; \"calendar_list\" ve \"calendar_search\" için \"account\" boş bırakılırsa aktif hesapların ikisine birden bakılır."
         } else {
             ""
         }
@@ -2942,7 +3013,7 @@ Kurallar:
 - Metin yazmak için "type" kullan ve kutunun [x,y] merkezini ver.
 - Bir uygulamayı açmak için çekmecede arama: "open_app" ver ve "package" alanına uygulamanın görünen adını yaz (ör. "Akbank", "TÜVTÜRK"); paket adını tahmin etme.
 - Her adımda "state" alanını tek kısa cümleyle güncel tut ki işlem duraklayıp devam ettiğinde kaldığın yeri tam bil.
-- "Hafıza / Merdiven metotları" bölümünde bu işe uyan bir kısayol veya engel aşma yöntemi varsa önce onu uygula.$driveRule$gmailRule
+- "Hafıza / Merdiven metotları" bölümünde bu işe uyan bir kısayol veya engel aşma yöntemi varsa önce onu uygula.$bridgeRules
 - Zor bir engeli aşan, gelecekte de geçerli genel bir yöntem keşfedersen "done" sırasında "learned" alanına tek cümleyle öner (kullanıcı tek dokunuşla hafızaya kaydedebilir).
 - Belirsizlik olduğunda (birden fazla eşleşen öğe, hangi hesap/kişi/cihaz olduğu belli değil, eksik bilgi, silme/gönderme/ödeme onayı, giriş/şifre/doğrulama adımı) görevi kapatma ("done" deme); bunun yerine "ask" döndür, "message" ile ne gerektiğini açıkla ve ekranda somut seçenekler varsa en fazla 4 kısa etiketi "options" dizisine koy. Kullanıcı cevap verince kaldığın yerden devam edeceksin.
 - Görev ileride bir zamanda yapılmak isteniyorsa ("yarın 9'da", "her sabah 8.30'da", "2 saat sonra", "cuma 17:00'de") ekrana dokunmadan hemen "schedule" döndür: "at" alanını aşağıdaki "Şu an" satırına göre mutlak tarih-saat olarak hesapla, "repeat" ile tekrarı ver, "task" alanına zaman ifadesini çıkarıp işi yaz, "message" ile ne kurduğunu kısaca söyle.
@@ -3042,13 +3113,19 @@ Kurallar:
             packageName = obj.optString("package").trim(),
             url = obj.optString("url").trim(),
             query = obj.optString("query").trim(),
-            fileId = obj.optString("file_id").trim(),
+            fileId = obj.optString("file_id").ifBlank { obj.optString("fileId") }.trim(),
             threadId = obj.optString("threadId").ifBlank { obj.optString("thread_id") }.trim(),
             account = obj.optString("account").trim(),
             to = obj.optString("to").trim(),
             subject = obj.optString("subject").trim(),
             body = obj.optString("body"),
             limit = obj.optInt("limit", 10),
+            title = obj.optString("title").trim(),
+            start = obj.optString("start").trim(),
+            end = obj.optString("end").trim(),
+            allDay = obj.optBoolean("allDay", false) || obj.optBoolean("all_day", false),
+            description = obj.optString("description").trim(),
+            location = obj.optString("location").trim(),
             note = obj.optString("note").trim(),
             learned = obj.optString("learned").trim(),
             ms = obj.optLong("ms", 1_000L),

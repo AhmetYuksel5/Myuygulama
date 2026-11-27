@@ -68,6 +68,7 @@ class AgentProtocolTest {
         assertTrue(sysWithoutBridges.contains("remember"))
         assertFalse(sysWithoutBridges.contains("drive_search"))
         assertFalse(sysWithoutBridges.contains("gmail_search"))
+        assertFalse(sysWithoutBridges.contains("calendar_list"))
 
         val sysWithWorkOnly = AgentProtocol.systemPrompt(driveEnabled = true, personalGmailEnabled = false)
         assertTrue(sysWithWorkOnly.contains("drive_search"))
@@ -76,6 +77,9 @@ class AgentProtocolTest {
         assertTrue(sysWithWorkOnly.contains("gmail_search"))
         assertTrue(sysWithWorkOnly.contains("gmail_read"))
         assertTrue(sysWithWorkOnly.contains("gmail_draft"))
+        assertTrue(sysWithWorkOnly.contains("calendar_list"))
+        assertTrue(sysWithWorkOnly.contains("calendar_search"))
+        assertTrue(sysWithWorkOnly.contains("calendar_create"))
         assertTrue(sysWithWorkOnly.contains("yesiltemizlik@gmail.com"))
         assertFalse(sysWithWorkOnly.contains("ahmetyuksel5@gmail.com"))
 
@@ -83,10 +87,12 @@ class AgentProtocolTest {
         assertTrue(sysWithBothAccounts.contains("yesiltemizlik@gmail.com"))
         assertTrue(sysWithBothAccounts.contains("ahmetyuksel5@gmail.com"))
         assertTrue(sysWithBothAccounts.contains("asla doğrudan gönderme"))
+        assertTrue(sysWithBothAccounts.contains("takvimde ne var"))
 
         val sysPersonalOnly = AgentProtocol.systemPrompt(driveEnabled = false, personalGmailEnabled = true)
-        assertFalse(sysPersonalOnly.contains("drive_search"))
+        assertTrue(sysPersonalOnly.contains("drive_search"))
         assertTrue(sysPersonalOnly.contains("gmail_search"))
+        assertTrue(sysPersonalOnly.contains("calendar_list"))
         assertTrue(sysPersonalOnly.contains("ahmetyuksel5@gmail.com"))
         assertFalse(sysPersonalOnly.contains("yesiltemizlik@gmail.com"))
     }
@@ -126,15 +132,15 @@ class AgentProtocolTest {
             AgentAction(action = "open_app", packageName = "com.example.app").describe(),
         )
         assertEquals(
-            "drive_search(\"teklif\")",
+            "drive_search(work, \"teklif\")",
             AgentAction(action = "drive_search", query = "teklif").describe(),
         )
         assertEquals(
-            "drive_read(abc123)",
-            AgentAction(action = "drive_read", fileId = "abc123").describe(),
+            "drive_read(personal, abc123)",
+            AgentAction(action = "drive_read", account = "personal", fileId = "abc123").describe(),
         )
         assertEquals(
-            "gmail_search(is, \"fatura\")",
+            "gmail_search(work, \"fatura\")",
             AgentAction(action = "gmail_search", query = "fatura").describe(),
         )
         assertEquals(
@@ -146,6 +152,18 @@ class AgentProtocolTest {
             AgentAction(action = "gmail_draft", account = "is", to = "ali@ornek.com").describe(),
         )
         assertEquals(
+            "calendar_list(both, 2026-11-27..2026-11-28)",
+            AgentAction(action = "calendar_list", start = "2026-11-27", end = "2026-11-28").describe(),
+        )
+        assertEquals(
+            "calendar_search(personal, \"dişçi\")",
+            AgentAction(action = "calendar_search", account = "personal", query = "dişçi").describe(),
+        )
+        assertEquals(
+            "calendar_create(work, \"Ekip toplantısı\", 2026-11-28T10:00)",
+            AgentAction(action = "calendar_create", title = "Ekip toplantısı", start = "2026-11-28T10:00").describe(),
+        )
+        assertEquals(
             "open_url(https://drive.google.com/file/d/1/view)",
             AgentAction(action = "open_url", url = "https://drive.google.com/file/d/1/view").describe(),
         )
@@ -153,7 +171,7 @@ class AgentProtocolTest {
     }
 
     @Test
-    fun personalAccountRoutingRecognizesAliasesAndDefaultsToWork() {
+    fun accountRoutingRecognizesPersonalBothAndDefaultsToWork() {
         assertTrue(ScreenAgentStorage.isPersonalAccount("kisisel"))
         assertTrue(ScreenAgentStorage.isPersonalAccount("kişisel"))
         assertTrue(ScreenAgentStorage.isPersonalAccount("KİŞİSEL"))
@@ -161,8 +179,16 @@ class AgentProtocolTest {
         assertTrue(ScreenAgentStorage.isPersonalAccount("ahmetyuksel5@gmail.com"))
 
         assertFalse(ScreenAgentStorage.isPersonalAccount(""))
+        assertFalse(ScreenAgentStorage.isPersonalAccount("work"))
         assertFalse(ScreenAgentStorage.isPersonalAccount("is"))
         assertFalse(ScreenAgentStorage.isPersonalAccount("iş"))
         assertFalse(ScreenAgentStorage.isPersonalAccount("yesiltemizlik@gmail.com"))
+
+        assertTrue(ScreenAgentStorage.isBothAccounts(""))
+        assertTrue(ScreenAgentStorage.isBothAccounts("both"))
+        assertTrue(ScreenAgentStorage.isBothAccounts("ikisi"))
+        assertTrue(ScreenAgentStorage.isBothAccounts("hepsi"))
+        assertFalse(ScreenAgentStorage.isBothAccounts("work"))
+        assertFalse(ScreenAgentStorage.isBothAccounts("personal"))
     }
 }

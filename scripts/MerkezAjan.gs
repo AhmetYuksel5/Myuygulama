@@ -1,13 +1,13 @@
 /**
- * Merkez Ekran Ajanı — Google Drive ve Gmail Köprüsü (Google Apps Script)
+ * Merkez Ekran Ajanı — Google Drive, Gmail ve Takvim Köprüsü (Google Apps Script)
  *
- * Aynı betik hem iş hesabında (yesiltemizlik@gmail.com — Drive + İş Gmail)
- * hem de kişisel hesapta (ahmetyuksel5@gmail.com — Kişisel Gmail) ayrı
- * Web Uygulaması olarak dağıtılabilir.
+ * Aynı betik hem iş hesabında (yesiltemizlik@gmail.com) hem de kişisel hesapta
+ * (ahmetyuksel5@gmail.com) ayrı Web Uygulaması olarak dağıtılabilir; her iki
+ * hesapta da Drive, Gmail ve Takvim (CalendarApp) birlikte çalışır.
  *
- * Güvenlik: yalnızca okuma ve taslak oluşturma vardır; otomatik e-posta
- * gönderme veya silme eylemi bilerek eklenmemiştir. Tüm istekler
- * MERKEZ_TOKEN komut dosyası özelliği ile korunur.
+ * Güvenlik: yalnızca okuma, taslak oluşturma ve takvime etkinlik ekleme vardır;
+ * otomatik e-posta gönderme, e-posta silme veya etkinlik silme eylemi bilerek
+ * eklenmemiştir. Tüm istekler MERKEZ_TOKEN komut dosyası özelliği ile korunur.
  *
  * Kurulum (bir kez, 1 dakika):
  * 1. https://script.google.com adresinde "Yeni proje" aç, adını "MerkezAjan" koy.
@@ -15,12 +15,13 @@
  * 3. Proje Ayarları (dişli simgesi) → Komut Dosyası Özellikleri → Özellik ekle:
  *      Özellik: MERKEZ_TOKEN
  *      Değer:   kendin belirlediğin uzun rastgele bir parola (depoya asla yazma!)
- * 4. Sağ üstte Dağıt → Yeni dağıtım → Tür: Web uygulaması:
+ * 4. İlk kurulumda yetkiVer() fonksiyonunu bir kez çalıştırıp Drive + Gmail +
+ *    Takvim izinlerini tek seferde onayla.
+ * 5. Sağ üstte Dağıt → Yeni dağıtım → Tür: Web uygulaması:
  *      - Yürütme kimliği: Ben
  *      - Erişimi olanlar: Herkes (istekler MERKEZ_TOKEN ile korunur)
- *    Yetki onayını ver ve çıkan Web uygulaması URL'sini (…/exec) kopyala.
- * 5. Telefonda Merkez → Yapay zekâ → Google Drive / Kişisel Gmail köprüsü
- *    alanına URL ve jetonu gir.
+ *    Çıkan Web uygulaması URL'sini (…/exec) kopyala.
+ * 6. Telefonda Merkez → Yapay zekâ → Google Drive / Kişisel köprü alanına gir.
  */
 
 var FOLDER_NAME = 'MerkezAjan';
@@ -36,9 +37,10 @@ var DEFAULT_MEMORY_TEMPLATE = [
   'Sık yaptığın işlerin kısa yollarını ve takıldığın engelleri aşma kurallarını buraya madde madde yazabilirsin.',
   '',
   '## Genel Kurallar',
-  '- Google Drive dosyası aranıyorsa ekranda Drive uygulamasını açmak yerine önce `drive_search` ve `drive_read` araçlarını kullan; gerekirse dönen linki `open_url` ile tek adımda aç.',
+  '- Google Drive dosyası aranıyorsa ekranda Drive uygulamasını açmak yerine önce `drive_search` ve `drive_read` araçlarını kullan (`account: "work" | "personal"`); gerekirse dönen linki `open_url` ile tek adımda aç.',
   '- E-posta aranıyorsa ekranda Gmail uygulamasını açmak yerine önce `gmail_search` ve `gmail_read` araçlarını kullan; hangi hesap olduğu belli değilse ikisinde de ara veya `ask` ile sor.',
   '- E-posta yazılması istendiğinde asla doğrudan gönderme; `gmail_draft` ile taslak oluşturup kullanıcıya bildir.',
+  '- Kullanıcı "takvimde ne var", "bugün/yarın ne var" veya "toplantı ekle" dediğinde ekranda Takvim uygulamasını açmak yerine doğrudan `calendar_list`, `calendar_search` ve `calendar_create` araçlarını kullan.',
   '- Birden fazla eşleşen kişi, hesap veya cihaz çıktığında tahmin etme; `ask` eylemiyle seçenekleri sun.',
   '',
   '## Öğrenilen Metotlar',
@@ -73,6 +75,18 @@ function doPost(e) {
     if (action === 'gmail_search') return jsonOut_(handleGmailSearch_(body.query, body.limit));
     if (action === 'gmail_read') return jsonOut_(handleGmailRead_(body.threadId));
     if (action === 'gmail_draft') return jsonOut_(handleGmailDraft_(body.to, body.subject, body.body));
+    if (action === 'calendar_list') return jsonOut_(handleCalendarList_(body.start, body.end, body.limit));
+    if (action === 'calendar_search') return jsonOut_(handleCalendarSearch_(body.query, body.start, body.end, body.limit));
+    if (action === 'calendar_create') {
+      return jsonOut_(handleCalendarCreate_(
+        body.title,
+        body.start,
+        body.end,
+        body.allDay,
+        body.description,
+        body.location
+      ));
+    }
 
     return jsonOut_({ ok: false, error: 'Bilinmeyen eylem: ' + action });
   } catch (err) {
@@ -91,12 +105,20 @@ function handlePing_() {
   } catch (ignore) {
     gmailOk = false;
   }
+  var calendarOk = false;
+  try {
+    CalendarApp.getDefaultCalendar().getName();
+    calendarOk = true;
+  } catch (ignore) {
+    calendarOk = false;
+  }
   return {
     ok: true,
     folderId: folder.getId(),
     memoryFileId: mem.getId(),
     logFileId: log.getId(),
     gmail: gmailOk,
+    calendar: calendarOk,
   };
 }
 
@@ -240,7 +262,21 @@ function handleWriteMemory_(content) {
 
 function handleGmailPing_() {
   var unread = GmailApp.getInboxUnreadCount();
-  return { ok: true, gmail: true, unread: unread };
+  var calendarOk = false;
+  try {
+    CalendarApp.getDefaultCalendar().getName();
+    calendarOk = true;
+  } catch (ignore) {
+    calendarOk = false;
+  }
+  var driveOk = false;
+  try {
+    DriveApp.getRootFolder().getName();
+    driveOk = true;
+  } catch (ignore) {
+    driveOk = false;
+  }
+  return { ok: true, gmail: true, unread: unread, calendar: calendarOk, drive: driveOk };
 }
 
 function handleGmailSearch_(query, limit) {
@@ -342,12 +378,144 @@ function handleGmailDraft_(to, subject, body) {
   };
 }
 
+// ---- Google Takvim (CalendarApp) — yalnızca listeleme, arama ve oluşturma ----
+
+function handleCalendarList_(startRaw, endRaw, limit) {
+  var cal = CalendarApp.getDefaultCalendar();
+  var now = new Date();
+  var todayStr = Utilities.formatDate(now, 'Europe/Istanbul', 'yyyy-MM-dd');
+  var startDate = parseTrDate_(startRaw, false) || parseTrDate_(todayStr, false);
+  var endDate = parseTrDate_(endRaw, true) || new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000 - 1000);
+  if (endDate.getTime() <= startDate.getTime()) {
+    endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000 - 1000);
+  }
+  var maxItems = Math.min(Math.max(Number(limit) || 25, 1), 50);
+  var events = cal.getEvents(startDate, endDate);
+  var items = [];
+  for (var i = 0; i < events.length && items.length < maxItems; i++) {
+    items.push(serializeEvent_(events[i]));
+  }
+  return {
+    ok: true,
+    calendarName: cal.getName(),
+    start: formatDateTr_(startDate),
+    end: formatDateTr_(endDate),
+    items: items,
+  };
+}
+
+function handleCalendarSearch_(query, startRaw, endRaw, limit) {
+  var q = String(query || '').trim();
+  if (!q) return { ok: false, error: 'Takvim arama sorgusu boş.' };
+  var cal = CalendarApp.getDefaultCalendar();
+  var now = new Date();
+  var startDate = parseTrDate_(startRaw, false) || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  var endDate = parseTrDate_(endRaw, true) || new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+  if (endDate.getTime() <= startDate.getTime()) {
+    endDate = new Date(startDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+  }
+  var maxItems = Math.min(Math.max(Number(limit) || 25, 1), 50);
+  var events = cal.getEvents(startDate, endDate, { search: q });
+  var items = [];
+  for (var i = 0; i < events.length && items.length < maxItems; i++) {
+    items.push(serializeEvent_(events[i]));
+  }
+  return {
+    ok: true,
+    calendarName: cal.getName(),
+    query: q,
+    items: items,
+  };
+}
+
+// Güvenlik sınırı: yalnızca etkinlik oluşturulur; etkinlik silme bilerek yoktur.
+function handleCalendarCreate_(title, startRaw, endRaw, allDay, description, location) {
+  var cleanTitle = String(title || '').trim();
+  if (!cleanTitle) return { ok: false, error: 'Etkinlik başlığı (title) boş.' };
+  var startStr = String(startRaw || '').trim();
+  var startDate = parseTrDate_(startStr, false);
+  if (!startDate) return { ok: false, error: 'Geçersiz başlangıç tarihi (start): ' + startStr };
+
+  var cal = CalendarApp.getDefaultCalendar();
+  var options = {};
+  var desc = String(description || '').trim();
+  var loc = String(location || '').trim();
+  if (desc) options.description = desc;
+  if (loc) options.location = loc;
+
+  var isAllDay = Boolean(allDay) || /^\d{4}-\d{2}-\d{2}$/.test(startStr);
+  var ev;
+  if (isAllDay) {
+    var endDateOnly = parseTrDate_(endRaw, false);
+    if (endDateOnly && endDateOnly.getTime() > startDate.getTime()) {
+      // CalendarApp.createAllDayEvent bitiş tarihini hariç tutar; 1 gün ekle.
+      var exclusiveEnd = new Date(endDateOnly.getTime() + 24 * 60 * 60 * 1000);
+      ev = cal.createAllDayEvent(cleanTitle, startDate, exclusiveEnd, options);
+    } else {
+      ev = cal.createAllDayEvent(cleanTitle, startDate, options);
+    }
+  } else {
+    var endDate = parseTrDate_(endRaw, false);
+    if (!endDate || endDate.getTime() <= startDate.getTime()) {
+      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+    }
+    ev = cal.createEvent(cleanTitle, startDate, endDate, options);
+  }
+
+  return {
+    ok: true,
+    calendarName: cal.getName(),
+    event: serializeEvent_(ev),
+  };
+}
+
+function serializeEvent_(ev) {
+  var allDay = ev.isAllDayEvent();
+  return {
+    eventId: ev.getId(),
+    title: ev.getTitle() || '',
+    start: allDay ? formatDateOnlyTr_(ev.getAllDayStartDate()) : formatDateTr_(ev.getStartTime()),
+    end: allDay ? formatDateOnlyTr_(ev.getAllDayEndDate()) : formatDateTr_(ev.getEndTime()),
+    allDay: allDay,
+    location: ev.getLocation() || '',
+    description: String(ev.getDescription() || '').replace(/\s+/g, ' ').trim().slice(0, 240),
+  };
+}
+
+function parseTrDate_(raw, endOfDay) {
+  var s = String(raw || '').trim();
+  if (!s) return null;
+  // Yalnızca tarih verilmişse İstanbul yerel gün başı/sonu kullan.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    var dOnly = new Date(s + (endOfDay ? 'T23:59:59+03:00' : 'T00:00:00+03:00'));
+    return isNaN(dOnly.getTime()) ? null : dOnly;
+  }
+  // Saat dilimi yoksa Türkiye (UTC+3) kabul et.
+  var norm = s.replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(norm)) {
+    norm = norm + ':00+03:00';
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(norm)) {
+    norm = norm + '+03:00';
+  }
+  var parsed = new Date(norm);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function formatDateTr_(d) {
   if (!d) return '';
   try {
     return Utilities.formatDate(d, 'Europe/Istanbul', 'yyyy-MM-dd HH:mm');
   } catch (ignore) {
     return d.toISOString ? d.toISOString() : String(d);
+  }
+}
+
+function formatDateOnlyTr_(d) {
+  if (!d) return '';
+  try {
+    return Utilities.formatDate(d, 'Europe/Istanbul', 'yyyy-MM-dd');
+  } catch (ignore) {
+    return d.toISOString ? d.toISOString().slice(0, 10) : String(d);
   }
 }
 
@@ -367,4 +535,16 @@ function jsonOut_(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Drive, Gmail ve Takvim OAuth kapsamlarını her dağıtımda tek seferde canlı
+ * tutmak için korunan yardımcı fonksiyon. İlk kurulumda bir kez çalıştırılır.
+ */
+function yetkiVer() {
+  return {
+    drive: DriveApp.getRootFolder().getName(),
+    gmailUnread: GmailApp.getInboxUnreadCount(),
+    calendar: CalendarApp.getDefaultCalendar().getName(),
+  };
 }
