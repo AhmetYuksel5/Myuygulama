@@ -83,19 +83,10 @@ fun NotificationFilterScreen(onBack: (() -> Unit)? = null) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         MerkezTopBar(title = "Bildirim süzgeci", onBack = onBack)
-        Text(
-            text = "Telefonun kapatılamayan bildirimlerini (\"piliniz azaldı\", \"arka planda güç " +
-                "tüketiyor\" gibi) geldiği anda gizler. Atılabilen bildirim silinir; " +
-                "atılamayan kalıcı bildirim ertelenir.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         ServiceCard(
             enabled = enabled,
-            explanation = "Bildirimleri görebilmek için bildirim erişimi ister. Bildirimlerin " +
-                "içeriği telefondan çıkmaz, hiçbir yere gönderilmez. İzin soluk görünüyorsa " +
-                "önce Merkez'in uygulama bilgisi → ⋮ → \"Kısıtlı ayarlara izin ver\".",
+            explanation = "Bildirimleri görebilmek için bildirim erişimi ister. İzin soluk görünüyorsa: Uygulama bilgisi → ⋮ → Kısıtlı ayarlara izin ver.",
             onOpen = {
                 context.startActivity(
                     Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
@@ -107,13 +98,13 @@ fun NotificationFilterScreen(onBack: (() -> Unit)? = null) {
         Text("Gizlenenler", style = MaterialTheme.typography.labelLarge)
         if (rules.isEmpty()) {
             Text(
-                "Henüz kural yok. Aşağıdaki son bildirimlerden birini seç ya da elle ekle.",
+                "Kural yok.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text(
-                "Bugüne kadar $hidden bildirim gizlendi.",
+                "$hidden gizlendi",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -144,11 +135,7 @@ fun NotificationFilterScreen(onBack: (() -> Unit)? = null) {
         }
         if (recent.isEmpty()) {
             Text(
-                if (enabled) {
-                    "Henüz bildirim görülmedi. Gizlemek istediğin bildirim gelince buraya düşer."
-                } else {
-                    "İzin verilince gelen bildirimler burada listelenir."
-                },
+                "Bildirim yok.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -164,7 +151,7 @@ fun NotificationFilterScreen(onBack: (() -> Unit)? = null) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        if (current.pkg.isBlank()) "Her uygulamadan" else "Uygulama: ${appName(context, current.pkg)}",
+                        if (current.pkg.isBlank()) "Her uygulamadan" else appName(context, current.pkg),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     OutlinedTextField(
@@ -172,13 +159,6 @@ fun NotificationFilterScreen(onBack: (() -> Unit)? = null) {
                         onValueChange = { text = it },
                         label = { Text("İçinde geçen yazı") },
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        "Başlığında ya da metninde bu yazı geçen bildirimler gizlenir. Kısa tut: " +
-                            "bildirimde değişen kısım (yüzde, uygulama adı) varsa onu sil." +
-                            if (current.pkg.isNotBlank()) " Boş bırakırsan bu uygulamanın bütün bildirimleri gizlenir." else "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },

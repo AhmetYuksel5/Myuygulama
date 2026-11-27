@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
+import com.ahmety.uygulama.core.designsystem.longPressHint
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -68,16 +69,6 @@ fun PermissionsScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text("İzinler", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                text = if (missingCount == 0) {
-                    "Tüm izinler verildi."
-                } else {
-                    "$missingCount izin bekliyor. Her biri olmadan da uygulama açılır, " +
-                        "sadece ilgili özellik çalışmaz."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
         }
 
         LazyColumn(
@@ -140,9 +131,19 @@ private fun PermissionCard(
     granted: Boolean,
     onRequest: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .longPressHint(title = spec.title, hint = spec.rationale),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 if (granted) {
                     Icon(
                         imageVector = MerkezIcons.CheckCircle,
@@ -153,17 +154,9 @@ private fun PermissionCard(
                 }
                 Text(text = spec.title, style = MaterialTheme.typography.titleMedium)
             }
-            Text(
-                text = spec.rationale,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp),
-            )
             if (!granted) {
-                Button(
-                    onClick = onRequest,
-                    modifier = Modifier.padding(top = 12.dp),
-                ) {
-                    Text(if (spec.kind == PermissionKind.RUNTIME) "İzin ver" else "Ayarları aç")
+                Button(onClick = onRequest) {
+                    Text(if (spec.kind == PermissionKind.RUNTIME) "İzin ver" else "Aç")
                 }
             }
         }

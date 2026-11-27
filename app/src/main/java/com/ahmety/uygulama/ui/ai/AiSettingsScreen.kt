@@ -16,6 +16,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
+import com.ahmety.uygulama.core.designsystem.longPressHint
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -131,17 +132,9 @@ fun AiSettingsScreen(
     ) {
         MerkezTopBar(title = "Yapay zekâ", onBack = onBack)
 
-        Text(
-            text = "Sözlük, ekrana sor ve ekran ajanı anahtarları yalnızca bu " +
-                "telefonda, uygulamanın kendi alanında saklanır. Depoya veya " +
-                "yedeğe yazılmaz.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         // ---- OpenAI (sözlük + ekrana sor + sesli yazma) ----
         ProviderKeySection(
-            title = "OpenAI (sözlük ve ekrana sor)",
+            title = "OpenAI",
             fieldLabel = "OpenAI anahtarı (sk-…)",
             initialConfigured = viewModel.configured(),
             initialMasked = viewModel.masked(),
@@ -158,13 +151,13 @@ fun AiSettingsScreen(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         // ---- Ekran ajanı sağlayıcı seçimi ----
-        Text("Ekran ajanı", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Görev verdiğinde ekranı okuyup senin yerine dokunarak ve " +
-                "yazarak adımları uygular. Banka ve ödeme uygulamalarında " +
-                "kendiliğinden durur.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Ekran ajanı",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.longPressHint(
+                title = "Ekran ajanı",
+                hint = "Görev verdiğinde ekranı okuyup senin yerine dokunarak ve yazarak uygular. Banka uygulamalarında güvenlik için kendiliğinden durur.",
+            ),
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -219,16 +212,16 @@ fun AiSettingsScreen(
         )
 
         var planner by remember { mutableStateOf(viewModel.claudePlanner()) }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.weight(1f)) {
-                Text("Opus planlasın", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Her turun başında Opus ekrana bir kez bakıp adım planı yazar; seçili model " +
-                        "(Haiku) bu plana göre dokunur. Tur başına bir Opus çağrısı (~0,03 $).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .longPressHint(
+                    title = "Opus planlasın",
+                    hint = "Her turun başında Opus ekrana bir kez bakıp adım planı yazar; seçili model bu plana göre uygular.",
+                ),
+        ) {
+            Text("Opus planlasın", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Switch(checked = planner, onCheckedChange = {
                 planner = it
                 viewModel.saveClaudePlanner(it)
@@ -236,17 +229,16 @@ fun AiSettingsScreen(
         }
 
         var escalate by remember { mutableStateOf(viewModel.claudeEscalate()) }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.weight(1f)) {
-                Text("Takılınca güçlü model devralsın", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Haiku takılırsa (ekran değişmez, aynı hareketi tekrarlar, anlamsız yanıt verir) " +
-                        "Sonnet en az 4 adım devralır; o da takılırsa Opus en az 3 adım. Sonra birer " +
-                        "basamak iner. Turda Sonnet en çok 10 adım; Opus için sınır yok.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .longPressHint(
+                    title = "Takılınca güçlü model devralsın",
+                    hint = "Haiku takılırsa Sonnet (en az 4 adım), o da takılırsa Opus (en az 3 adım) devralır; sonra birer basamak iner.",
+                ),
+        ) {
+            Text("Takılınca güçlü model devralsın", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Switch(checked = escalate, onCheckedChange = {
                 escalate = it
                 viewModel.saveClaudeEscalate(it)
@@ -270,13 +262,6 @@ fun AiSettingsScreen(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AgentUsageSection(viewModel)
-
-        Text(
-            text = "Güvenlik: anahtarını bir sohbete veya mesaja yapıştırdıysan, " +
-                "onu iptal edip yenisini üretmen daha doğru olur.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -448,18 +433,21 @@ private fun AgentLogSection() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var log by remember { mutableStateOf(com.ahmety.uygulama.feature.gestures.AgentLog.saved(context)) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Ekran ajanı günlüğü", style = MaterialTheme.typography.titleSmall)
         Text(
-            if (log.isBlank()) {
-                "Henüz kayıt yok. Ajan her turu adım adım buraya yazar."
-            } else {
-                "Son turlar adım adım: model, uygulama, süre, maliyet, düşünce ve hareket. " +
-                    "Ekranın tam yazısı kaydedilmez."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Ekran ajanı günlüğü",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.longPressHint(
+                title = "Ekran ajanı günlüğü",
+                hint = "Son turların model, uygulama, süre, maliyet ve hareket kayıtları. Ekranın tam yazısı kaydedilmez.",
+            ),
         )
-        if (log.isNotBlank()) {
+        if (log.isBlank()) {
+            Text(
+                "Kayıt yok.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
             Row {
                 TextButton(onClick = {
                     val cm = context.getSystemService(android.content.ClipboardManager::class.java)
@@ -485,18 +473,17 @@ private fun AgentBankSection() {
     val banks = remember { com.ahmety.uygulama.feature.gestures.BankAccess.installedBanks(context) }
     var allowed by remember { mutableStateOf(com.ahmety.uygulama.feature.gestures.BankAccess.allowed(context)) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Ajanın çalışabileceği bankalar", style = MaterialTheme.typography.titleSmall)
         Text(
-            "Açtığın bankada ajan bakiye ve hareketleri okur, gezinir, form doldurur. Onayla, " +
-                "Gönder, Öde gibi para çıkaran düğmelere asla kendisi basmaz; orada durur, son " +
-                "dokunuşu sen yaparsın. Bankada Claude seçiliyse her adımı Opus yapar. Ekrandaki " +
-                "yazılar (IBAN ve kart numarası maskelenmiş olarak) yapay zekâ sağlayıcısına gider.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Ajanın çalışabileceği bankalar",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.longPressHint(
+                title = "Ajanın çalışabileceği bankalar",
+                hint = "Açtığın bankada ajan bilgi okur ve form doldurur ama Onayla/Gönder/Öde gibi para çıkaran düğmelere asla basmaz. IBAN ve kart numarası maskelenir.",
+            ),
         )
         if (banks.isEmpty()) {
             Text(
-                "Telefonda banka uygulaması bulunamadı.",
+                "Banka uygulaması yok.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -525,17 +512,17 @@ private fun AgentScheduleSection() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var jobs by remember { mutableStateOf(com.ahmety.uygulama.feature.gestures.AgentScheduler.list(context)) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Zamanlanmış görevler", style = MaterialTheme.typography.titleSmall)
         Text(
-            "Kurmak için ajana saatiyle söylemen yeter: \"yarın 9'da …\", \"her sabah 8.30'da …\", " +
-                "\"hafta içi 18:00'de …\". Saat gelince ekran yanar, kaydırma kilidi kalkar ve görev başlar; " +
-                "sonucu bildirimde de görürsün.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Zamanlanmış görevler",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.longPressHint(
+                title = "Zamanlanmış görevler",
+                hint = "Ajana saatiyle görev verdiğinde (\"yarın 9'da…\", \"her sabah 8.30'da…\") burada listelenir ve saatinde kendiliğinden çalışır.",
+            ),
         )
         if (jobs.isEmpty()) {
             Text(
-                "Kurulu zamanlayıcı yok.",
+                "Zamanlayıcı yok.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -564,7 +551,7 @@ private fun AgentScheduleSection() {
                             .setData(android.net.Uri.parse("package:" + context.packageName)),
                     )
                 }
-            }) { Text("Tam saat iznini aç (yoksa birkaç dakika sapabilir)") }
+            }) { Text("Tam saat iznini aç") }
         }
     }
 }
@@ -582,13 +569,13 @@ private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
     var testing by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Google Drive ve İş Gmail köprüsü (Apps Script)", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = "yesiltemizlik@gmail.com ana köprüsü: Drive dosyalarını ve iş e-postalarını " +
-                "arka planda okur, taslak oluşturur (göndermez), günlükleri MerkezAjan/Merkez_Ajan_Log.md " +
-                "dosyasına yazar ve merdiven metotlarını Merkez_Ajan_Hafiza.md ile eşitler.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "İş köprüsü (yesiltemizlik@gmail.com)",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.longPressHint(
+                title = "İş köprüsü",
+                hint = "Drive, Gmail (okuma + taslak), Takvim, günlük ve hafıza eşitleme için Apps Script köprüsü.",
+            ),
         )
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -600,7 +587,7 @@ private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
                     text = if (configured) {
                         "Köprü kayıtlı · Jeton: $maskedToken"
                     } else {
-                        "Köprü kurulmamış."
+                        "Kurulmamış."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -613,7 +600,7 @@ private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
                 urlInput = it
                 status = null
             },
-            label = { Text("Web uygulaması URL'si (https://script.google.com/…/exec)") },
+            label = { Text("Web uygulaması URL'si") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -624,7 +611,7 @@ private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
                 tokenInput = it
                 status = null
             },
-            label = { Text("Köprü jetonu (MERKEZ_TOKEN)") },
+            label = { Text("MERKEZ_TOKEN") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
@@ -694,7 +681,7 @@ private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
     }
 }
 
-/** Opsiyonel ikinci hesap: ahmetyuksel5@gmail.com için yalnızca okuma ve taslak köprüsü. */
+/** Opsiyonel ikinci hesap: ahmetyuksel5@gmail.com köprüsü. */
 @Composable
 private fun PersonalGmailBridgeSection(viewModel: AiSettingsViewModel) {
     val context = LocalContext.current
@@ -708,12 +695,13 @@ private fun PersonalGmailBridgeSection(viewModel: AiSettingsViewModel) {
     var testing by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Kişisel Gmail köprüsü (ahmetyuksel5@gmail.com)", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = "Opsiyonel ikinci hesap: yalnızca okuma ve taslak oluşturma. Jetonu boş " +
-                "bırakırsan yukarıdaki ana MERKEZ_TOKEN kullanılır.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Kişisel köprü (ahmetyuksel5@gmail.com)",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.longPressHint(
+                title = "Kişisel köprü",
+                hint = "Kişisel Gmail (okuma + taslak), Drive ve Takvim için ikinci Apps Script köprüsü. Jeton boş bırakılırsa üstteki ana MERKEZ_TOKEN kullanılır.",
+            ),
         )
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -724,8 +712,8 @@ private fun PersonalGmailBridgeSection(viewModel: AiSettingsViewModel) {
                 Text(
                     text = when {
                         configured && ownToken -> "Köprü kayıtlı · Özel jeton: $maskedToken"
-                        configured -> "Köprü kayıtlı · Ana MERKEZ_TOKEN kullanılıyor"
-                        else -> "Kişisel Gmail köprüsü kurulmamış."
+                        configured -> "Köprü kayıtlı · Ana jeton"
+                        else -> "Kurulmamış."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -738,7 +726,7 @@ private fun PersonalGmailBridgeSection(viewModel: AiSettingsViewModel) {
                 urlInput = it
                 status = null
             },
-            label = { Text("2. Web uygulaması URL'si (https://script.google.com/…/exec)") },
+            label = { Text("2. Web uygulaması URL'si") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -749,7 +737,7 @@ private fun PersonalGmailBridgeSection(viewModel: AiSettingsViewModel) {
                 tokenInput = it
                 status = null
             },
-            label = { Text("2. Köprü jetonu (opsiyonel — boşsa ana jeton)") },
+            label = { Text("2. Jeton (opsiyonel)") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
@@ -832,13 +820,13 @@ private fun AgentMemorySection() {
     var busy by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Ajan hafızası (merdiven metotları)", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = "Ekran ajanı her görev başında bu Markdown notlarına bakar. " +
-                "Sık kullandığın yolları ve takıldığı engelleri aşma kurallarını " +
-                "buradan ya da Drive'daki Merkez_Ajan_Hafiza.md dosyasından güncelleyebilirsin.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Ajan hafızası",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.longPressHint(
+                title = "Ajan hafızası",
+                hint = "Ekran ajanı her görev başında bu notlara bakar; Drive'daki Merkez_Ajan_Hafiza.md ile eşitlenir.",
+            ),
         )
 
         OutlinedTextField(

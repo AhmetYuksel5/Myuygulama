@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
+import com.ahmety.uygulama.core.designsystem.longPressHint
 import com.ahmety.uygulama.feature.gestures.AccessibilityGuard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -80,17 +81,6 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         MerkezTopBar(title = "Tek elle imleç", onBack = onBack)
-        Text(
-            text = "Ekranın dibindeki çubuğa parmağını basıp gezdir; ekranda bir imleç " +
-                "trackpad gibi dolaşır, parmağını kaldırınca oraya dokunur. Sol üst gibi " +
-                "tek elle ulaşamadığın yerlere basmak için. Çubuğu taşımak için uzun " +
-                "basıp sürükle; hızlıca iki kez dokununca kısayol çubuğu açılır. " +
-                "Ekranı yana çevirince ve kilit ekranında çubuk " +
-                "kayboluyor; video izlerken ya da telefonu cebinden çıkarınca " +
-                "görüntünün üstünde durmasın diye.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         ServiceCard(
             enabled = serviceEnabled,
@@ -101,7 +91,11 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
 
         GuardSection()
 
-        Toggle("Tek elle imleci göster", enabled) {
+        Toggle(
+            label = "Tek elle imleci göster",
+            checked = enabled,
+            hint = "Ekranın dibindeki çubuğa basıp gezdirince sanal imleç çıkar; uzun basıp sürükleyerek çubuğu taşıyabilir, çift dokunarak kısayolları açabilirsin.",
+        ) {
             enabled = it
             settings.enabled = it
         }
@@ -114,20 +108,20 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
             barHeight = it; settings.handleHeightDp = it
         }
 
-        Text("Çubuğun yeri", style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = "Çubuğun yeri",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.longPressHint(
+                title = "Çubuğun yeri",
+                hint = "Alttan yukarı 0 = ekranın tam dibi. Yatay kayma 0 = ortada (eksi sola, artı sağa). Çubuğa uzun basıp sürükleyerek de taşınabilir.",
+            ),
+        )
         Stepper("Alttan yukarı", offset, 0..1200, step = 10, suffix = "dp") {
             offset = it; settings.bottomOffsetDp = it
         }
         Stepper("Yatay kayma", centerOffset, -300..300, step = 10, suffix = "dp") {
             centerOffset = it; settings.centerOffsetDp = it
         }
-        Text(
-            text = "Alttan yukarı 0 = ekranın tam dibinde. Yatay kayma 0 = ortada, " +
-                "eksi değer sola, artı değer sağa. Çubuğa uzun basıp sürükleyerek de " +
-                "taşıyabilirsin; bıraktığın yer kaydedilir.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         Text("İmlecin biçimi", style = MaterialTheme.typography.labelLarge)
         Row(
@@ -197,66 +191,56 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
                 )
             }
         }
-        Text(
-            text = "İmleç gezerken ardında bu renkte bir iz bırakıyor. " +
-                "Renkler mat: parlak bir iz altındaki yazıyı okunmaz yapıyor.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         Text("Üst köşeler", style = MaterialTheme.typography.labelLarge)
-        Toggle("Tepeye götürünce perde açılsın", edgeActions) {
+        Toggle(
+            label = "Tepeye götürünce perde açılsın",
+            checked = edgeActions,
+            hint = "İmleci ekranın tepesinden dışarı it: sol yarıda bildirimler, sağ yarıda hızlı ayarlar açılır.",
+        ) {
             edgeActions = it
             settings.edgeActions = it
         }
-        Text(
-            text = "İmleci ekranın tepesinden biraz dışarı it: sol yarıda bildirimler, " +
-                "sağ yarıda hızlı ayarlar açılır. Bölgeye girince tepede ince bir çizgi " +
-                "belirir ve telefon kısa bir titrer.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         if (edgeActions) {
-            Toggle("Parmağı bırakınca açılsın", edgeOnRelease) {
+            Toggle(
+                label = "Parmağı bırakınca açılsın",
+                checked = edgeOnRelease,
+                hint = "Açıkken bölgede parmağı bırakınca açılır; kapalıyken bölgeye değer değmez açılır.",
+            ) {
                 edgeOnRelease = it
                 settings.edgeOnRelease = it
             }
-            Text(
-                text = if (edgeOnRelease) {
-                    "Bölgede parmağını bırakınca açılır; vazgeçersen aşağı çekip bırak."
-                } else {
-                    "Bölgeye değer değmez açılır, bırakmayı beklemez."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
 
         ShortcutsSection()
-        Stepper("Kaç uygulama arasında dolaşılsın", carousel, 2..4, step = 1, suffix = "") {
+        Stepper(
+            label = "Kaç uygulama arasında dolaşılsın",
+            value = carousel,
+            range = 2..4,
+            step = 1,
+            suffix = "",
+            hint = "Önceki uygulama son bu kadar uygulama arasında döner; şeritte simgeye uzun basarak listeden çıkarabilirsin.",
+        ) {
             carousel = it
             settings.carouselCount = it
         }
-        Text(
-            text = "Önceki uygulama her basışta son bu kadar uygulama arasında " +
-                "sırayla döner; ortadaki şeritte görünürler, birine dokunursan oraya geçer. " +
-                "Kapattığın bir uygulamayı listeden çıkarmak için şeritte simgesine uzun bas.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Toggle("Bir öncekine sistemin hızlı geçişiyle dön", quickSwitch) {
+        Toggle(
+            label = "Bir öncekine sistemin hızlı geçişiyle dön",
+            checked = quickSwitch,
+            hint = "Deneysel: açıkken uygulama içi pencereler bıraktığın yerden gelir; siyah ekran olursa kapalı tut.",
+        ) {
             quickSwitch = it
             settings.systemQuickSwitch = it
         }
-        Text(
-            text = "Deneysel. Açıkken Drive'daki PDF gibi uygulama içi pencereler " +
-                "de bıraktığın yerden gelir; ama bazı telefonlarda arada siyah " +
-                "ekran kalıyor. Öyle olursa kapalı tut.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
-        Text("Sesli yazma", style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = "Sesli yazma",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.longPressHint(
+                title = "Sesli yazma",
+                hint = "Klavye açılınca köşede mikrofon çıkar; dokun-konuş-dokun ile OpenAI üzerinden yazıya çevirir. Sürükleyerek taşıyabilir, kayıtta uzun basarak iptal edebilirsin.",
+            ),
+        )
         // Ayar servisin okuduğu dosyada; servis her klavye açılışında bakıyor.
         val voicePrefs = remember {
             context.getSharedPreferences(VoiceTyping.PREFS, android.content.Context.MODE_PRIVATE)
@@ -298,41 +282,30 @@ fun QuickCursorScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Modifie
                 )
             }
         }
-        Text(
-            text = "Klavye açılınca sağ üst köşesinde bir mikrofon çıkıyor. Dokun, konuş, " +
-                "tekrar dokun: söylediğin OpenAI ile yazıya çevrilip kutuya ekleniyor. " +
-                "Sürükleyerek yerini değiştirebilirsin; kayıttayken uzun basmak iptal ediyor. " +
-                "Mikrofon izni ve Yapay zekâ ayarlarında OpenAI anahtarı gerekiyor.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         Text("İnce ayarlar", style = MaterialTheme.typography.labelLarge)
-        // Birer birer: kenar şeridinde beşer beşer gitmek yetiyordu ama
-        // burada çubuk küçük, iki komşu değer arasındaki fark önemli.
-        // Uzak bir değere gitmek için düğmeyi basılı tutmak var.
-        Stepper("Saydamlık", opacity, 0..100, step = 1, suffix = "%") {
+        Stepper(
+            label = "Saydamlık",
+            value = opacity,
+            range = 0..100,
+            step = 1,
+            suffix = "%",
+            hint = "0'da çubuk görünmez ama yerinde çalışmaya devam eder. +/− düğmesine basılı tutunca hızlanır.",
+        ) {
             opacity = it
             settings.opacityPercent = it
         }
-        Text(
-            text = "Saydamlık, parmağını çekince çubuğun göründüğü hâl; " +
-                "dokunduğun sürece biraz daha belirgin oluyor. 0'da çubuk hiç " +
-                "görünmez ama yeri değişmez, oraya basınca yine çalışır. " +
-                "Düğmeyi basılı tutarsan hızlanarak ilerler.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Stepper("Hassasiyet", sensitivityTimes10, 10..40, step = 2, suffix = "×10") {
+        Stepper(
+            label = "Hassasiyet",
+            value = sensitivityTimes10,
+            range = 10..40,
+            step = 2,
+            suffix = "×10",
+            hint = "Parmak hareketinin kaç katı imleç hareketi olacağını belirler.",
+        ) {
             sensitivityTimes10 = it
             settings.sensitivity = it / 10f
         }
-        Text(
-            text = "Hassasiyet, parmak hareketinin kaç katı imleç hareketi olduğu. " +
-                "Yüksek değer küçük hareketle ekranın öbür ucuna ulaştırır.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -370,28 +343,25 @@ private fun GuardSection() {
     }
 
     Text("Kendiliğinden kapanırsa", style = MaterialTheme.typography.labelLarge)
-    Toggle("Uyar ya da geri aç", guarded) {
+    Toggle(
+        label = "Uyar ya da geri aç",
+        checked = guarded,
+        hint = if (canRestore) {
+            "Geri açma izni açık: servis kapanırsa kendiliğinden açılır (${AccessibilityGuard.restoredCount(context)} kez). Kasıtlı kapatmak için önce bu anahtarı kapat."
+        } else {
+            "Servis kapanırsa bildirim çıkarır. Kendiliğinden geri açması için bilgisayardan alttaki ADB komutunu bir kez çalıştır."
+        },
+    ) {
         guarded = it
         AccessibilityGuard.setGuarded(context, it)
     }
-    Text(
-        text = if (canRestore) {
-            "Geri açma izni verilmiş: servis kapanırsa hemen kendiliğinden açılıyor " +
-                "(bugüne kadar ${AccessibilityGuard.restoredCount(context)} kez). Kasıtlı " +
-                "kapatmak istersen önce yukarıdaki anahtarı kapat."
-        } else {
-            "Servis kapanırsa \"Merkez erişilebilirlik kapandı\" bildirimi çıkar; dokununca " +
-                "ayar açılır. Bunun için bildirim süzgecinin izni açık olmalı.\n\n" +
-                "Kendiliğinden geri açılması için bilgisayardan bir kez izin ver: telefonda " +
-                "Geliştirici seçenekleri → USB hata ayıklama açık, telefonu bilgisayara " +
-                "bağla ve şu komutu çalıştır:"
-        },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     if (canRestore) {
         Text("Kablosuz hata ayıklama (ADB)", style = MaterialTheme.typography.labelLarge)
-        Toggle("ADB yetki zaman aşımını kapat", adbNoTimeout) { next ->
+        Toggle(
+            label = "ADB yetki zaman aşımını kapat",
+            checked = adbNoTimeout,
+            hint = "adb_allowed_connection_time = 0 yazar; kablosuz ADB yetkisi 7 gün sonunda kendiliğinden düşmez.",
+        ) { next ->
             if (AccessibilityGuard.setAdbTimeoutDisabled(context, next)) {
                 adbNoTimeout = AccessibilityGuard.isAdbTimeoutDisabled(context)
             } else {
@@ -402,12 +372,6 @@ private fun GuardSection() {
                 ).show()
             }
         }
-        Text(
-            text = "adb_allowed_connection_time = 0 yazar; bilgisayarla eşleştirilen " +
-                "kablosuz hata ayıklama yetkisi 7 gün sonunda kendiliğinden iptal edilmez.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Toggle("Kablosuz hata ayıklama", wirelessAdbOn) { next ->
             if (AccessibilityGuard.setWirelessAdb(context, next)) {
                 wirelessAdbOn = AccessibilityGuard.isWirelessAdbOn(context)
@@ -428,19 +392,9 @@ private fun GuardSection() {
             ),
             modifier = Modifier.clickable { copy("Komut", AccessibilityGuard.ADB_COMMAND) },
         )
-        Text(
-            "Komuta dokununca kopyalanır.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
     if (exits.isNotBlank()) {
         Text("Kapanma geçmişi", style = MaterialTheme.typography.labelLarge)
-        Text(
-            "Android'in kaydı: Merkez'in son kapanışları, en yenisi üstte.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Text(exits, style = MaterialTheme.typography.bodySmall)
         androidx.compose.material3.TextButton(onClick = {
             val report = exits + (crash?.let { "\n\nSon çökme:\n$it" } ?: "")

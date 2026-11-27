@@ -26,6 +26,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
+import com.ahmety.uygulama.core.designsystem.longPressHint
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -120,7 +121,14 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
             settings.enabled = it
         }
 
-        Text("Hangi kenarlar", style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = "Hangi kenarlar",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.longPressHint(
+                title = "Hangi kenarlar",
+                hint = "İkisini birden açabilirsin. Şeridin kapladığı alanda sistemin kenardan geri hareketi devre dışı bırakılır; çakışma olursa şeridi kısalt veya kaydır.",
+            ),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = showLeft,
@@ -139,22 +147,14 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
                 label = { Text("Sağ") },
             )
         }
-        Text(
-            text = "İkisini birden açabilirsin. Telefonu hareketlerle kullanıyorsan, " +
-                "şeridin kapladığı alanda sistemin kendi \"kenardan çek = geri\" hareketinin " +
-                "devre dışı kalması için gereken istek gönderiliyor; şeridin dışında sistem " +
-                "normal çalışır. Bazı üretici arayüzlerinde bu istek yok sayılabilir — " +
-                "çakışma sürerse şeridi biraz kısaltmayı veya yerini kaydırmayı dene.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
-        Text("Yön ayrımı", style = MaterialTheme.typography.labelLarge)
         Text(
-            text = "Parmağın yatayla yaptığı açı bu çizginin altındaysa \"içeri\" " +
-                "(geri), üstündeyse yukarı/aşağı sayılır. Oku sürükleyerek ayarla.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Yön ayrımı",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.longPressHint(
+                title = "Yön ayrımı",
+                hint = "Parmağın yatayla yaptığı açı bu çizginin altındaysa içeri (geri), üstündeyse yukarı/aşağı sayılır. Oku sürükleyerek ayarla.",
+            ),
         )
         AnglePicker(
             angle = backAngle,
@@ -186,43 +186,46 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
 
         Text("Boyut ve konum", style = MaterialTheme.typography.labelLarge)
         Stepper("Kalınlık", widthDp, 2..16, suffix = "dp") { widthDp = it; settings.widthDp = it }
-        Stepper("Uzunluk", heightDp, 60..500, step = 20, suffix = "dp") {
+        Stepper(
+            label = "Uzunluk",
+            value = heightDp,
+            range = 60..500,
+            step = 20,
+            suffix = "dp",
+            hint = "Android kenar başına en fazla 200dp alanda sistem geri hareketini bırakır; 200dp üstünde sistem geri hareketi devreye girebilir.",
+        ) {
             heightDp = it; settings.heightDp = it
         }
-        if (heightDp > 200) {
-            Text(
-                text = "Not: Android, kenar başına en fazla 200dp'lik alanda sistem geri " +
-                    "hareketini bize bırakıyor. Şerit daha uzunsa 200dp'yi aşan kısımda " +
-                    "telefonun kendi geri hareketi devreye girebilir.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        Stepper("Dikey konum", offsetDp, -300..300, step = 20, suffix = "dp") {
+        Stepper(
+            label = "Dikey konum",
+            value = offsetDp,
+            range = -300..300,
+            step = 20,
+            suffix = "dp",
+            hint = "Negatif değer yukarı, pozitif değer aşağı taşır.",
+        ) {
             offsetDp = it; settings.verticalOffsetDp = it
         }
-        Stepper("Saydamlık", opacity, 0..100, step = 1, suffix = "%") {
+        Stepper(
+            label = "Saydamlık",
+            value = opacity,
+            range = 0..100,
+            step = 1,
+            suffix = "%",
+            hint = "0'da şerit görünmez olur ama dokunmayı yine alır. Kilit ekranında çizilmez.",
+        ) {
             opacity = it; settings.opacityPercent = it
         }
-        Text(
-            text = "Negatif yukarı, pozitif aşağı taşır. Saydamlık 0'da şerit görünmez " +
-                "olur ama dokunmayı yine alır. Kilit ekranında şerit hiç çizilmez. " +
-                "Değişiklikler anında uygulanır.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         var ownRecents by remember { mutableStateOf(settings.ownRecents) }
-        Toggle("Son uygulamalar için Merkez'in panelini kullan", ownRecents) {
+        Toggle(
+            label = "Son uygulamalar için Merkez'in panelini kullan",
+            checked = ownRecents,
+            hint = "Açıkken son kullandığın 10 uygulamayı Merkez'in panelinde gösterir; uzun basınca listeden çıkarır.",
+        ) {
             ownRecents = it
             settings.ownRecents = it
         }
-        Text(
-            "Açıkken \"Son uygulamalar\" telefonun ekranı yerine Merkez'in panelini açar: " +
-                "en son kullandığın 10 uygulama (aynı anda 4'ü, aşağı kaydırınca eskileri), dokununca geçer, uzun basınca listeden çıkar.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         HiddenAppsButton()
 
         // "Önceki uygulama" eylemi buradan da atanabildiği için ayarı burada da var.
@@ -252,7 +255,11 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
             }
         }
 
-        Toggle("Bip sesi", sound) {
+        Toggle(
+            label = "Bip sesi",
+            checked = sound,
+            hint = "Jest algılanınca kısa bip çalar; ses yüksekliği sistem sesinden bağımsızdır.",
+        ) {
             sound = it
             settings.soundEnabled = it
             if (it) GestureFeedback.beep(settings)
@@ -265,12 +272,6 @@ fun GestureSettingsScreen(onBack: (() -> Unit)? = null, modifier: Modifier = Mod
                 GestureFeedback.beep(settings)
             }
         }
-        Text(
-            text = "Jest başarıyla algılanınca kısa bir \"bip\" çalar. Yükseklik " +
-                "ayarı sistem ses seviyesinden bağımsızdır.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -347,22 +348,24 @@ internal fun ServiceCard(
     explanation: String,
     onOpen: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .longPressHint(title = "Servis", hint = explanation),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = if (enabled) "Servis açık." else "Servis kapalı.",
+                text = if (enabled) "Servis açık" else "Servis kapalı",
                 style = MaterialTheme.typography.titleMedium,
             )
-            Text(
-                text = explanation,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Button(onClick = onOpen) {
-                Text(if (enabled) "Erişilebilirlik ayarları" else "Servisi aç")
+                Text(if (enabled) "Ayarlar" else "Aç")
             }
         }
     }
@@ -464,13 +467,20 @@ private fun ActionPicker(
 }
 
 @Composable
-internal fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun Toggle(
+    label: String,
+    checked: Boolean,
+    hint: String? = null,
+    onChange: (Boolean) -> Unit,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .longPressHint(title = label, hint = hint),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }
@@ -482,10 +492,13 @@ internal fun Stepper(
     range: IntRange,
     step: Int = 1,
     suffix: String,
+    hint: String? = null,
     onChange: (Int) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .longPressHint(title = label, hint = hint),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

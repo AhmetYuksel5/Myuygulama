@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.ahmety.uygulama.core.designsystem.longPressHint
 import com.ahmety.uygulama.feature.gestures.Shortcut
 import com.ahmety.uygulama.feature.gestures.ShortcutKind
 import com.ahmety.uygulama.feature.gestures.ShortcutStore
@@ -62,13 +63,13 @@ internal fun ShortcutsSection() {
         list = store.items
     }
 
-    Text("Kısayollar", style = MaterialTheme.typography.labelLarge)
     Text(
-        text = "Dipteki çubuğa hızlıca iki kez dokununca kısayol çubuğu açılır; " +
-            "uygulamanın üstünde durur, dışına dokununca kapanır. Uygulama, " +
-            "arama, WhatsApp ve sistem kısayolu karışık durabilir.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        text = "Kısayollar",
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.longPressHint(
+            title = "Kısayollar",
+            hint = "Dipteki çubuğa hızlıca iki kez dokununca kısayol çubuğu açılır; dışına dokununca kapanır.",
+        ),
     )
 
     list.forEachIndexed { index, item ->

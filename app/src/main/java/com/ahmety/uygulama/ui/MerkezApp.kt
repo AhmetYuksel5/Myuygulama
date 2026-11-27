@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ahmety.uygulama.core.designsystem.MerkezIcons
+import com.ahmety.uygulama.core.designsystem.longPressHint
 import com.ahmety.uygulama.feature.ebook.BookReaderRoute
 import com.ahmety.uygulama.feature.ebook.BookShelfRoute
 import com.ahmety.uygulama.feature.ebook.PdfReaderRoute
@@ -393,7 +394,6 @@ private fun MoreScreen(
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Calendar) },
             headlineContent = { Text("Takvim bildirimi") },
-            supportingContent = { Text("Bildirim çubuğunda duran ay takvimi") },
             trailingContent = {
                 Switch(
                     checked = takvimAcik,
@@ -403,21 +403,23 @@ private fun MoreScreen(
                     },
                 )
             },
-            modifier = Modifier.clickable {
-                takvimAcik = !takvimAcik
-                TakvimBildirimi.ayarla(context, takvimAcik)
-            },
+            modifier = Modifier.longPressHint(
+                title = "Takvim bildirimi",
+                hint = "Bildirim çubuğunda duran ay takvimi.",
+                onClick = {
+                    takvimAcik = !takvimAcik
+                    TakvimBildirimi.ayarla(context, takvimAcik)
+                },
+            ),
         )
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Flame) },
             headlineContent = { Text("Alışkanlıklar") },
-            supportingContent = { Text("Günlük takip, seriler, haftalık şerit") },
             modifier = Modifier.clickable(onClick = onOpenHabits),
         )
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Subtitle) },
             headlineContent = { Text("Altyazı arama") },
-            supportingContent = { Text("Altyazıyı indir, bilmediğin kelimeleri çıkar") },
             modifier = Modifier.clickable(onClick = onOpenSubtitles),
         )
 
@@ -426,39 +428,45 @@ private fun MoreScreen(
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.EdgeSwipe) },
             headlineContent = { Text("Kenar hareketleri") },
-            supportingContent = { Text("Son uygulamalar ve bildirim paneli için kenar şeridi") },
-            modifier = Modifier.clickable(onClick = onOpenGestures),
+            modifier = Modifier.longPressHint(
+                title = "Kenar hareketleri",
+                hint = "Son uygulamalar, bildirim paneli ve kısayollar için kenar şeridi.",
+                onClick = onOpenGestures,
+            ),
         )
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Cursor) },
             headlineContent = { Text("Tek elle imleç") },
-            supportingContent = { Text("Ulaşılamayan köşelere basmak için sanal imleç") },
-            modifier = Modifier.clickable(onClick = onOpenCursor),
+            modifier = Modifier.longPressHint(
+                title = "Tek elle imleç",
+                hint = "Ulaşılamayan köşelere basmak için sanal trackpad imleci.",
+                onClick = onOpenCursor,
+            ),
         )
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Shield) },
             headlineContent = { Text("Bildirim süzgeci") },
-            supportingContent = { Text("Kapatılamayan sistem bildirimlerini kendiliğinden gizler") },
-            modifier = Modifier.clickable(onClick = onOpenNotificationFilter),
+            modifier = Modifier.longPressHint(
+                title = "Bildirim süzgeci",
+                hint = "Kapatılamayan sistem bildirimlerini geldiği anda gizler.",
+                onClick = onOpenNotificationFilter,
+            ),
         )
 
         SectionLabel("AYARLAR")
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Shield) },
             headlineContent = { Text("İzinler") },
-            supportingContent = { Text("Bildirim, takvim, alarm, dosya erişimi") },
             modifier = Modifier.clickable(onClick = onOpenPermissions),
         )
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Sync) },
             headlineContent = { Text("Senkronizasyon") },
-            supportingContent = { Text("İki telefon arasında paylaşılan klasör") },
             modifier = Modifier.clickable(onClick = onOpenSync),
         )
         ListItem(
             leadingContent = { MoreIcon(MerkezIcons.Sparkle) },
             headlineContent = { Text("Yapay zekâ") },
-            supportingContent = { Text("OpenAI anahtarı — kitaptan gelen kelimeleri doldurur") },
             modifier = Modifier.clickable(onClick = onOpenAi),
         )
     }

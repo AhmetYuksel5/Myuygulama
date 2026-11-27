@@ -54,13 +54,6 @@ fun SubtitleSettingsScreen(
             .padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            text = "opensubtitles.com'da ücretsiz hesap aç, Consumers sayfasından bir API " +
-                "anahtarı üret ve buraya yapıştır. Anahtar yalnızca bu telefonda durur.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         if (saved.isNotBlank()) {
             Text(
                 text = "Kayıtlı anahtar: $saved",

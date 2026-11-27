@@ -20,6 +20,7 @@ import androidx.compose.runtime.DisposableEffect
 import com.ahmety.uygulama.core.database.sync.SyncMode
 import androidx.compose.material3.MaterialTheme
 import com.ahmety.uygulama.core.designsystem.MerkezTopBar
+import com.ahmety.uygulama.core.designsystem.longPressHint
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -72,20 +73,24 @@ fun SyncScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         MerkezTopBar(title = "Senkronizasyon", onBack = onBack)
-        Text(
-            text = "Her cihaz kendi değişiklik günlüğünü paylaşılan klasöre yazar, " +
-                "karşı tarafınkini okur. Veritabanı dosyası kopyalanmaz — böylece " +
-                "iki telefonda da çalışsan hiçbir girdi kaybolmaz.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("1. Yol", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "1. Yol",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.longPressHint(
+                        title = "Senkronizasyon yolu",
+                        hint = when (state.mode) {
+                            SyncMode.LAN -> "İki telefon aynı Wi-Fi'de ve bu ekranda açıkken birbirini bulur; aynı kurtarma anahtarıyla şifreli aktarır."
+                            SyncMode.GITHUB -> "Mobil veriyle de çalışır; giden tüm veriler kurtarma anahtarıyla şifrelenir."
+                            SyncMode.FOLDER -> "Seçilen klasörü iki telefon arasında taşımak için Syncthing gibi bir araç gerekir."
+                        },
+                    ),
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = state.mode == SyncMode.LAN,
@@ -103,29 +108,6 @@ fun SyncScreen(
                         label = { Text("Klasör") },
                     )
                 }
-                Text(
-                    text = when (state.mode) {
-                        SyncMode.LAN ->
-                            "İki telefon da aynı Wi-Fi'de ve bu ekranda açık olsun; " +
-                                "birbirlerini kendileri buluyor. Eşleştirme yok — aynı " +
-                                "kurtarma anahtarını taşımak eşleşmek demek. En hızlısı " +
-                                "ve internete hiç çıkmıyor."
-
-                        SyncMode.GITHUB ->
-                            "Mobil veriyle de çalışır ve telefonların aynı anda açık " +
-                                "olması gerekmez; her telefon canı istediğinde " +
-                                "senkronlanır. Giden her şey şifreli, GitHub da " +
-                                "anlamsız baytlar görüyor."
-
-                        SyncMode.FOLDER ->
-                            "Bir klasör seç. Dikkat: uygulama o klasörü iki telefon " +
-                                "arasında taşımıyor, bunu Syncthing gibi bir araç " +
-                                "yapmalı. Google Drive Android'in klasör seçicisinde " +
-                                "çıkmadığı için Drive klasörü seçilemiyor."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
 
@@ -143,7 +125,7 @@ fun SyncScreen(
                     Text(
                         text = when {
                             !state.listening -> "Ağ dinlenemiyor."
-                            state.peers.isEmpty() -> "Henüz başka cihaz görünmüyor."
+                            state.peers.isEmpty() -> "Cihaz bulunamadı."
                             else -> "Bulundu: " + state.peers.joinToString(", ")
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -162,13 +144,13 @@ fun SyncScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("2. GitHub deposu", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "GitHub'da özel bir depo aç (örneğin merkez-senkron) ve " +
-                            "içerik yazma yetkisi olan bir erişim anahtarı üret. " +
-                            "Deponun özel olması şart.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "2. GitHub deposu",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.longPressHint(
+                            title = "GitHub deposu",
+                            hint = "Özel bir GitHub deposu ve içerik yazma yetkili erişim anahtarı gerekir.",
+                        ),
                     )
                     OutlinedTextField(
                         value = repository,
@@ -190,11 +172,7 @@ fun SyncScreen(
                         singleLine = true,
                         label = {
                             Text(
-                                if (state.maskedToken.isBlank()) {
-                                    "Erişim anahtarı"
-                                } else {
-                                    "Yeni anahtar (boş bırakırsan aynısı kalır)"
-                                },
+                                if (state.maskedToken.isBlank()) "Erişim anahtarı" else "Yeni anahtar",
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -222,7 +200,7 @@ fun SyncScreen(
             ) {
                 Text("2. Paylaşılan klasör", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = state.folderLabel?.let { "Seçili: $it" } ?: "Henüz seçilmedi.",
+                    text = state.folderLabel?.let { "Seçili: $it" } ?: "Seçilmedi.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -242,14 +220,13 @@ fun SyncScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("3. Kurtarma anahtarı", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "Dışarı çıkan her şey bu anahtarla şifrelenir. " +
-                        "Birinci telefonda oluştur, ikinci telefona aynısını gir. " +
-                        "Ağ yolunda eşleştirme de bununla oluyor: aynı anahtarı " +
-                        "taşımayan cihaz görünmüyor bile.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "3. Kurtarma anahtarı",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.longPressHint(
+                        title = "Kurtarma anahtarı",
+                        hint = "Dışarı çıkan her şey bu anahtarla şifrelenir. Birinci telefonda oluştur, ikinci telefona aynısını gir.",
+                    ),
                 )
 
                 val key = state.recoveryKey
