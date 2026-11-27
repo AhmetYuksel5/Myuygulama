@@ -41,9 +41,12 @@ object Tanitim {
     data class Grup(val anahtar: String, val ad: String, val gomulu: String? = null)
 
     val GRUPLAR = listOf(
+        // Genel tanıtım ve yalnız referanslar (kullanıcı 2026-11-27); ötekiler hizmete özel.
+        Grup("tanitim", "Tanıtım kataloğu", "Yesil Temizlik - Tanitim Katalogu.pdf"),
         Grup("ofis", "Ofis tanıtım", "Yesil Temizlik - Ofis Temizligi.pdf"),
         Grup("bos", "Boş daire temizliği", "Yesil Temizlik - Bos Daire Temizligi.pdf"),
         Grup("insaat", "İnşaat sonrası", "Yesil Temizlik - Insaat Sonrasi Temizlik.pdf"),
+        Grup("referans", "Referanslar", "Yesil Temizlik - Referanslar.pdf"),
         Grup("genel", "Diğer"),
     )
 

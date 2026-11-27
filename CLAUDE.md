@@ -198,8 +198,10 @@ yalnız `ofis/` değişen gönderim Merkez sürümü çıkarmaz.
   ad kutusu (uzantı korunur) + Kaydet / Kaldır / Vazgeç (kullanıcı 2026-11-26).
   Paneldeki WhatsApp botu bu işe karışmaz (kullanıcı: "onu karıştırma").
 - Kataloglar (kullanıcı 2026-11-26): tanıtım dosyaları gruplu —
-  `Tanitim.GRUPLAR`: ofis "Ofis tanıtım", bos "Boş daire temizliği", insaat
-  "İnşaat sonrası", genel "Diğer" (eski düzende eklenenler; boşsa gizli).
+  `Tanitim.GRUPLAR`: tanitim "Tanıtım kataloğu" (genel: hakkımızda, sekiz
+  hizmet, referanslar), ofis "Ofis tanıtım", bos "Boş daire temizliği", insaat
+  "İnşaat sonrası", referans "Referanslar" (yalnız referanslar, A4 2 sayfa, 57
+  kurum; kullanıcı 2026-11-27), genel "Diğer" (eski düzende eklenenler; boşsa gizli).
   Klasör `tanitim/k_<anahtar>/<sıra>/<ad>`, genel kökte. Uygulamayla gelen
   katalog `assets/katalog/<anahtar>.pdf` ilk açılışta bir kez kopyalanır
   (`gomuluSurum_<anahtar>`; katalog PDF'i yenilenince `Tanitim.KATALOG_SURUM`
