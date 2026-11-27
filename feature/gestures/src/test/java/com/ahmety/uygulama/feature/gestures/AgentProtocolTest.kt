@@ -1,6 +1,7 @@
 package com.ahmety.uygulama.feature.gestures
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,17 +61,34 @@ class AgentProtocolTest {
 
     @Test
     fun systemPromptDocumentsGeneralAskActionAndRollingState() {
-        val sysWithoutDrive = AgentProtocol.systemPrompt(driveEnabled = false)
-        assertTrue(sysWithoutDrive.contains("\"ask\""))
-        assertTrue(sysWithoutDrive.contains("\"options\""))
-        assertTrue(sysWithoutDrive.contains("\"state\""))
-        assertTrue(sysWithoutDrive.contains("remember"))
-        assertTrue(!sysWithoutDrive.contains("drive_search"))
+        val sysWithoutBridges = AgentProtocol.systemPrompt(driveEnabled = false, personalGmailEnabled = false)
+        assertTrue(sysWithoutBridges.contains("\"ask\""))
+        assertTrue(sysWithoutBridges.contains("\"options\""))
+        assertTrue(sysWithoutBridges.contains("\"state\""))
+        assertTrue(sysWithoutBridges.contains("remember"))
+        assertFalse(sysWithoutBridges.contains("drive_search"))
+        assertFalse(sysWithoutBridges.contains("gmail_search"))
 
-        val sysWithDrive = AgentProtocol.systemPrompt(driveEnabled = true)
-        assertTrue(sysWithDrive.contains("drive_search"))
-        assertTrue(sysWithDrive.contains("drive_read"))
-        assertTrue(sysWithDrive.contains("open_url"))
+        val sysWithWorkOnly = AgentProtocol.systemPrompt(driveEnabled = true, personalGmailEnabled = false)
+        assertTrue(sysWithWorkOnly.contains("drive_search"))
+        assertTrue(sysWithWorkOnly.contains("drive_read"))
+        assertTrue(sysWithWorkOnly.contains("open_url"))
+        assertTrue(sysWithWorkOnly.contains("gmail_search"))
+        assertTrue(sysWithWorkOnly.contains("gmail_read"))
+        assertTrue(sysWithWorkOnly.contains("gmail_draft"))
+        assertTrue(sysWithWorkOnly.contains("yesiltemizlik@gmail.com"))
+        assertFalse(sysWithWorkOnly.contains("ahmetyuksel5@gmail.com"))
+
+        val sysWithBothAccounts = AgentProtocol.systemPrompt(driveEnabled = true, personalGmailEnabled = true)
+        assertTrue(sysWithBothAccounts.contains("yesiltemizlik@gmail.com"))
+        assertTrue(sysWithBothAccounts.contains("ahmetyuksel5@gmail.com"))
+        assertTrue(sysWithBothAccounts.contains("asla doğrudan gönderme"))
+
+        val sysPersonalOnly = AgentProtocol.systemPrompt(driveEnabled = false, personalGmailEnabled = true)
+        assertFalse(sysPersonalOnly.contains("drive_search"))
+        assertTrue(sysPersonalOnly.contains("gmail_search"))
+        assertTrue(sysPersonalOnly.contains("ahmetyuksel5@gmail.com"))
+        assertFalse(sysPersonalOnly.contains("yesiltemizlik@gmail.com"))
     }
 
     @Test
@@ -116,9 +134,35 @@ class AgentProtocolTest {
             AgentAction(action = "drive_read", fileId = "abc123").describe(),
         )
         assertEquals(
+            "gmail_search(is, \"fatura\")",
+            AgentAction(action = "gmail_search", query = "fatura").describe(),
+        )
+        assertEquals(
+            "gmail_read(kisisel, th42)",
+            AgentAction(action = "gmail_read", account = "kisisel", threadId = "th42").describe(),
+        )
+        assertEquals(
+            "gmail_draft(is, \"ali@ornek.com\")",
+            AgentAction(action = "gmail_draft", account = "is", to = "ali@ornek.com").describe(),
+        )
+        assertEquals(
             "open_url(https://drive.google.com/file/d/1/view)",
             AgentAction(action = "open_url", url = "https://drive.google.com/file/d/1/view").describe(),
         )
         assertEquals("back", AgentAction(action = "back").describe())
+    }
+
+    @Test
+    fun personalAccountRoutingRecognizesAliasesAndDefaultsToWork() {
+        assertTrue(ScreenAgentStorage.isPersonalAccount("kisisel"))
+        assertTrue(ScreenAgentStorage.isPersonalAccount("kişisel"))
+        assertTrue(ScreenAgentStorage.isPersonalAccount("KİŞİSEL"))
+        assertTrue(ScreenAgentStorage.isPersonalAccount("personal"))
+        assertTrue(ScreenAgentStorage.isPersonalAccount("ahmetyuksel5@gmail.com"))
+
+        assertFalse(ScreenAgentStorage.isPersonalAccount(""))
+        assertFalse(ScreenAgentStorage.isPersonalAccount("is"))
+        assertFalse(ScreenAgentStorage.isPersonalAccount("iş"))
+        assertFalse(ScreenAgentStorage.isPersonalAccount("yesiltemizlik@gmail.com"))
     }
 }

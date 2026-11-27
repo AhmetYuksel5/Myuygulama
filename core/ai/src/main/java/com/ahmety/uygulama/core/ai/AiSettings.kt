@@ -169,6 +169,35 @@ class AiSettings @Inject constructor(
             .apply()
     }
 
+    // ---- Kişisel Gmail Apps Script köprüsü (opsiyonel, ahmetyuksel5@gmail.com) ----
+    // Jeton boş bırakılırsa ana köprünün MERKEZ_TOKEN'ı kullanılır; iki hesapta aynı
+    // parolayı kullanan kullanıcı iki kez girmek zorunda kalmaz.
+
+    var personalGmailBridgeUrl: String
+        get() = prefs.getString(KEY_PERSONAL_GMAIL_URL, null).orEmpty()
+        set(value) = prefs.edit().putString(KEY_PERSONAL_GMAIL_URL, value.trim()).apply()
+
+    var personalGmailBridgeToken: String
+        get() = prefs.getString(KEY_PERSONAL_GMAIL_TOKEN, null).orEmpty()
+        set(value) = prefs.edit().putString(KEY_PERSONAL_GMAIL_TOKEN, value.trim()).apply()
+
+    val personalGmailBridgeConfigured: Boolean
+        get() = personalGmailBridgeUrl.isNotBlank() &&
+            (personalGmailBridgeToken.isNotBlank() || driveBridgeToken.isNotBlank())
+
+    val hasOwnPersonalGmailToken: Boolean
+        get() = personalGmailBridgeToken.isNotBlank()
+
+    fun maskedPersonalGmailToken(): String =
+        if (personalGmailBridgeToken.isNotBlank()) mask(personalGmailBridgeToken) else maskedDriveToken()
+
+    fun clearPersonalGmailBridge() {
+        prefs.edit()
+            .remove(KEY_PERSONAL_GMAIL_URL)
+            .remove(KEY_PERSONAL_GMAIL_TOKEN)
+            .apply()
+    }
+
     private fun mask(key: String): String {
         if (key.isBlank()) return ""
         return if (key.length <= 10) "•".repeat(key.length) else key.take(6) + "…" + key.takeLast(4)
@@ -216,6 +245,8 @@ class AiSettings @Inject constructor(
         private const val KEY_HAIKU_MIGRATED = "claude_haiku_migrated"
         const val KEY_DRIVE_BRIDGE_URL = "drive_bridge_url"
         const val KEY_DRIVE_BRIDGE_TOKEN = "drive_bridge_token"
+        const val KEY_PERSONAL_GMAIL_URL = "personal_gmail_bridge_url"
+        const val KEY_PERSONAL_GMAIL_TOKEN = "personal_gmail_bridge_token"
     }
 }
 

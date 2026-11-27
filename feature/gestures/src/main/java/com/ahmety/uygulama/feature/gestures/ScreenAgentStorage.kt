@@ -22,6 +22,8 @@ object ScreenAgentStorage {
     private const val PREFS_NAME = "merkez_yapay_zeka"
     private const val KEY_DRIVE_URL = "drive_bridge_url"
     private const val KEY_DRIVE_TOKEN = "drive_bridge_token"
+    private const val KEY_PERSONAL_GMAIL_URL = "personal_gmail_bridge_url"
+    private const val KEY_PERSONAL_GMAIL_TOKEN = "personal_gmail_bridge_token"
 
     private const val MEMORY_FILE = "screen_agent_memory.md"
     private const val LOG_FILE = "screen_agent_log.md"
@@ -49,6 +51,8 @@ object ScreenAgentStorage {
 
         ## Genel Kurallar
         - Google Drive dosyası aranıyorsa ekranda Drive uygulamasını açmak yerine önce `drive_search` ve `drive_read` kullan; gerekirse dönen linki `open_url` ile tek adımda aç.
+        - E-posta aranıyorsa ekranda Gmail uygulamasını açmak yerine önce `gmail_search` ve `gmail_read` araçlarını kullan; hangi hesap olduğu belli değilse ikisinde de ara veya `ask` ile sor.
+        - E-posta yazılması istendiğinde asla doğrudan gönderme; `gmail_draft` ile taslak oluşturup kullanıcıya bildir.
         - Birden fazla eşleşen kişi, hesap veya cihaz çıktığında tahmin etme; `ask` eylemiyle seçenekleri sun.
 
         ## Öğrenilen Metotlar
@@ -56,6 +60,11 @@ object ScreenAgentStorage {
 
     fun isBridgeConfigured(context: Context): Boolean {
         val (url, token) = bridgeCreds(context)
+        return url.isNotBlank() && token.isNotBlank()
+    }
+
+    fun isPersonalGmailConfigured(context: Context): Boolean {
+        val (url, token) = personalGmailCreds(context)
         return url.isNotBlank() && token.isNotBlank()
     }
 
@@ -203,7 +212,24 @@ object ScreenAgentStorage {
             if (!res.optBoolean("ok", false)) {
                 error(res.optString("error").ifBlank { "Köprü yanıt vermedi." })
             }
-            "Bağlantı başarılı (MerkezAjan klasörü ve dosyaları hazır)."
+            val gmailNote = if (res.optBoolean("gmail", false)) "İş Gmail aktif" else "İş Gmail izni henüz yok"
+            "Bağlantı başarılı (Drive hazır · $gmailNote)."
+        }
+    }
+
+    fun pingPersonalGmailBridge(context: Context): Result<String> {
+        if (!isPersonalGmailConfigured(context)) {
+            return Result.failure(IllegalStateException("Önce kişisel Gmail köprü URL'si (ve jeton) kaydedilmeli."))
+        }
+        return runCatching {
+            val (url, token) = personalGmailCreds(context)
+            val res = callEndpoint(url, token, JSONObject().put("action", "gmail_ping"))
+            if (!res.optBoolean("ok", false)) {
+                error(res.optString("error").ifBlank { "Kişisel Gmail köprüsü yanıt vermedi." })
+            }
+            val unread = res.optInt("unread", -1)
+            val extra = if (unread >= 0) ", $unread okunmamış" else ""
+            "Bağlantı başarılı (Kişisel Gmail hazır$extra)."
         }
     }
 
@@ -263,8 +289,152 @@ object ScreenAgentStorage {
         }
     }
 
+    // ---- İki hesaplı Gmail köprü araçları (yalnızca okuma ve taslak) ----
+
+    fun gmailSearch(
+        context: Context,
+        query: String,
+        account: String = "is",
+        limit: Int = 10,
+    ): Result<String> = runCatching {
+        val (url, token, label) = resolveGmailBridge(context, account)
+        val q = query.trim()
+        require(q.isNotEmpty()) { "Gmail arama sorgusu boş." }
+        val res = callEndpoint(
+            url,
+            token,
+            JSONObject()
+                .put("action", "gmail_search")
+                .put("query", q)
+                .put("limit", limit.coerceIn(1, 20)),
+        )
+        if (!res.optBoolean("ok", false)) {
+            error(res.optString("error").ifBlank { "Gmail araması başarısız." })
+        }
+        val items = res.optJSONArray("items")
+        if (items == null || items.length() == 0) {
+            "$label hesabında \"$q\" için eşleşen e-posta bulunamadı."
+        } else {
+            buildString {
+                append("$label Gmail sonuçları (\"$q\"):\n")
+                for (i in 0 until items.length()) {
+                    val row = items.optJSONObject(i) ?: continue
+                    val unreadTag = if (row.optBoolean("unread", false)) "[OKUNMADI] " else ""
+                    val subject = row.optString("subject").ifBlank { "(konusuz)" }
+                    val from = row.optString("from")
+                    val date = row.optString("date")
+                    val tid = row.optString("threadId")
+                    val count = row.optInt("messageCount", 1)
+                    val snippet = row.optString("snippet").take(140)
+                    append("${i + 1}. $unreadTag$subject | Kimden: $from | Tarih: $date ($count mesaj) | threadId=$tid")
+                    if (snippet.isNotBlank()) append(" | Özet: $snippet")
+                    append('\n')
+                }
+            }.trim()
+        }
+    }
+
+    fun gmailRead(
+        context: Context,
+        threadId: String,
+        account: String = "is",
+    ): Result<String> = runCatching {
+        val (url, token, label) = resolveGmailBridge(context, account)
+        val tid = threadId.trim()
+        require(tid.isNotEmpty()) { "threadId boş." }
+        val res = callEndpoint(
+            url,
+            token,
+            JSONObject()
+                .put("action", "gmail_read")
+                .put("threadId", tid),
+        )
+        if (!res.optBoolean("ok", false)) {
+            error(res.optString("error").ifBlank { "E-posta okunamadı." })
+        }
+        val subject = res.optString("subject").ifBlank { "(konusuz)" }
+        val total = res.optInt("messageCount", 0)
+        val msgs = res.optJSONArray("messages")
+        buildString {
+            append("$label Gmail yazışması: $subject (toplam $total mesaj, son ${msgs?.length() ?: 0})\n")
+            if (msgs != null) {
+                for (i in 0 until msgs.length()) {
+                    val m = msgs.optJSONObject(i) ?: continue
+                    append("\n--- Mesaj ${i + 1} ---\n")
+                    append("Kimden: ").append(m.optString("from")).append('\n')
+                    val to = m.optString("to")
+                    if (to.isNotBlank()) append("Kime: ").append(to).append('\n')
+                    append("Tarih: ").append(m.optString("date")).append('\n')
+                    val atts = m.optJSONArray("attachments")
+                    if (atts != null && atts.length() > 0) {
+                        val names = (0 until atts.length()).mapNotNull { j ->
+                            val a = atts.optJSONObject(j) ?: return@mapNotNull null
+                            val n = a.optString("name").ifBlank { return@mapNotNull null }
+                            val sz = a.optLong("size", 0L)
+                            if (sz > 0L) "$n (${sz / 1024} KB)" else n
+                        }
+                        if (names.isNotEmpty()) append("Ekler: ").append(names.joinToString(", ")).append('\n')
+                    }
+                    append(m.optString("body").trim()).append('\n')
+                }
+            }
+        }.trim()
+    }
+
+    fun gmailDraft(
+        context: Context,
+        to: String,
+        subject: String,
+        body: String,
+        account: String = "is",
+    ): Result<String> = runCatching {
+        val (url, token, label) = resolveGmailBridge(context, account)
+        val recipient = to.trim()
+        require(recipient.isNotEmpty()) { "Alıcı (to) boş." }
+        val res = callEndpoint(
+            url,
+            token,
+            JSONObject()
+                .put("action", "gmail_draft")
+                .put("to", recipient)
+                .put("subject", subject.trim())
+                .put("body", body),
+        )
+        if (!res.optBoolean("ok", false)) {
+            error(res.optString("error").ifBlank { "Taslak oluşturulamadı." })
+        }
+        val draftId = res.optString("draftId")
+        "$label hesabında taslak oluşturuldu (gönderilmedi) | draftId=$draftId | Kime: $recipient | Konu: ${subject.trim()}"
+    }
+
+    private data class ResolvedBridge(val url: String, val token: String, val label: String)
+
+    internal fun isPersonalAccount(account: String): Boolean {
+        val norm = account.trim().lowercase(java.util.Locale.ROOT).replace("i\u0307", "i")
+        return norm == "kisisel" || norm == "kişisel" || norm == "personal" || norm.contains("ahmetyuksel5")
+    }
+
+    private fun resolveGmailBridge(context: Context, account: String): ResolvedBridge {
+        return if (isPersonalAccount(account)) {
+            val (url, token) = personalGmailCreds(context)
+            require(url.isNotBlank()) { "Kişisel Gmail köprüsü kayıtlı değil: Merkez → Yapay zekâ." }
+            require(token.isNotBlank()) { "Kişisel Gmail köprüsü için jeton kayıtlı değil." }
+            ResolvedBridge(url, token, "Kişisel (ahmetyuksel5)")
+        } else {
+            val (url, token) = bridgeCreds(context)
+            require(url.isNotBlank() && token.isNotBlank()) {
+                "İş Gmail / Drive köprüsü kayıtlı değil: Merkez → Yapay zekâ."
+            }
+            ResolvedBridge(url, token, "İş (yesiltemizlik)")
+        }
+    }
+
     private fun callBridge(context: Context, payload: JSONObject): JSONObject {
         val (url, token) = bridgeCreds(context)
+        return callEndpoint(url, token, payload)
+    }
+
+    private fun callEndpoint(url: String, token: String, payload: JSONObject): JSONObject {
         require(url.startsWith("https://")) { "Köprü URL'si https:// ile başlamalı." }
         payload.put("token", token)
         val request = Request.Builder()
@@ -286,6 +456,15 @@ object ScreenAgentStorage {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val url = prefs.getString(KEY_DRIVE_URL, null).orEmpty().trim()
         val token = prefs.getString(KEY_DRIVE_TOKEN, null).orEmpty().trim()
+        return url to token
+    }
+
+    private fun personalGmailCreds(context: Context): Pair<String, String> {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val url = prefs.getString(KEY_PERSONAL_GMAIL_URL, null).orEmpty().trim()
+        // Kişisel jeton boş bırakıldıysa ana MERKEZ_TOKEN devralınır.
+        val ownToken = prefs.getString(KEY_PERSONAL_GMAIL_TOKEN, null).orEmpty().trim()
+        val token = ownToken.ifBlank { prefs.getString(KEY_DRIVE_TOKEN, null).orEmpty().trim() }
         return url to token
     }
 

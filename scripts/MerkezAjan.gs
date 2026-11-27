@@ -1,5 +1,13 @@
 /**
- * Merkez Ekran Ajanı — Google Drive Köprüsü (Google Apps Script)
+ * Merkez Ekran Ajanı — Google Drive ve Gmail Köprüsü (Google Apps Script)
+ *
+ * Aynı betik hem iş hesabında (yesiltemizlik@gmail.com — Drive + İş Gmail)
+ * hem de kişisel hesapta (ahmetyuksel5@gmail.com — Kişisel Gmail) ayrı
+ * Web Uygulaması olarak dağıtılabilir.
+ *
+ * Güvenlik: yalnızca okuma ve taslak oluşturma vardır; otomatik e-posta
+ * gönderme veya silme eylemi bilerek eklenmemiştir. Tüm istekler
+ * MERKEZ_TOKEN komut dosyası özelliği ile korunur.
  *
  * Kurulum (bir kez, 1 dakika):
  * 1. https://script.google.com adresinde "Yeni proje" aç, adını "MerkezAjan" koy.
@@ -11,13 +19,15 @@
  *      - Yürütme kimliği: Ben
  *      - Erişimi olanlar: Herkes (istekler MERKEZ_TOKEN ile korunur)
  *    Yetki onayını ver ve çıkan Web uygulaması URL'sini (…/exec) kopyala.
- * 5. Telefonda Merkez → Yapay zekâ → Google Drive köprüsü alanına URL ve jetonu gir.
+ * 5. Telefonda Merkez → Yapay zekâ → Google Drive / Kişisel Gmail köprüsü
+ *    alanına URL ve jetonu gir.
  */
 
 var FOLDER_NAME = 'MerkezAjan';
 var LOG_FILE_NAME = 'Merkez_Ajan_Log.md';
 var MEMORY_FILE_NAME = 'Merkez_Ajan_Hafiza.md';
 var MAX_LOG_CHARS = 80000;
+var MAX_GMAIL_READ_CHARS = 6000;
 
 var DEFAULT_MEMORY_TEMPLATE = [
   '# Merkez Ekran Ajanı — Hafıza ve Merdiven Metotları',
@@ -27,6 +37,8 @@ var DEFAULT_MEMORY_TEMPLATE = [
   '',
   '## Genel Kurallar',
   '- Google Drive dosyası aranıyorsa ekranda Drive uygulamasını açmak yerine önce `drive_search` ve `drive_read` araçlarını kullan; gerekirse dönen linki `open_url` ile tek adımda aç.',
+  '- E-posta aranıyorsa ekranda Gmail uygulamasını açmak yerine önce `gmail_search` ve `gmail_read` araçlarını kullan; hangi hesap olduğu belli değilse ikisinde de ara veya `ask` ile sor.',
+  '- E-posta yazılması istendiğinde asla doğrudan gönderme; `gmail_draft` ile taslak oluşturup kullanıcıya bildir.',
   '- Birden fazla eşleşen kişi, hesap veya cihaz çıktığında tahmin etme; `ask` eylemiyle seçenekleri sun.',
   '',
   '## Öğrenilen Metotlar',
@@ -57,6 +69,10 @@ function doPost(e) {
     if (action === 'read_memory') return jsonOut_(handleReadMemory_());
     if (action === 'append_memory') return jsonOut_(handleAppendMemory_(body.note));
     if (action === 'write_memory') return jsonOut_(handleWriteMemory_(body.content));
+    if (action === 'gmail_ping') return jsonOut_(handleGmailPing_());
+    if (action === 'gmail_search') return jsonOut_(handleGmailSearch_(body.query, body.limit));
+    if (action === 'gmail_read') return jsonOut_(handleGmailRead_(body.threadId));
+    if (action === 'gmail_draft') return jsonOut_(handleGmailDraft_(body.to, body.subject, body.body));
 
     return jsonOut_({ ok: false, error: 'Bilinmeyen eylem: ' + action });
   } catch (err) {
@@ -68,11 +84,19 @@ function handlePing_() {
   var folder = getOrCreateFolder_();
   var mem = getOrCreateTextFile_(folder, MEMORY_FILE_NAME, DEFAULT_MEMORY_TEMPLATE);
   var log = getOrCreateTextFile_(folder, LOG_FILE_NAME, '# Merkez Ekran Ajanı Günlüğü\n\n');
+  var gmailOk = false;
+  try {
+    GmailApp.getInboxUnreadCount();
+    gmailOk = true;
+  } catch (ignore) {
+    gmailOk = false;
+  }
   return {
     ok: true,
     folderId: folder.getId(),
     memoryFileId: mem.getId(),
     logFileId: log.getId(),
+    gmail: gmailOk,
   };
 }
 
@@ -212,6 +236,119 @@ function handleWriteMemory_(content) {
   var file = getOrCreateTextFile_(folder, MEMORY_FILE_NAME, DEFAULT_MEMORY_TEMPLATE);
   file.setContent(text.trim() ? text : DEFAULT_MEMORY_TEMPLATE);
   return { ok: true, fileId: file.getId(), content: file.getBlob().getDataAsString('UTF-8') };
+}
+
+function handleGmailPing_() {
+  var unread = GmailApp.getInboxUnreadCount();
+  return { ok: true, gmail: true, unread: unread };
+}
+
+function handleGmailSearch_(query, limit) {
+  var q = String(query || '').trim();
+  if (!q) return { ok: false, error: 'Gmail arama sorgusu boş.' };
+  var maxItems = Math.min(Math.max(Number(limit) || 10, 1), 20);
+  var threads = GmailApp.search(q, 0, maxItems);
+  var items = [];
+  for (var i = 0; i < threads.length; i++) {
+    var th = threads[i];
+    var msgs = th.getMessages();
+    var last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+    var snippet = last
+      ? String(last.getPlainBody() || '').replace(/\s+/g, ' ').trim().slice(0, 180)
+      : '';
+    items.push({
+      threadId: th.getId(),
+      subject: th.getFirstMessageSubject() || '',
+      from: last ? last.getFrom() : '',
+      date: formatDateTr_(th.getLastMessageDate()),
+      snippet: snippet,
+      unread: th.isUnread(),
+      messageCount: msgs.length,
+    });
+  }
+  return { ok: true, items: items };
+}
+
+function handleGmailRead_(threadId) {
+  var id = String(threadId || '').trim();
+  if (!id) return { ok: false, error: 'threadId boş.' };
+  var th = GmailApp.getThreadById(id);
+  if (!th) return { ok: false, error: 'Yazışma bulunamadı: ' + id };
+
+  var allMsgs = th.getMessages();
+  var recent = allMsgs.length > 5 ? allMsgs.slice(allMsgs.length - 5) : allMsgs;
+  var remaining = MAX_GMAIL_READ_CHARS;
+  var perMsgCap = Math.max(400, Math.floor(MAX_GMAIL_READ_CHARS / Math.max(recent.length, 1)));
+  var messages = [];
+
+  for (var i = 0; i < recent.length; i++) {
+    var m = recent[i];
+    var plain = String(m.getPlainBody() || '').trim();
+    var allowed = Math.min(remaining, Math.max(perMsgCap, remaining - (recent.length - 1 - i) * 300));
+    var bodyText = plain;
+    var truncated = false;
+    if (allowed <= 0) {
+      bodyText = '…(uzunluk sınırına ulaşıldı)';
+      truncated = true;
+    } else if (plain.length > allowed) {
+      bodyText = plain.slice(0, allowed) + '\n…(kısaltıldı)';
+      truncated = true;
+    }
+    remaining = Math.max(0, remaining - Math.min(plain.length, Math.max(0, allowed)));
+
+    var rawAtts = m.getAttachments({ includeInlineImages: false, includeAttachments: true });
+    var attachments = [];
+    for (var j = 0; j < rawAtts.length; j++) {
+      var att = rawAtts[j];
+      attachments.push({
+        name: att.getName(),
+        contentType: att.getContentType(),
+        size: att.getSize(),
+      });
+    }
+
+    messages.push({
+      from: m.getFrom(),
+      to: m.getTo(),
+      date: formatDateTr_(m.getDate()),
+      subject: m.getSubject(),
+      body: bodyText,
+      truncated: truncated,
+      attachments: attachments,
+    });
+  }
+
+  return {
+    ok: true,
+    threadId: th.getId(),
+    subject: th.getFirstMessageSubject() || '',
+    messageCount: allMsgs.length,
+    messages: messages,
+  };
+}
+
+// Güvenlik sınırı: yalnızca taslak oluşturulur; sendEmail ve silme bilerek yoktur.
+function handleGmailDraft_(to, subject, body) {
+  var recipient = String(to || '').trim();
+  if (!recipient) return { ok: false, error: 'Alıcı (to) boş.' };
+  var subj = String(subject || '').trim();
+  var text = String(body || '');
+  var draft = GmailApp.createDraft(recipient, subj, text);
+  return {
+    ok: true,
+    draftId: draft.getId(),
+    to: recipient,
+    subject: subj,
+  };
+}
+
+function formatDateTr_(d) {
+  if (!d) return '';
+  try {
+    return Utilities.formatDate(d, 'Europe/Istanbul', 'yyyy-MM-dd HH:mm');
+  } catch (ignore) {
+    return d.toISOString ? d.toISOString() : String(d);
+  }
 }
 
 function getOrCreateFolder_() {

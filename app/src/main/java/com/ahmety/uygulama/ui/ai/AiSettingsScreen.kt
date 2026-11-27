@@ -95,6 +95,16 @@ class AiSettingsViewModel @Inject constructor(
         if (token.isNotBlank()) settings.driveBridgeToken = token
     }
     fun clearDriveBridge() = settings.clearDriveBridge()
+
+    fun personalGmailBridgeUrl(): String = settings.personalGmailBridgeUrl
+    fun personalGmailBridgeConfigured(): Boolean = settings.personalGmailBridgeConfigured
+    fun hasOwnPersonalGmailToken(): Boolean = settings.hasOwnPersonalGmailToken
+    fun maskedPersonalGmailToken(): String = settings.maskedPersonalGmailToken()
+    fun savePersonalGmailBridge(url: String, token: String) {
+        if (url.isNotBlank()) settings.personalGmailBridgeUrl = url
+        if (token.isNotBlank()) settings.personalGmailBridgeToken = token
+    }
+    fun clearPersonalGmailBridge() = settings.clearPersonalGmailBridge()
 }
 
 /**
@@ -245,6 +255,9 @@ fun AiSettingsScreen(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         DriveBridgeSection(viewModel)
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        PersonalGmailBridgeSection(viewModel)
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AgentMemorySection()
@@ -569,11 +582,11 @@ private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
     var testing by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Google Drive köprüsü (Apps Script)", style = MaterialTheme.typography.titleSmall)
+        Text("Google Drive ve İş Gmail köprüsü (Apps Script)", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = "Ekran ajanı Drive dosyalarını ekranda elle aramak yerine arka planda " +
-                "tek adımda bulup okur; günlükleri MerkezAjan/Merkez_Ajan_Log.md dosyasına " +
-                "otomatik yazar ve merdiven metotlarını Merkez_Ajan_Hafiza.md ile eşitler.",
+            text = "yesiltemizlik@gmail.com ana köprüsü: Drive dosyalarını ve iş e-postalarını " +
+                "arka planda okur, taslak oluşturur (göndermez), günlükleri MerkezAjan/Merkez_Ajan_Log.md " +
+                "dosyasına yazar ve merdiven metotlarını Merkez_Ajan_Hafiza.md ile eşitler.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -658,6 +671,134 @@ private fun DriveBridgeSection(viewModel: AiSettingsViewModel) {
                         urlInput = ""
                         tokenInput = ""
                         configured = false
+                        maskedToken = ""
+                        status = null
+                    },
+                ) {
+                    Text("Sil", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+
+        status?.let { msg ->
+            Text(
+                text = msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (msg.startsWith("Hata")) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            )
+        }
+    }
+}
+
+/** Opsiyonel ikinci hesap: ahmetyuksel5@gmail.com için yalnızca okuma ve taslak köprüsü. */
+@Composable
+private fun PersonalGmailBridgeSection(viewModel: AiSettingsViewModel) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var urlInput by remember { mutableStateOf(viewModel.personalGmailBridgeUrl()) }
+    var tokenInput by remember { mutableStateOf("") }
+    var configured by remember { mutableStateOf(viewModel.personalGmailBridgeConfigured()) }
+    var ownToken by remember { mutableStateOf(viewModel.hasOwnPersonalGmailToken()) }
+    var maskedToken by remember { mutableStateOf(viewModel.maskedPersonalGmailToken()) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Kişisel Gmail köprüsü (ahmetyuksel5@gmail.com)", style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = "Opsiyonel ikinci hesap: yalnızca okuma ve taslak oluşturma. Jetonu boş " +
+                "bırakırsan yukarıdaki ana MERKEZ_TOKEN kullanılır.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = when {
+                        configured && ownToken -> "Köprü kayıtlı · Özel jeton: $maskedToken"
+                        configured -> "Köprü kayıtlı · Ana MERKEZ_TOKEN kullanılıyor"
+                        else -> "Kişisel Gmail köprüsü kurulmamış."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = urlInput,
+            onValueChange = {
+                urlInput = it
+                status = null
+            },
+            label = { Text("2. Web uygulaması URL'si (https://script.google.com/…/exec)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        OutlinedTextField(
+            value = tokenInput,
+            onValueChange = {
+                tokenInput = it
+                status = null
+            },
+            label = { Text("2. Köprü jetonu (opsiyonel — boşsa ana jeton)") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            Button(
+                enabled = urlInput.isNotBlank() &&
+                    (tokenInput.isNotBlank() || viewModel.driveBridgeConfigured() || configured),
+                onClick = {
+                    viewModel.savePersonalGmailBridge(urlInput, tokenInput)
+                    tokenInput = ""
+                    configured = viewModel.personalGmailBridgeConfigured()
+                    ownToken = viewModel.hasOwnPersonalGmailToken()
+                    maskedToken = viewModel.maskedPersonalGmailToken()
+                    status = "Kaydedildi."
+                },
+            ) {
+                Text("Kaydet")
+            }
+            if (configured) {
+                OutlinedButton(
+                    enabled = !testing,
+                    onClick = {
+                        testing = true
+                        status = "Sınanıyor…"
+                        scope.launch {
+                            val res = withContext(Dispatchers.IO) {
+                                ScreenAgentStorage.pingPersonalGmailBridge(context)
+                            }
+                            testing = false
+                            status = res.getOrElse { "Hata: ${it.message}" }
+                        }
+                    },
+                ) {
+                    Text(if (testing) "Sınanıyor…" else "Bağlantıyı dene")
+                }
+                TextButton(
+                    onClick = {
+                        viewModel.clearPersonalGmailBridge()
+                        urlInput = ""
+                        tokenInput = ""
+                        configured = false
+                        ownToken = false
                         maskedToken = ""
                         status = null
                     },
